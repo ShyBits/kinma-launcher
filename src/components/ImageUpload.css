@@ -1,0 +1,178 @@
+.image-upload-section {
+  margin-bottom: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.image-upload-section .image-upload-label {
+  margin-bottom: 6px;
+}
+
+.image-upload-section > div:last-child {
+  flex: 1;
+  min-height: 0;
+}
+
+.image-upload-section.dragging {
+  position: relative;
+}
+
+.image-upload-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+}
+
+.optional-label {
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.image-upload-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  border: 2px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+.image-upload-dropzone::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.05),
+    transparent
+  );
+  transition: left 0.5s ease;
+}
+
+.image-upload-dropzone:hover::before,
+.image-upload-dropzone.dragging::before {
+  left: 100%;
+}
+
+.image-upload-dropzone:hover {
+  border-color: var(--accent-primary);
+  background: rgba(255, 255, 255, 0.04);
+  transform: translateY(-2px);
+}
+
+.image-upload-dropzone.dragging {
+  border-color: var(--accent-primary);
+  background: rgba(102, 126, 234, 0.1);
+  border-style: solid;
+  transform: scale(1.02);
+}
+
+.image-upload-dropzone > * {
+  position: relative;
+  z-index: 1;
+}
+
+.image-upload-dropzone svg {
+  color: var(--accent-primary);
+  margin-bottom: 6px;
+  width: 28px;
+  height: 28px;
+}
+
+.image-upload-dropzone span {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-align: center;
+  line-height: 1.1;
+}
+
+.image-upload-hint {
+  display: block;
+  font-size: 10px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  opacity: 0.7;
+  font-weight: 400;
+  text-align: center;
+}
+
+.image-upload-preview {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.image-upload-preview-img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  display: block;
+  transition: opacity 0.2s ease;
+  object-fit: contain;
+}
+
+.image-upload-preview label:hover .image-upload-preview-img {
+  opacity: 0.9;
+}
+
+/* Preserve existing preview classes */
+.upload-preview-logo {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.upload-preview-card {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  aspect-ratio: 2 / 3;
+  display: block;
+}
+
+.upload-preview-title {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.image-upload-delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-upload-delete-btn svg {
+  width: 16px;
+  height: 16px;
+}
+

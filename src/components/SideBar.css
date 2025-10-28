@@ -1,0 +1,710 @@
+:root {
+    --bg-primary: #0f1115;
+    --bg-secondary: #181b20;
+    --bg-hover: #1f2329;
+    --text-primary: #f5f6fa;
+    --text-secondary: #a0a3a8;
+    --accent-primary: #3b82f6;
+    --border-color: #2a2e35;
+    --accent-warning: #ffa726;
+    --accent-success: #22c55e;
+    --accent-danger: #ef4444;
+}
+
+/* Sidebar Container */
+.sidebar {
+    position: relative;
+    width: 260px;
+    background: rgba(255, 255, 255, 0.02);
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    transition: width 0.25s ease;
+    overflow: hidden;
+}
+
+.sidebar.collapsed {
+    width: 0;
+    border: none;
+}
+
+/* Top Section */
+.sidebar-top {
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    background: transparent;
+    position: relative;
+    z-index: 10;
+}
+
+.sidebar-btn {
+    width: 100%;
+    padding: 12px 16px;
+    background: transparent;
+    color: var(--text-secondary);
+    border: none;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.sidebar-btn:hover {
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-primary);
+}
+
+.sidebar-btn.active {
+    background: rgba(59, 130, 246, 0.1);
+    color: var(--accent-primary);
+}
+
+/* Search */
+.sidebar-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    margin-top: 12px;
+    transition: all 0.2s ease;
+}
+
+.sidebar-search:hover {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-search:focus-within {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: var(--accent-primary);
+}
+
+.sidebar-search input {
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--text-primary);
+    font-size: 13px;
+    flex: 1;
+}
+
+.sidebar-search svg {
+    color: var(--text-secondary);
+    transition: color 0.2s ease;
+}
+
+.sidebar-search:focus-within svg {
+    color: var(--accent-primary);
+}
+
+/* Game List */
+.sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 20px;
+}
+
+.sidebar-content::-webkit-scrollbar {
+    width: 5px;
+}
+
+.sidebar-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 2px;
+}
+
+.sidebar-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* Section Header */
+.section-header {
+    width: 100%;
+    text-align: left;
+    padding: 8px 12px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-secondary);
+    border: none;
+    background: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 8px;
+}
+
+.section-header:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.section-header .rotated {
+    transform: rotate(180deg);
+    transition: transform 0.2s ease;
+}
+
+.section-header svg {
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+}
+
+.section-header:hover svg {
+    color: var(--text-primary);
+}
+
+/* Game Items */
+.section-list {
+    margin-top: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.game-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    position: relative;
+    border-radius: 8px;
+    padding: 0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    overflow: hidden;
+}
+
+.game-item.updating {
+    background: rgba(34, 197, 94, 0.08);
+    border: 1px solid rgba(34, 197, 94, 0.2);
+    animation: update-pulse 2s ease-in-out infinite;
+}
+
+.game-item.downloading {
+    background: rgba(147, 197, 253, 0.08);
+    border: 1px solid rgba(147, 197, 253, 0.4);
+    animation: download-pulse 2s ease-in-out infinite;
+}
+
+@keyframes download-pulse {
+    0%, 100% {
+        border-color: rgba(147, 197, 253, 0.3);
+        box-shadow: 0 0 0 0 rgba(147, 197, 253, 0);
+    }
+    50% {
+        border-color: rgba(147, 197, 253, 0.6);
+        box-shadow: 0 0 12px rgba(147, 197, 253, 0.3);
+    }
+}
+
+.game-item.updating::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 100%;
+    background: rgba(34, 197, 94, 0.2);
+    border-radius: 8px;
+    animation: update-fill 3s ease-in-out forwards;
+    z-index: 0;
+    transform-origin: left;
+    clip-path: inset(0 100% 0 0);
+}
+
+.game-item.updating .game-row,
+.game-item.updating .update-icon-btn,
+.game-item.downloading .game-row {
+    position: relative;
+    z-index: 1;
+}
+
+@keyframes update-pulse {
+    0%, 100% {
+        border-color: rgba(34, 197, 94, 0.2);
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+    }
+    50% {
+        border-color: rgba(34, 197, 94, 0.4);
+        box-shadow: 0 0 12px rgba(34, 197, 94, 0.2);
+    }
+}
+
+@keyframes update-fill {
+    from {
+        clip-path: inset(0 100% 0 0);
+    }
+    to {
+        clip-path: inset(0 0% 0 0);
+    }
+}
+
+.game-item:hover .game-row {
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-primary);
+    transform: translateX(2px);
+}
+
+.game-item.active {
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.game-item.active .game-row {
+    color: var(--accent-primary);
+    font-weight: 500;
+}
+
+.game-item.completed-download .game-name {
+    color: var(--accent-primary);
+    animation: completion-pulse 1s ease-out;
+}
+
+.game-item.completed-update .game-name {
+    color: var(--accent-success);
+    animation: completion-pulse 1s ease-out;
+}
+
+.game-item.completed-download,
+.game-item.completed-update {
+    animation: completion-outline 1s ease-out;
+}
+
+@keyframes completion-pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+@keyframes completion-outline {
+    0%, 100% {
+        border: 1px solid transparent;
+    }
+    50% {
+        border: 1px solid var(--accent-success);
+    }
+    100% {
+        border: 1px solid transparent;
+    }
+}
+
+.game-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+    border-radius: 8px;
+}
+
+/* Clickable */
+.game-clickable {
+    background: none;
+    border: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    cursor: pointer;
+    color: inherit;
+    text-align: left;
+    font-size: 14px;
+}
+
+.game-icon {
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-primary);
+    border-radius: 4px;
+    background: rgba(59, 130, 246, 0.08);
+    flex-shrink: 0;
+}
+
+/* --- 🔄 Update Icon --- */
+.update-icon-btn {
+    background: transparent;
+    border: none;
+    color: var(--accent-warning);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+.update-icon-btn svg {
+    transition: none;
+}
+
+/* 🟢 Active Update (green, spinning) */
+.update-icon-btn.spinning {
+    color: var(--accent-success);
+    background: rgba(34, 197, 94, 0.1);
+}
+
+.update-icon-btn.spinning svg {
+    animation: spin 1s linear infinite;
+}
+
+/* Hover states - higher specificity for spinning hover */
+.update-icon-btn:not(.spinning):hover {
+    background: rgba(255, 167, 38, 0.15);
+    color: #ffb74d;
+}
+
+/* 🟥 Hover während Update -> Pause Icon (handled by JS) */
+.update-icon-btn.spinning:hover {
+    color: #ef4444 !important;
+}
+
+/* Ensure pause icon is red when visible */
+.update-icon-btn:hover svg[data-pause="true"] {
+    color: #ef4444 !important;
+}
+
+/* Make sure pause icon is always red */
+svg[data-pause="true"] {
+    color: #ef4444 !important;
+}
+
+.update-icon-btn.spinning:hover svg {
+    animation: none !important;
+}
+
+/* 🟢 Fortschrittsbalken unter der App */
+.update-progress-bar {
+    position: relative;
+    width: 100%;
+    height: 3px;
+    background: rgba(34, 197, 94, 0.3);
+    border-radius: 0 0 8px 8px;
+    overflow: hidden;
+    animation: progress 3s ease-in-out forwards;
+    box-shadow: 0 0 10px rgba(34, 197, 94, 0.3);
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes progress {
+    from {
+        width: 0%;
+    }
+
+    to {
+        width: 100%;
+    }
+}
+
+/* Sidebar Footer */
+.sidebar-footer {
+    padding: 16px 20px;
+    background: transparent;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    margin-top: auto;
+}
+
+/* Footer Downloads Section */
+.footer-downloads {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.footer-download-item,
+.footer-update-item {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 10px 12px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    gap: 8px;
+}
+
+.footer-download-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex: 1;
+    gap: 12px;
+    min-height: 24px;
+}
+
+.footer-download-name {
+    font-size: 12px;
+    color: var(--text-primary);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 180px;
+}
+
+.footer-download-speed {
+    font-size: 11px;
+    color: #60a5fa;
+    font-weight: 600;
+}
+
+.footer-update-item .footer-download-speed {
+    color: var(--accent-success);
+}
+
+/* Footer Download Buttons */
+.footer-download-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+.footer-download-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+}
+
+.footer-cancel-btn:hover {
+    background: rgba(255, 59, 48, 0.1);
+    border-color: rgba(255, 59, 48, 0.3);
+    color: #ff3b30;
+}
+
+.footer-download-btn svg {
+    fill: currentColor;
+}
+
+/* Footer Progress Bar */
+.footer-progress-bar {
+    width: 100%;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 0;
+}
+
+.footer-progress-fill {
+    height: 100%;
+    background: var(--accent-primary);
+    transition: width 0.3s ease;
+}
+
+/* Footer progress bar colors */
+.footer-download-item .footer-progress-fill {
+    background: #93c5fd;
+}
+
+.footer-update-item .footer-progress-fill {
+    background: #86efac;
+}
+
+/* Game Progress Bar - Fills the entire background */
+.game-progress-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: var(--accent-primary);
+    border-radius: 8px;
+    transition: width 0.3s ease;
+    z-index: 0;
+    opacity: 0.2;
+}
+
+/* Blue progress bar for downloads */
+.game-item.downloading .game-progress-bar {
+    background: #93c5fd;;
+}
+
+/* Green progress bar for updates */
+.game-item.updating .game-progress-bar {
+    background: rgba(134, 239, 172, 0.25);
+}
+
+.game-item.downloading .game-row {
+    z-index: 1;
+    position: relative;
+}
+
+.game-item.updating .game-row {
+    z-index: 1;
+    position: relative;
+}
+
+.footer-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.footer-text {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    letter-spacing: 0.3px;
+}
+
+.footer-version {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-weight: 600;
+    opacity: 0.6;
+}
+
+/* Side Menu for Footer Downloads */
+.footer-download-item,
+.footer-update-item {
+    position: relative;
+}
+
+.footer-download-side-menu {
+    width: 280px;
+    background: var(--bg-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    z-index: 10000;
+    animation: slideInRight 0.2s ease;
+}
+
+@keyframes slideInRight {
+    from {
+        opacity: 0;
+        transform: translateX(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.side-menu-header {
+    padding: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.side-menu-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.side-menu-content {
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.side-menu-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.side-menu-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.side-menu-value {
+    font-size: 12px;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
+.side-menu-actions {
+    padding: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    gap: 8px;
+}
+
+.side-menu-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.side-menu-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.side-menu-btn-danger {
+    color: #ff3b30;
+    border-color: rgba(255, 59, 48, 0.2);
+}
+
+.side-menu-btn-danger:hover {
+    background: rgba(255, 59, 48, 0.1);
+    border-color: rgba(255, 59, 48, 0.3);
+}
+
+.side-menu-btn svg {
+    flex-shrink: 0;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .sidebar {
+        width: 220px;
+    }
+}

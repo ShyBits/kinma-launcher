@@ -1,0 +1,68 @@
+.kinma-logo-container {
+  display: flex;
+  border-radius: 500px;
+  align-items: center;
+  justify-content: center;
+  height: 450px;
+  width: 450px;
+  position: relative;
+  overflow: visible;
+  transform-origin: center;
+}
+
+.kinma-bar {
+  position: absolute;
+  background-color: #ffffff;
+  width: 35px;
+  border-radius: 50px;
+  transition: transform 1s ease, width 0.5s ease, height 0.5s ease;
+}
+
+.bar1 {
+  background-color: #ffffff;
+  height: 200px;
+  transform: rotate(45deg) translateY(-83px);
+}
+
+.bar2 {
+  background-color: #ffffff;
+  height: 200px;
+  transform: rotate(90deg) translateY(-83px);
+}
+
+.bar3 {
+  background-color: #ffffff;
+  height: 200px;
+  transform: rotate(135deg) translateY(-83px);
+}
+
+.bar4 {
+  background-color: #ffffff;
+  height: 120px;
+  transform: rotate(180deg) translateY(-120px);
+}
+
+.bar5 {
+  background-color: #ffffff;
+  height: 135px;
+  transform: rotate(225deg) translateY(-115px);
+}
+
+.bar6 {
+  height: 35px;
+  background-color: #ffffff;
+  transform: rotate(270deg) translateY(-165px);
+}
+
+.bar7 {
+  height: 35px;
+  background-color: #ffffff;
+  transform: rotate(315deg) translateY(-165px);
+}
+
+.bar8 {
+  height: 35px;
+  background-color: #ffffff;
+  transform: rotate(360deg) translateY(-165px);
+}
+

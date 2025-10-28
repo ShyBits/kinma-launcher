@@ -1,0 +1,179 @@
+/* Title Bar - Modern Design */
+.title-bar {
+  height: 40px;
+  background: var(--bg-primary);
+  border: none;
+  display: flex;
+  align-items: flex-start;
+  -webkit-app-region: drag;
+  position: relative;
+  z-index: 10001;
+}
+
+.title-bar-content {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+}
+
+.title-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  -webkit-app-region: no-drag;
+  padding-left: 8px;
+}
+
+.app-logo {
+  width: 24px;
+  height: 24px;
+  background: var(--gradient-primary);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
+  font-weight: 800;
+  font-size: 12px;
+  box-shadow: var(--shadow-sm);
+}
+
+.logo-icon {
+  font-family: 'Inter', sans-serif;
+}
+
+.app-title {
+  display: flex;
+  align-items: center;
+}
+
+.title-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+  letter-spacing: -0.25px;
+}
+
+.subtitle-text {
+  font-size: 9px;
+  color: var(--text-muted);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.title-bar-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.title-decoration {
+  width: 200px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent-primary), transparent);
+  opacity: 0.3;
+}
+
+.title-bar-right {
+  display: flex;
+  -webkit-app-region: no-drag;
+}
+
+.title-bar-button {
+  width: 46px;
+  height: 40px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+  border-radius: 0;
+}
+
+.title-bar-button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.title-bar-button.close:hover {
+  background: var(--accent-error);
+  color: white;
+}
+
+.title-bar-button.disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.title-bar-button.disabled:hover {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .title-bar-content {
+    padding: 0;
+  }
+  
+  .app-logo {
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+  }
+  
+  .title-text {
+    font-size: 12px;
+  }
+  
+  .subtitle-text {
+    font-size: 8px;
+  }
+  
+  .title-decoration {
+    width: 150px;
+  }
+  
+  .title-bar-button {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+@media (max-width: 480px) {
+  .title-bar-content {
+    padding: 0;
+  }
+  
+  .app-logo {
+    width: 18px;
+    height: 18px;
+    font-size: 9px;
+  }
+  
+  .title-text {
+    font-size: 11px;
+  }
+  
+  .subtitle-text {
+    font-size: 7px;
+  }
+  
+  .title-decoration {
+    width: 100px;
+  }
+  
+  .title-bar-button {
+    width: 36px;
+    height: 40px;
+  }
+}

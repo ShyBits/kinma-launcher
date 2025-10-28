@@ -1,0 +1,937 @@
+/* Window Controls Bar - Above Top Navigation */
+.window-controls-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 32px;
+  padding: 0 16px;
+  background: transparent;
+  gap: 8px;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 51;
+  pointer-events: none;
+}
+
+.window-controls-bar > * {
+  pointer-events: auto;
+}
+
+.sidebar-toggle-control {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.sidebar-toggle-control:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.navigation-arrows {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.nav-arrow-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.nav-arrow-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.nav-arrow-btn:active {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Top Navigation - Clean Modern Design */
+.top-navigation {
+  height: var(--nav-height);
+  background: rgba(15, 17, 21, 0.95);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  position: relative;
+  z-index: 50;
+  min-width: 0;
+}
+
+/* Left Section - Home Button */
+.nav-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+
+.menu-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  pointer-events: auto;
+}
+
+.menu-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+}
+
+.menu-toggle-btn:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.menu-toggle-btn svg {
+  transition: all 0.2s ease;
+  pointer-events: none;
+}
+
+.home-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: transparent;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 700;
+  position: relative;
+}
+
+.home-btn:hover {
+  background: transparent;
+}
+
+.home-logo {
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  color: white;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 18px;
+  flex-shrink: 0;
+  overflow: visible;
+  position: relative;
+}
+
+.home-logo > * {
+  transform: scale(0.071); /* Scale down from 450px to ~28px */
+}
+
+
+
+/* Right Section */
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Nav Separator */
+.nav-separator {
+  width: 1px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 4px;
+}
+
+
+/* Balance Wrapper */
+.balance-wrapper {
+  position: relative;
+}
+
+/* Balance Display */
+.nav-balance {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: fit-content;
+  padding: 0 16px;
+  height: var(--nav-height);
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  margin-right: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.nav-balance::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0px;
+  right: 8px;
+  height: 2px;
+  background: transparent;
+  transition: background 0.2s ease;
+}
+
+.nav-balance:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.nav-balance:hover::before {
+  background: #10b981;
+}
+
+.nav-balance svg {
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.nav-balance:hover svg {
+  color: #10b981;
+}
+
+.nav-balance:hover .balance-amount {
+  color: #10b981;
+}
+
+.nav-balance.active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.nav-balance.active::before {
+  background: #10b981;
+}
+
+.nav-balance.active svg {
+  color: #10b981;
+}
+
+.nav-balance.active .balance-amount {
+  color: #10b981;
+}
+
+.balance-amount {
+  color: #10b981;
+  font-weight: 700;
+  transition: color 0.2s ease;
+}
+
+/* Nav Items */
+.nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: fit-content;
+  height: var(--nav-height);
+  padding: 0 16px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.nav-item::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: transparent;
+  transition: background 0.2s ease;
+  border-radius: 0 0 8px 8px;
+}
+
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+}
+
+.nav-item:hover::before {
+  background: var(--accent-primary);
+}
+
+.nav-item.active {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+.nav-item.active::before {
+  background: var(--accent-primary);
+}
+
+.nav-item svg {
+  transition: all 0.2s ease;
+}
+
+.nav-item:hover svg {
+  color: var(--accent-primary);
+}
+
+.nav-item.active svg {
+  color: var(--accent-primary);
+}
+
+/* Tooltip */
+.tooltip-wrapper {
+  position: relative;
+}
+
+.custom-tooltip {
+  position: absolute;
+  bottom: -35px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.9);
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 1000;
+  opacity: 0;
+  animation: tooltipFadeIn 0.2s ease forwards;
+}
+
+@keyframes tooltipFadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Balance Menu */
+.balance-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: transparent;
+  z-index: 999;
+  cursor: pointer;
+}
+
+.balance-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 360px;
+  background: rgb(18, 18, 18);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.8);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.balance-menu-header {
+  padding: 20px 24px;
+}
+
+.balance-menu-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: white;
+}
+
+.balance-input-section {
+  padding: 24px;
+}
+
+.balance-input-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.amount-btn {
+  width: 48px;
+  height: 48px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+}
+
+.amount-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.amount-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.balance-input-display {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.currency {
+  font-size: 24px;
+  font-weight: 700;
+  color: white;
+}
+
+.balance-amount-input {
+  width: 150px;
+  text-align: center;
+  font-size: 32px;
+  font-weight: 800;
+  color: white;
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+.balance-presets {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-top: 16px;
+  padding: 0 24px;
+}
+
+.preset-btn {
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.preset-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.balance-actions {
+  display: flex;
+  gap: 12px;
+  padding: 20px 24px;
+}
+
+.cancel-btn,
+.confirm-btn {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 2px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancel-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: white;
+}
+
+.cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.confirm-btn {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.confirm-btn:hover:not(:disabled) {
+  background: #3a8ce8;
+}
+
+.confirm-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Transaction Menu */
+.transaction-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 998;
+}
+
+.transaction-menu {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 600px;
+  max-width: 90vw;
+  max-height: 90vh;
+  background: rgb(18, 18, 18);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9);
+  z-index: 1000;
+  overflow-y: auto;
+}
+
+.transaction-header {
+  padding: 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.transaction-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: white;
+}
+
+.transaction-close-btn {
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.transaction-close-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.transaction-content {
+  padding: 24px;
+}
+
+.transaction-amount {
+  text-align: center;
+  padding: 32px 0;
+}
+
+.currency-symbol {
+  font-size: 32px;
+  font-weight: 700;
+  color: white;
+  margin-right: 8px;
+}
+
+.transaction-amount-value {
+  font-size: 48px;
+  font-weight: 800;
+  color: white;
+}
+
+.transaction-methods {
+  margin: 32px 0;
+}
+
+.transaction-methods h3 {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.payment-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.payment-method {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.payment-method:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.payment-method.selected {
+  background: rgba(74, 158, 255, 0.1);
+  border-color: var(--accent-primary);
+}
+
+.payment-logo {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.payment-logo img {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.payment-method input[type="radio"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.payment-method label {
+  flex: 1;
+  margin: 0;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+}
+
+.payment-form {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.payment-form h4 {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.form-group input {
+  width: 100%;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  color: white;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.form-group input:focus {
+  border-color: var(--accent-primary);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.transaction-summary {
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 2px;
+  margin-top: 24px;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.summary-row.total {
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-weight: 700;
+  font-size: 16px;
+  margin-bottom: 0;
+}
+
+.summary-row span:first-child {
+  color: var(--text-secondary);
+}
+
+.summary-row span:last-child {
+  color: white;
+}
+
+.transaction-confirm-btn {
+  width: 100%;
+  padding: 14px;
+  margin-top: 24px;
+  background: var(--accent-primary);
+  border: none;
+  border-radius: 2px;
+  color: white;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.transaction-confirm-btn:hover {
+  background: #3a8ce8;
+}
+
+.connect-prompt {
+  text-align: center;
+  padding: 24px;
+}
+
+.connect-prompt h4 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+}
+
+.connect-btn,
+.connect-btn-large {
+  padding: 12px 24px;
+  background: var(--accent-primary);
+  border: none;
+  border-radius: 2px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.connect-btn:hover,
+.connect-btn-large:hover {
+  background: #3a8ce8;
+}
+
+.connect-btn-large {
+  width: 100%;
+  font-size: 15px;
+  padding: 14px;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 1001;
+}
+
+.modal-content {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 500px;
+  max-width: 90vw;
+  background: rgba(18, 18, 18, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  backdrop-filter: blur(20px);
+  z-index: 1002;
+}
+
+.modal-header {
+  padding: 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: white;
+}
+
+.modal-close {
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.modal-close:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.crypto-qr-placeholder {
+  width: 100%;
+  aspect-ratio: 1;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 24px 0;
+}
+
+.qr-code {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* Responsive */
+@media (max-width: 1400px) {
+  .top-navigation {
+    padding: 0 24px;
+  }
+
+}
+
+@media (max-width: 1200px) {
+  .top-navigation {
+    padding: 0 20px;
+  }
+
+  .nav-separator-vertical {
+    height: 36px;
+    margin: 0 8px;
+  }
+}
+
+@media (max-width: 768px) {
+  .top-navigation {
+    padding: 0 16px;
+  }
+
+  .nav-right {
+    gap: 4px;
+  }
+
+  .nav-balance {
+    margin-right: 4px;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .balance-amount {
+    font-size: 13px;
+  }
+
+
+
+}
+
+@media (max-width: 480px) {
+  .top-navigation {
+    padding: 0 12px;
+  }
+
+
+
+}
+
