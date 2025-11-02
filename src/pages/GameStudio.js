@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getUserData, saveUserData, getUserScopedKey } from '../utils/UserDataManager';
 import { 
   Upload, Plus, Edit, Trash2, Package, Play, X, Box,
   FileText, Image, Settings, ChevronLeft, ChevronRight, Check, X as XIcon, Edit2,
@@ -18,71 +19,49 @@ import ImageUpload from '../components/ImageUpload';
 import CustomVideoPlayer from '../components/CustomVideoPlayer';
 
 const GameStudio = ({ navigate }) => {
-  // Load custom games from localStorage on mount
-  const [games, setGames] = useState(() => {
-    // No dummy games - only load real custom games
+  // Helper function to load user-specific custom games
+  const loadCustomGames = () => {
     try {
-      const stored = localStorage.getItem('customGames');
-      if (stored) {
-        const customGames = JSON.parse(stored);
-        // Convert custom games to Studio format
-        const customGamesFormatted = customGames.map((game, index) => ({
-          id: index + 1,
-          name: game.name,
-          version: game.version || '1.0.0',
-          status: game.status || 'public',
-          downloads: game.downloads || 0,
-          revenue: `$${((game.downloads || 0) * 2.5).toFixed(2)}`,
-          banner: game.banner || (game.banner?.startsWith('file://') || game.banner?.startsWith('data:') ? game.banner : '/public/images/games/pathline-banner.jpg'),
-          lastUpdated: game.lastUpdated || 'just now',
-          gameId: game.gameId // Store reference to the actual game
-        }));
-        return customGamesFormatted;
-      }
+      const customGames = getUserData('customGames', []);
+      
+      // Convert custom games to Studio format
+      const customGamesFormatted = customGames.map((game, index) => ({
+        id: index + 1,
+        name: game.name,
+        version: game.version || '1.0.0',
+        status: game.status || 'public',
+        downloads: game.downloads || 0,
+        revenue: `$${((game.downloads || 0) * 2.5).toFixed(2)}`,
+        banner: game.banner || (game.banner?.startsWith('file://') || game.banner?.startsWith('data:') ? game.banner : '/public/images/games/pathline-banner.jpg'),
+        lastUpdated: game.lastUpdated || 'just now',
+        gameId: game.gameId // Store reference to the actual game
+      }));
+      
+      return customGamesFormatted;
     } catch (e) {
       console.error('Error loading custom games in GameStudio:', e);
+      return [];
     }
-    
-    return []; // Return empty array if no games
-  });
+  };
+
+  // Load custom games from user-specific storage on mount
+  const [games, setGames] = useState(() => loadCustomGames());
 
   // Listen for custom game updates to reload the games list
   useEffect(() => {
-    const loadCustomGames = () => {
-      try {
-        const stored = localStorage.getItem('customGames');
-        if (stored) {
-          const customGames = JSON.parse(stored);
-          
-          const customGamesFormatted = customGames.map((game, index) => ({
-            id: index + 1,
-            name: game.name,
-            version: game.version || '1.0.0',
-            status: game.status || 'public',
-            downloads: game.downloads || 0,
-            revenue: `$${((game.downloads || 0) * 2.5).toFixed(2)}`,
-            banner: game.banner || (game.banner?.startsWith('file://') || game.banner?.startsWith('data:') ? game.banner : '/public/images/games/pathline-banner.jpg'),
-            lastUpdated: game.lastUpdated || 'just now',
-            gameId: game.gameId
-          }));
-          
-          setGames(customGamesFormatted);
-        } else {
-          setGames([]);
-        }
-      } catch (e) {
-        console.error('Error loading custom games in GameStudio:', e);
-      }
-    };
-    
     const handleCustomGameUpdate = () => {
-      loadCustomGames();
+      setGames(loadCustomGames());
     };
     
     const handleStorageChange = (e) => {
-      if (e.key === 'customGames') {
-        loadCustomGames();
+      if (e.key === getUserScopedKey('customGames')) {
+        setGames(loadCustomGames());
       }
+    };
+    
+    // Listen for user changes
+    const handleUserChange = () => {
+      setGames(loadCustomGames());
     };
     
     // Load on mount
@@ -90,10 +69,12 @@ const GameStudio = ({ navigate }) => {
     
     window.addEventListener('customGameUpdate', handleCustomGameUpdate);
     window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('user-changed', handleUserChange);
     
     return () => {
       window.removeEventListener('customGameUpdate', handleCustomGameUpdate);
       window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('user-changed', handleUserChange);
     };
   }, []);
 
@@ -956,8 +937,7 @@ const GameStudio = ({ navigate }) => {
       // Fallback to localStorage if metadata.json not available
       let fd = null;
       if (!metadata) {
-        const stored = localStorage.getItem('customGames');
-        const customGames = stored ? JSON.parse(stored) : [];
+        const customGames = getUserData('customGames', []);
         const customGame = customGames.find(g => g.gameId === game.gameId);
         
         if (customGame && customGame.fullFormData) {
@@ -1073,16 +1053,13 @@ const GameStudio = ({ navigate }) => {
       // Remove from games list in UI
       setGames(games.filter(game => game.id !== gameId));
       
-      // Remove from localStorage
-      const storedCustomGames = localStorage.getItem('customGames');
-      if (storedCustomGames) {
-        const customGames = JSON.parse(storedCustomGames);
-        const updatedGames = customGames.filter(game => game.gameId !== gameToDelete.gameId);
-        localStorage.setItem('customGames', JSON.stringify(updatedGames));
-        
-        // Dispatch event to update other components
-        window.dispatchEvent(new Event('customGameUpdate'));
-      }
+      // Remove from user-specific storage
+      const customGames = getUserData('customGames', []);
+      const updatedGames = customGames.filter(game => game.gameId !== gameToDelete.gameId);
+      saveUserData('customGames', updatedGames);
+      
+      // Dispatch event to update other components
+      window.dispatchEvent(new Event('customGameUpdate'));
       
       // If Electron API is available, delete the game files folder
       if (window.electronAPI && window.electronAPI.deleteGameFolder) {
@@ -2335,9 +2312,8 @@ const GameStudio = ({ navigate }) => {
                               validateStep(7);
                               alert('Please fill in all required fields before uploading.');
                             } else {
-                              // Get or initialize custom games from localStorage
-                              const storedCustomGames = localStorage.getItem('customGames');
-                              let customGames = storedCustomGames ? JSON.parse(storedCustomGames) : [];
+                              // Get or initialize custom games from user-specific storage
+                              let customGames = getUserData('customGames', []);
                               
                               const gameId = formData.gameName.toLowerCase().replace(/\s+/g, '-');
                               
@@ -2588,7 +2564,7 @@ const GameStudio = ({ navigate }) => {
                                       ? { ...game, ...newGame }
                                       : game
                                   );
-                                  localStorage.setItem('customGames', JSON.stringify(updatedGames));
+                                  saveUserData('customGames', updatedGames);
                                   
                                   // Dispatch custom event to update other components
                                   window.dispatchEvent(new Event('customGameUpdate'));
@@ -2604,11 +2580,11 @@ const GameStudio = ({ navigate }) => {
                                   // Add new game
                                   customGames.push(newGame);
                                   
-                                  // Save to localStorage (this might fail if data URLs are too large)
+                                  // Save to user-specific storage (this might fail if data URLs are too large)
                                   try {
-                                    localStorage.setItem('customGames', JSON.stringify(customGames));
+                                    saveUserData('customGames', customGames);
                                   } catch (error) {
-                                    console.error('Failed to save to localStorage (likely too large):', error);
+                                    console.error('Failed to save to storage (likely too large):', error);
                                     // Fallback: save without the full data URLs
                                     const gameWithoutDataUrls = {
                                       ...newGame,
@@ -2635,8 +2611,8 @@ const GameStudio = ({ navigate }) => {
                                       }
                                     };
                                     customGames[customGames.length - 1] = gameWithoutDataUrls;
-                                    localStorage.setItem('customGames', JSON.stringify(customGames));
-                                    console.log('Saved to localStorage with file paths only');
+                                    saveUserData('customGames', customGames);
+                                    console.log('Saved to user storage with file paths only');
                                   }
                                   
                                   // Dispatch custom event to update other components

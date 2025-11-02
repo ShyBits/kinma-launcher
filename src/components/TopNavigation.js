@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Settings, Users, MessageSquare, ShoppingCart, Bell, User, Wallet, Plus, Minus, CreditCard, Coins, Store, Globe, Menu,
-  BarChart3, Package, FileText, Upload, TrendingUp, DollarSign, Download
+  BarChart3, Package, FileText, Upload, TrendingUp, DollarSign, Download, Check, RefreshCw
 } from 'lucide-react';
 import KinmaLogo from './KinmaLogo';
 import AuthModal from './AuthModal';
+import { getUserData } from '../utils/UserDataManager';
 import './TopNavigation.css';
 
 const CustomTooltip = ({ text, children }) => {
@@ -87,10 +88,23 @@ const TopNavigation = ({
     try { const u = localStorage.getItem('authUser'); return u ? JSON.parse(u) : null; } catch (_) { return null; }
   });
   const userName = authUser?.name || 'Guest';
+  const [userLevel, setUserLevel] = useState(() => {
+    if (authUser) {
+      const userStats = getUserData('userStats', null);
+      return userStats?.level || 1;
+    }
+    return 1;
+  });
   const [showAuth, setShowAuth] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const profileMenuRef = useRef(null);
   const profileButtonRef = useRef(null);
+  const [availableUsers, setAvailableUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [showQuickSwitchMenu, setShowQuickSwitchMenu] = useState(false);
+  const quickSwitchMenuRef = useRef(null);
+  const quickSwitchButtonRef = useRef(null);
+  const quickSwitchHoverTimeoutRef = useRef(null);
   
   // Check if we're in Game Studio
   const isGameStudio = location?.pathname === '/game-studio' || location?.pathname === '/game-studio-settings';
@@ -228,6 +242,248 @@ const TopNavigation = ({
     }
   };
 
+  const handleLogout = async () => {
+    try { localStorage.removeItem('authUser'); } catch (_) {}
+    try { localStorage.removeItem('developerIntent'); } catch (_) {}
+    setAuthUser(null);
+    try { await (window.electronAPI?.logout?.()); } catch (_) {}
+  };
+
+  // Update user level when user changes
+  useEffect(() => {
+    const handleUserChanged = () => {
+      const updatedAuthUser = (() => {
+        try { const u = localStorage.getItem('authUser'); return u ? JSON.parse(u) : null; } catch (_) { return null; }
+      })();
+      if (updatedAuthUser) {
+        setAuthUser(updatedAuthUser);
+        const userStats = getUserData('userStats', null);
+        setUserLevel(userStats?.level || 1);
+      }
+    };
+
+    window.addEventListener('user-changed', handleUserChanged);
+    
+    // Also check on mount
+    if (authUser) {
+      const userStats = getUserData('userStats', null);
+      if (userStats?.level) {
+        setUserLevel(userStats.level);
+      }
+    }
+
+    return () => {
+      window.removeEventListener('user-changed', handleUserChanged);
+    };
+  }, [authUser]);
+
+  // Load available users when menu opens
+  useEffect(() => {
+    if (showProfileMenu && authUser) {
+      setLoadingUsers(true);
+      const loadUsers = async () => {
+        try {
+          const api = window.electronAPI || window.electron;
+          if (api?.getUsers) {
+            const result = await api.getUsers();
+            if (result && result.success && Array.isArray(result.users)) {
+              // Sort: current user first, then by lastLoginTime, then alphabetically
+              const sorted = result.users.sort((a, b) => {
+                if (a.id === authUser.id) return -1;
+                if (b.id === authUser.id) return 1;
+                if (a.lastLoginTime && b.lastLoginTime) {
+                  const timeA = new Date(a.lastLoginTime).getTime();
+                  const timeB = new Date(b.lastLoginTime).getTime();
+                  if (timeA !== timeB) return timeB - timeA;
+                } else if (a.lastLoginTime) return -1;
+                else if (b.lastLoginTime) return 1;
+                const nameA = (a.name || a.email || a.username || '').toLowerCase();
+                const nameB = (b.name || b.email || b.username || '').toLowerCase();
+                return nameA.localeCompare(nameB);
+              });
+              setAvailableUsers(sorted);
+            } else {
+              setAvailableUsers([]);
+            }
+          } else {
+            setAvailableUsers([]);
+          }
+        } catch (error) {
+          console.error('Error loading users:', error);
+          setAvailableUsers([]);
+        } finally {
+          setLoadingUsers(false);
+        }
+      };
+      loadUsers();
+    } else {
+      setAvailableUsers([]);
+    }
+  }, [showProfileMenu, authUser]);
+
+  // Load users for quick switch menu on hover
+  useEffect(() => {
+    if (showQuickSwitchMenu && authUser) {
+      setLoadingUsers(true);
+      const loadUsers = async () => {
+        try {
+          const api = window.electronAPI || window.electron;
+          if (api?.getUsers) {
+            const result = await api.getUsers();
+            if (result && result.success && Array.isArray(result.users)) {
+              // Sort: current user first, then by lastLoginTime, then alphabetically
+              const sorted = result.users.sort((a, b) => {
+                if (a.id === authUser.id) return -1;
+                if (b.id === authUser.id) return 1;
+                if (a.lastLoginTime && b.lastLoginTime) {
+                  const timeA = new Date(a.lastLoginTime).getTime();
+                  const timeB = new Date(b.lastLoginTime).getTime();
+                  if (timeA !== timeB) return timeB - timeA;
+                } else if (a.lastLoginTime) return -1;
+                else if (b.lastLoginTime) return 1;
+                const nameA = (a.name || a.email || a.username || '').toLowerCase();
+                const nameB = (b.name || b.email || b.username || '').toLowerCase();
+                return nameA.localeCompare(nameB);
+              });
+              setAvailableUsers(sorted);
+            } else {
+              setAvailableUsers([]);
+            }
+          } else {
+            setAvailableUsers([]);
+          }
+        } catch (error) {
+          console.error('Error loading users:', error);
+          setAvailableUsers([]);
+        } finally {
+          setLoadingUsers(false);
+        }
+      };
+      loadUsers();
+    }
+  }, [showQuickSwitchMenu, authUser]);
+
+  const handleQuickSwitchFromMenu = async (user) => {
+    if (user.id === authUser?.id) {
+      setShowQuickSwitchMenu(false);
+      return;
+    }
+
+    setShowQuickSwitchMenu(false);
+    const api = window.electronAPI || window.electron;
+    try {
+      // Dispatch event to show loading screen in main window
+      window.dispatchEvent(new CustomEvent('main-window-account-switch-start', {
+        detail: { user }
+      }));
+
+      // Wait a moment for loading screen to render
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Step 1: Update last login time for this user
+      try {
+        const result = await api?.getUsers?.();
+        if (result && result.success && Array.isArray(result.users)) {
+          const users = result.users;
+          const userIndex = users.findIndex(u => u.id === user.id);
+          if (userIndex !== -1) {
+            users[userIndex].lastLoginTime = new Date().toISOString();
+            await api?.saveUsers?.(users);
+          }
+        }
+      } catch (error) {
+        console.error('Error updating last login time:', error);
+      }
+
+      // Step 2: Set auth user in localStorage
+      try {
+        const authUserData = { 
+          id: user.id, 
+          email: user.email, 
+          name: user.name || user.username || user.email?.split('@')[0] || 'User' 
+        };
+        localStorage.setItem('authUser', JSON.stringify(authUserData));
+        setAuthUser(authUserData);
+      } catch (error) {
+        console.error('Error setting localStorage:', error);
+      }
+
+      // Step 3: Set auth user in Electron store
+      try {
+        await api?.setAuthUser?.(user);
+      } catch (error) {
+        console.error('Error setting Electron store:', error);
+      }
+
+      // Step 4: Call authSuccess to properly handle login
+      try {
+        await api?.authSuccess?.(user);
+        
+        // Dispatch user-changed event
+        window.dispatchEvent(new Event('user-changed'));
+      } catch (error) {
+        console.error('Error calling authSuccess:', error);
+      }
+
+      // Step 5: Wait a bit more then hide loading screen
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Dispatch completion event
+      window.dispatchEvent(new Event('main-window-account-switch-complete'));
+      
+    } catch (error) {
+      console.error('Error switching account:', error);
+      window.dispatchEvent(new Event('main-window-account-switch-complete'));
+    }
+  };
+
+  const handleQuickSwitch = async (user) => {
+    if (user.id === authUser?.id) {
+      setShowProfileMenu(false);
+      return;
+    }
+
+    setShowProfileMenu(false);
+    const api = window.electronAPI || window.electron;
+    try {
+      // Update last login time
+      const result = await api?.getUsers?.();
+      if (result && result.success && Array.isArray(result.users)) {
+        const users = result.users;
+        const userIndex = users.findIndex(u => u.id === user.id);
+        if (userIndex !== -1) {
+          users[userIndex].lastLoginTime = new Date().toISOString();
+          await api?.saveUsers?.(users);
+        }
+      }
+
+      // Set auth user
+      const authUserData = { 
+        id: user.id, 
+        email: user.email, 
+        name: user.name || user.username || user.email?.split('@')[0] || 'User' 
+      };
+      localStorage.setItem('authUser', JSON.stringify(authUserData));
+      await api?.setAuthUser?.(user);
+      await api?.authSuccess?.(user);
+      
+      // Dispatch user-changed event
+      window.dispatchEvent(new Event('user-changed'));
+      setAuthUser(authUserData);
+    } catch (error) {
+      console.error('Error switching account:', error);
+    }
+  };
+
+  const getInitials = (user) => {
+    const name = user.name || user.username || user.email || 'U';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
   useEffect(() => {
     if (!showProfileMenu) return;
     const onKey = (e) => { if (e.key === 'Escape') setShowProfileMenu(false); };
@@ -238,24 +494,44 @@ const TopNavigation = ({
       }
     };
     
-    // Adjust menu position if it would overflow - wait for render
+    // Adjust menu position to center it below the button
     const adjustPosition = () => {
       if (profileMenuRef.current && profileButtonRef.current) {
         const menu = profileMenuRef.current;
         const button = profileButtonRef.current;
-        const rect = button.getBoundingClientRect();
+        const buttonRect = button.getBoundingClientRect();
         const menuRect = menu.getBoundingClientRect();
+        const parentRect = button.parentElement.getBoundingClientRect();
         const windowWidth = window.innerWidth;
         const menuWidth = menuRect.width || 250; // fallback width
         
-        if (rect.right + menuWidth > windowWidth) {
-          menu.style.right = 'auto';
-          menu.style.left = '0';
-          menu.style.transform = 'translateX(-100%)';
-        } else {
-          menu.style.right = '0';
+        // Calculate button center relative to parent
+        const buttonCenterInParent = buttonRect.left - parentRect.left + (buttonRect.width / 2);
+        
+        // Center menu below button
+        const menuLeftInParent = buttonCenterInParent - (menuWidth / 2);
+        
+        // Check if menu would overflow on the right
+        const menuRightEdge = buttonRect.left + (buttonRect.width / 2) + (menuWidth / 2);
+        if (menuRightEdge > windowWidth) {
+          // Menu would overflow right, align to right edge with padding
           menu.style.left = 'auto';
-          menu.style.transform = 'translateX(0)';
+          menu.style.right = '0';
+          menu.style.transform = 'none';
+        } else {
+          // Check if menu would overflow on the left
+          const menuLeftEdge = buttonRect.left + (buttonRect.width / 2) - (menuWidth / 2);
+          if (menuLeftEdge < 0) {
+            // Menu would overflow left, align to left edge
+            menu.style.left = '0';
+            menu.style.right = 'auto';
+            menu.style.transform = 'none';
+          } else {
+            // Center it perfectly below the button
+            menu.style.left = `${menuLeftInParent}px`;
+            menu.style.right = 'auto';
+            menu.style.transform = 'none';
+          }
         }
       }
     };
@@ -273,13 +549,37 @@ const TopNavigation = ({
     };
   }, [showProfileMenu]);
 
-  const handleLogout = async () => {
-    try { localStorage.removeItem('authUser'); } catch (_) {}
-    try { localStorage.removeItem('developerIntent'); } catch (_) {}
-    setAuthUser(null);
-    setShowProfileMenu(false);
-    try { await (window.electronAPI?.logout?.()); } catch (_) {}
-  };
+  // Quick switch menu handlers
+  useEffect(() => {
+    if (!showQuickSwitchMenu) return;
+    
+    const onClickOutside = (e) => {
+      // Check if click was outside both button and profile menu
+      if (quickSwitchButtonRef.current && profileMenuRef.current) {
+        const button = quickSwitchButtonRef.current;
+        const profileMenu = profileMenuRef.current;
+        
+        if (!button.contains(e.target) && !profileMenu.contains(e.target)) {
+          setShowQuickSwitchMenu(false);
+        }
+      }
+    };
+
+    const onKey = (e) => { 
+      if (e.key === 'Escape') setShowQuickSwitchMenu(false); 
+    };
+
+    // Small delay before adding click listener to avoid immediate close
+    setTimeout(() => {
+      document.addEventListener('mousedown', onClickOutside);
+    }, 0);
+    document.addEventListener('keydown', onKey);
+    
+    return () => {
+      document.removeEventListener('mousedown', onClickOutside);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [showQuickSwitchMenu]);
 
   return (
     <>
@@ -627,7 +927,36 @@ const TopNavigation = ({
         ) : (
           /* Regular navigation */
           <>
-            {/* Wallet & Store (Financial) */}
+            <CustomTooltip text="Store">
+              <button 
+                className={`nav-item ${currentPage === 'store' ? 'active' : ''}`}
+                onClick={() => handleNavigation('store')}
+              >
+                <Store size={20} />
+              </button>
+            </CustomTooltip>
+            
+            <CustomTooltip text="Market">
+              <button 
+                className={`nav-item ${currentPage === 'market' ? 'active' : ''}`}
+                onClick={() => handleNavigation('market')}
+              >
+                <ShoppingCart size={20} />
+              </button>
+            </CustomTooltip>
+            
+            <CustomTooltip text="Community">
+              <button 
+                className={`nav-item ${currentPage === 'community' ? 'active' : ''}`}
+                onClick={() => handleNavigation('community')}
+              >
+                <Globe size={20} />
+              </button>
+            </CustomTooltip>
+            
+            <div className="nav-separator" />
+            
+            {/* Balance & Profile */}
             <div className="balance-wrapper">
               <CustomTooltip text={showBalanceMenu ? '' : 'Balance'}>
                 <div 
@@ -734,80 +1063,153 @@ const TopNavigation = ({
               )}
             </div>
             
-            <div className="nav-separator" />
-            
-            <CustomTooltip text="Store">
-              <button 
-                className={`nav-item ${currentPage === 'store' ? 'active' : ''}`}
-                onClick={() => handleNavigation('store')}
-              >
-                <Store size={20} />
-              </button>
-            </CustomTooltip>
-            
-            <CustomTooltip text="Market">
-              <button 
-                className={`nav-item ${currentPage === 'market' ? 'active' : ''}`}
-                onClick={() => handleNavigation('market')}
-              >
-                <ShoppingCart size={20} />
-              </button>
-            </CustomTooltip>
-            
-            <CustomTooltip text="Community">
-              <button 
-                className={`nav-item ${currentPage === 'community' ? 'active' : ''}`}
-                onClick={() => handleNavigation('community')}
-              >
-                <Globe size={20} />
-              </button>
-            </CustomTooltip>
-            
-            <div className="nav-separator" />
-            
-            <CustomTooltip text="Notifications">
-              <button 
-                className={`nav-item ${currentPage === 'notifications' ? 'active' : ''}`}
-                onClick={() => handleNavigation('notifications')}
-              >
-                <Bell size={20} />
-              </button>
-            </CustomTooltip>
-            
             {authUser ? (
               <div style={{ position: 'relative' }}>
                 <CustomTooltip text={`Profile - ${userName}`}>
                   <button 
                     ref={profileButtonRef}
-                    className={`nav-item ${showProfileMenu ? 'active' : ''}`}
+                    className={`nav-item nav-item-with-user-info ${showProfileMenu ? 'active' : ''}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       setShowProfileMenu((v) => !v);
                     }}
                   >
                     <User size={20} />
+                    <span className="nav-user-name">{userName}</span>
+                    <span className="nav-user-level">{userLevel}</span>
                   </button>
                 </CustomTooltip>
                 {showProfileMenu && (
                   <div 
                     ref={profileMenuRef} 
-                    className="balance-menu" 
+                    className="profile-menu" 
                     style={{ 
                       position: 'absolute',
                       top: '100%',
-                      right: 0,
+                      left: '50%',
+                      transform: 'translateX(-50%)',
                       marginTop: '8px',
-                      minWidth: '200px',
+                      width: '320px',
                       zIndex: 1000
                     }}
                   >
-                    <div className="balance-menu-header">
-                      <h2 style={{ marginBottom: 0 }}>Account</h2>
-                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>{userName}</p>
+                    <div className="profile-menu-header">
+                      <div className="profile-menu-user-info">
+                        <div className="profile-menu-avatar">
+                          {getInitials(authUser)}
+                        </div>
+                        <div className="profile-menu-user-details">
+                          <h3>{userName}</h3>
+                          <p>{authUser?.email || ''}</p>
+                        </div>
+                        <div style={{ marginLeft: 'auto' }}>
+                          <button
+                            ref={quickSwitchButtonRef}
+                            className="profile-menu-quick-switch-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowQuickSwitchMenu((prev) => !prev);
+                            }}
+                            title="Quick Switch Account"
+                          >
+                            <RefreshCw size={18} />
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <div className="balance-actions" style={{ justifyContent: 'space-between' }}>
-                      <button className="cancel-btn" onClick={() => { handleNavigation('profile'); setShowProfileMenu(false); }}>Open Profile</button>
-                      <button className="confirm-btn" onClick={handleLogout}>Log out</button>
+
+                    {showQuickSwitchMenu && availableUsers.length > 1 && (
+                      <div className="profile-menu-quick-switch-section">
+                        <div className="quick-switch-header">
+                          <span>Quick Switch</span>
+                        </div>
+                        <div className="quick-switch-accounts">
+                          {loadingUsers ? (
+                            <div className="quick-switch-loading">Loading accounts...</div>
+                          ) : (
+                            availableUsers.map((user) => {
+                              const isCurrentUser = user.id === authUser?.id;
+                              const userInitials = getInitials(user);
+                              const userDisplayName = user.name || user.username || user.email?.split('@')[0] || 'User';
+                              
+                              return (
+                                <button
+                                  key={user.id}
+                                  className={`quick-switch-item ${isCurrentUser ? 'active' : ''}`}
+                                  onClick={() => {
+                                    handleQuickSwitchFromMenu(user);
+                                    setShowQuickSwitchMenu(false);
+                                  }}
+                                  disabled={isCurrentUser}
+                                >
+                                  <div className="quick-switch-avatar">{userInitials}</div>
+                                  <div className="quick-switch-info">
+                                    <span className="quick-switch-name">{userDisplayName}</span>
+                                    {isCurrentUser && <span className="quick-switch-current-badge">Current</span>}
+                                  </div>
+                                  {isCurrentUser && <Check size={16} />}
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {showQuickSwitchMenu && <div className="profile-menu-divider"></div>}
+
+                    <div className="profile-menu-manage-accounts">
+                      <button 
+                        className="profile-menu-action-btn"
+                        onClick={async () => { 
+                          setShowProfileMenu(false);
+                          const api = window.electronAPI || window.electron;
+                          try {
+                            const result = await api?.openAccountSwitcherWindow?.();
+                            if (!result || !result.success) {
+                              navigate('/account-switcher');
+                            }
+                          } catch (error) {
+                            console.error('Error opening account switcher window:', error);
+                            navigate('/account-switcher');
+                          }
+                        }}
+                      >
+                        <Users size={16} />
+                        <span>Manage Accounts</span>
+                      </button>
+                    </div>
+
+                    <div className="profile-menu-divider"></div>
+
+                    <div className="profile-menu-actions">
+                      <button 
+                        className="profile-menu-action-btn"
+                        onClick={() => { handleNavigation('profile'); setShowProfileMenu(false); }}
+                      >
+                        <User size={16} />
+                        <span>Open Profile</span>
+                      </button>
+                      <button 
+                        className="profile-menu-action-btn"
+                        onClick={() => { handleNavigation('notifications'); setShowProfileMenu(false); }}
+                      >
+                        <Bell size={16} />
+                        <span>Notifications</span>
+                      </button>
+                      <button 
+                        className="profile-menu-action-btn"
+                        onClick={() => { handleNavigation('settings'); setShowProfileMenu(false); }}
+                      >
+                        <Settings size={16} />
+                        <span>Settings</span>
+                      </button>
+                      <button 
+                        className="profile-menu-action-btn danger"
+                        onClick={() => { handleLogout(); setShowProfileMenu(false); }}
+                      >
+                        <span>Log out</span>
+                      </button>
                     </div>
                   </div>
                 )}
@@ -822,15 +1224,6 @@ const TopNavigation = ({
                 </button>
               </CustomTooltip>
             )}
-            
-            <CustomTooltip text="Settings">
-              <button 
-                className={`nav-item ${currentPage === 'settings' ? 'active' : ''}`}
-                onClick={() => handleNavigation('settings')}
-              >
-                <Settings size={20} />
-              </button>
-            </CustomTooltip>
           </>
         )}
       </div>

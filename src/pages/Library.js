@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Filter, MessageSquare, Star } from 'lucide-react';
+import { getUserData, saveUserData, getUserScopedKey } from '../utils/UserDataManager';
 import './Library.css';
 
 const Library = () => {
@@ -23,8 +24,9 @@ const Library = () => {
   useEffect(() => {
     const load = () => {
       try {
-        const stored = localStorage.getItem('customGames');
-        setCustomGames(stored ? JSON.parse(stored) : []);
+        // Load user-specific custom games
+        const userGames = getUserData('customGames', []);
+        setCustomGames(userGames);
       } catch (_) {
         setCustomGames([]);
       }
@@ -32,8 +34,25 @@ const Library = () => {
     load();
     const handler = () => load();
     window.addEventListener('customGameUpdate', handler);
-    window.addEventListener('storage', (e) => { if (e.key === 'customGames') load(); });
-    return () => window.removeEventListener('customGameUpdate', handler);
+    
+    // Listen for storage changes for this user's games
+    const handleStorageChange = (e) => {
+      if (e.key === getUserScopedKey('customGames')) {
+        load();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also reload when user changes
+    const handleUserChange = () => load();
+    window.addEventListener('user-changed', handleUserChange);
+    
+    return () => {
+      window.removeEventListener('customGameUpdate', handler);
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('user-changed', handleUserChange);
+    };
   }, []);
 
   // Base games will be loaded from localStorage or API

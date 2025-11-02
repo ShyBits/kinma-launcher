@@ -2,6 +2,7 @@ import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import WorkshopSection from '../components/WorkshopSection';
 import { MessageSquare, Package } from 'lucide-react';
+import { getUserData, getUserScopedKey, getAllUsersData } from '../utils/UserDataManager';
 import './Community.css';
 
 // Posts will be loaded from API or localStorage
@@ -14,17 +15,28 @@ const Community = () => {
   const [sortBy, setSortBy] = React.useState('trending');
   const [selectedTab, setSelectedTab] = React.useState('posts'); // posts | workshop
   const [savedSet] = React.useState(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('communitySaved') || '[]')); } catch (_) { return new Set(); }
+    try { 
+      const saved = getUserData('communitySaved', []);
+      return new Set(saved); 
+    } catch (_) { 
+      return new Set(); 
+    }
   });
   const [pickerOpen, setPickerOpen] = React.useState(false);
   const pickerRef = React.useRef(null);
   const [pickerQuery, setPickerQuery] = React.useState('');
 
-  // Build game list from customGames only (no built-ins)
+  // Build game list from ALL published games from ALL users (shared marketplace)
   const gameList = React.useMemo(() => {
     let list = [{ id: 'all', name: 'All Games', banner: null }];
     try {
-      const stored = JSON.parse(localStorage.getItem('customGames') || '[]');
+      // Get all games from all users (shared)
+      const allGames = getAllUsersData('customGames');
+      // Filter to only show published games
+      const publishedGames = allGames.filter(game => {
+        const status = game.status || game.fullFormData?.status || 'draft';
+        return status === 'public' || status === 'published';
+      });
       const getCard = (g) => (
         g.card || g.cardImage || g.fullFormData?.cardImage ||
         g.fullFormData?.card || g.metadata?.cardImage || g.files?.card?.path || null
@@ -32,7 +44,7 @@ const Community = () => {
       const getLogo = (g) => (
         g.gameLogo || g.logo || g.fullFormData?.gameLogo || g.fullFormData?.titleImage || g.titleImage || g.title || null
       );
-      const customs = stored.map(g => ({
+      const customs = publishedGames.map(g => ({
         id: g.gameId,
         name: g.name || g.gameName || g.id,
         banner: null,
@@ -52,15 +64,53 @@ const Community = () => {
     });
   };
 
-  // Load posts from localStorage or empty array
-  const [posts] = React.useState(() => {
+  // Load ALL published posts from ALL users (shared community)
+  const [posts, setPosts] = React.useState(() => {
     try {
-      const stored = localStorage.getItem('communityPosts');
-      return stored ? JSON.parse(stored) : [];
+      // Get all posts from all users (shared)
+      const allPosts = getAllUsersData('communityPosts');
+      // Filter to only show published posts
+      const publishedPosts = allPosts.filter(post => {
+        const status = post.status || 'published';
+        return status === 'public' || status === 'published';
+      });
+      return publishedPosts;
     } catch (_) {
       return [];
     }
   });
+
+  // Reload posts when user changes or posts are updated
+  React.useEffect(() => {
+    const loadPosts = () => {
+      try {
+        const allPosts = getAllUsersData('communityPosts');
+        const publishedPosts = allPosts.filter(post => {
+          const status = post.status || 'published';
+          return status === 'public' || status === 'published';
+        });
+        setPosts(publishedPosts);
+      } catch (_) {
+        setPosts([]);
+      }
+    };
+
+    loadPosts();
+
+    const handleStorageChange = (e) => {
+      if (e.key && e.key.startsWith('communityPosts_')) {
+        loadPosts();
+      }
+    };
+
+    window.addEventListener('user-changed', loadPosts);
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('user-changed', loadPosts);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
 
   const filteredByGame = posts.filter(p => (currentGame === 'all' || p.game === currentGame));
   const filtered = filteredByGame.filter(p => (selectedTags.size === 0 || p.tags?.some(t => selectedTags.has(t))));

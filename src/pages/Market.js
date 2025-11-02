@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ShoppingCart, Plus, ShoppingBag, Eye, EyeOff, Grid, List, ArrowLeft, Crown } from 'lucide-react';
+import { getUserData, saveUserData, getAllUsersData } from '../utils/UserDataManager';
 import './Market.css';
 
 
-// User inventory will be loaded from API or localStorage
+// User inventory will be loaded from account-separated storage
 const getUserInventory = (gameId) => {
   try {
-    const stored = localStorage.getItem(`inventory_${gameId}`);
-    return stored ? JSON.parse(stored) : [];
+    return getUserData(`inventory_${gameId}`, []);
   } catch (_) {
     return [];
   }
@@ -36,43 +36,45 @@ const Market = () => {
   const [expandedCards, setExpandedCards] = useState(new Set());
   const [petitions, setPetitions] = useState(() => {
     try {
-      const stored = localStorage.getItem('marketPetitions');
-      return stored ? JSON.parse(stored) : {};
+      return getUserData('marketPetitions', {});
     } catch (e) {
       return {};
     }
   });
   
-  // Investments data loaded from localStorage
+  // Investments data loaded from account-separated storage
   const [investments] = useState(() => {
     try {
-      const stored = localStorage.getItem('marketInvestments');
-      return stored ? JSON.parse(stored) : {};
+      return getUserData('marketInvestments', {});
     } catch (e) {
       return {};
     }
   });
 
-  // Load custom games and watched games from localStorage
+  // Load all games with marketplace enabled from all users (for Market browse view)
   useEffect(() => {
     const loadCustomGames = () => {
       try {
-        const stored = localStorage.getItem('customGames');
-        if (stored) {
-          const games = JSON.parse(stored);
-          setCustomGames(games);
-        }
+        // Get all games from all users for the Market (shared marketplace)
+        const allGames = getAllUsersData('customGames');
+        // Filter to only show published games with marketplace enabled
+        const marketGames = allGames.filter(game => {
+          const status = game.status || game.fullFormData?.status || 'draft';
+          const marketEnabled = game.fullFormData?.marketEnabled !== false; // Default to true
+          return (status === 'public' || status === 'published') && marketEnabled;
+        });
+        setCustomGames(marketGames);
       } catch (e) {
         console.error('Error loading custom games:', e);
+        setCustomGames([]);
       }
     };
 
     const loadWatchedGames = () => {
       try {
-        const stored = localStorage.getItem('watchedGames');
-        if (stored) {
-          const gameIds = JSON.parse(stored);
-          setWatchedGames(new Set(gameIds));
+        const watched = getUserData('watchedGames', []);
+        if (Array.isArray(watched)) {
+          setWatchedGames(new Set(watched));
         }
       } catch (e) {
         console.error('Error loading watched games:', e);
@@ -83,36 +85,38 @@ const Market = () => {
     loadWatchedGames();
     const handleUpdate = () => loadCustomGames();
     window.addEventListener('customGameUpdate', handleUpdate);
+    window.addEventListener('user-changed', loadCustomGames);
     
-    return () => window.removeEventListener('customGameUpdate', handleUpdate);
+    return () => {
+      window.removeEventListener('customGameUpdate', handleUpdate);
+      window.removeEventListener('user-changed', loadCustomGames);
+    };
   }, []);
 
-  // Get all games with market settings
+  // Get all games with market settings (already filtered by published and marketEnabled)
   const allGamesData = React.useMemo(() => {
-    // Custom games from localStorage
+    // Custom games are already filtered to published + marketEnabled
     const customGamesData = customGames.map((game) => {
       const hasMarket = game.fullFormData?.marketEnabled !== false; // Default to true
-      // Load market data from localStorage or API
+      // Load market data from user-specific storage or API
       let marketData = {};
       try {
-        const stored = localStorage.getItem(`market_${game.gameId || game.id}`);
-        if (stored) {
-          marketData = JSON.parse(stored);
-        }
+        const marketKey = `market_${game.gameId || game.id}`;
+        marketData = getUserData(marketKey, {});
       } catch (_) {}
       
       return {
-        id: game.gameId || `custom-${game.id}`,
-        name: game.name,
-        icon: game.name?.charAt(0)?.toUpperCase() || 'G',
-        image: game.banner || game.bannerImage,
+        id: game.gameId || game.id || `custom-${Date.now()}`,
+        name: game.name || game.gameName || 'Untitled Game',
+        icon: (game.name || game.gameName || 'G')?.charAt(0)?.toUpperCase() || 'G',
+        image: game.banner || game.bannerImage || game.cardImage,
         logo: game.logo || game.gameLogo,
         installed: true,
         hasMarket,
         signatures: marketData.signatures || 0,
         myToken: marketData.myToken || null,
         isCustom: true,
-        cardImage: game.card || game.cardImage,
+        cardImage: game.card || game.cardImage || game.banner,
         marketRank: marketData.marketRank || null,
         totalVolume: marketData.totalVolume || '$0',
         marketTrend: marketData.marketTrend || '+0%'
@@ -140,22 +144,21 @@ const Market = () => {
     }
   }, [gameId, allGamesData]);
 
-  // Load market items from localStorage or API
+  // Load market items from account-separated storage
   const marketItems = React.useMemo(() => {
     if (!selectedGame) return [];
     
     try {
-      const stored = localStorage.getItem(`marketItems_${selectedGame.id}`);
-      return stored ? JSON.parse(stored) : [];
+      return getUserData(`marketItems_${selectedGame.id}`, []);
     } catch (_) {
       return [];
     }
   }, [selectedGame]);
 
-  // Calculate market statistics from localStorage data
+  // Calculate market statistics from account-separated storage
   const marketStats = React.useMemo(() => {
     try {
-      const transactions = JSON.parse(localStorage.getItem('marketTransactions') || '[]');
+      const transactions = getUserData('marketTransactions', []);
       const investmentKeys = Object.keys(investments);
       const totalTraded = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
       const totalProfit = transactions.reduce((sum, t) => sum + (t.profit || 0), 0);
@@ -329,9 +332,9 @@ const Market = () => {
         }
       };
       
-      // Save to localStorage
+      // Save to account-separated storage
       try {
-        localStorage.setItem('marketPetitions', JSON.stringify(updated));
+        saveUserData('marketPetitions', updated);
       } catch (e) {
         console.error('Error saving petitions:', e);
       }
@@ -349,7 +352,7 @@ const Market = () => {
       newWatched.add(gameId);
     }
     setWatchedGames(newWatched);
-    localStorage.setItem('watchedGames', JSON.stringify(Array.from(newWatched)));
+    saveUserData('watchedGames', Array.from(newWatched));
   };
 
   // If no game is selected, show game selection

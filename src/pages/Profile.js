@@ -1,76 +1,160 @@
-import React, { useState } from 'react';
-import { User, Activity, Trophy, Clock, Gamepad2, Calendar, TrendingUp, Star, Building } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, Activity, Trophy, Clock, Gamepad2, Star, TrendingUp } from 'lucide-react';
+import { getUserData, saveUserData } from '../utils/UserDataManager';
 import './Profile.css';
 
 const Profile = ({ navigate }) => {
-  const handleGameStudioClick = () => {
-    navigate('/game-studio');
-  };
-  const userStats = {
-    username: 'Player',
-    level: 42,
-    exp: 1250,
-    expToNext: 1500,
-    totalGames: 156,
-    achievements: 23,
-    totalPlaytime: 1240, // hours
-    rank: 'Elite'
-  };
+  // Load user data from account-separated storage
+  const [authUser, setAuthUser] = useState(() => {
+    try {
+      const u = localStorage.getItem('authUser');
+      return u ? JSON.parse(u) : null;
+    } catch (_) {
+      return null;
+    }
+  });
 
-  const recentAchievements = [
-    { id: 1, name: 'First Victory', icon: '🏆', date: '2 days ago' },
-    { id: 2, name: 'Speed Runner', icon: '⚡', date: '1 week ago' },
-    { id: 3, name: 'Collector', icon: '💎', date: '2 weeks ago' },
-  ];
+  // Load user stats (account-separated)
+  const [userStats, setUserStats] = useState(() => {
+    try {
+      const stats = getUserData('userStats', {
+        level: 1,
+        exp: 0,
+        expToNext: 100,
+        totalGames: 0,
+        achievements: 0,
+        totalPlaytime: 0,
+        rank: 'Novice'
+      });
+      return stats;
+    } catch (_) {
+      return {
+        level: 1,
+        exp: 0,
+        expToNext: 100,
+        totalGames: 0,
+        achievements: 0,
+        totalPlaytime: 0,
+        rank: 'Novice'
+      };
+    }
+  });
 
-  const gameLibrary = [
-    { id: 1, name: 'Pathline', hours: 450, lastPlayed: '3 days ago', progress: 87, favorite: true },
-    { id: 2, name: 'Cyber Arena', hours: 320, lastPlayed: '1 week ago', progress: 65 },
-    { id: 3, name: 'Racing Thunder', hours: 180, lastPlayed: '2 weeks ago', progress: 42 },
-  ];
+  // Load user games (account-separated)
+  const [customGames, setCustomGames] = useState(() => {
+    try {
+      return getUserData('customGames', []);
+    } catch (_) {
+      return [];
+    }
+  });
 
-  const recentActivity = [
-    { id: 1, type: 'achievement', text: 'Unlocked "First Victory" achievement', time: '2 days ago' },
-    { id: 2, type: 'playtime', text: 'Played Pathline for 3 hours', time: '3 days ago' },
-    { id: 3, type: 'level', text: 'Reached Level 42', time: '5 days ago' },
-  ];
+  // Load recent achievements (account-separated)
+  const [recentAchievements, setRecentAchievements] = useState(() => {
+    try {
+      return getUserData('recentAchievements', []);
+    } catch (_) {
+      return [];
+    }
+  });
 
-  const expPercentage = (userStats.exp / userStats.expToNext) * 100;
+  // Load recent activity (account-separated)
+  const [recentActivity, setRecentActivity] = useState(() => {
+    try {
+      return getUserData('recentActivity', []);
+    } catch (_) {
+      return [];
+    }
+  });
+
+  // Reload data when user changes
+  useEffect(() => {
+    const handleUserChange = () => {
+      try {
+        const u = localStorage.getItem('authUser');
+        setAuthUser(u ? JSON.parse(u) : null);
+        setUserStats(getUserData('userStats', {
+          level: 1,
+          exp: 0,
+          expToNext: 100,
+          totalGames: 0,
+          achievements: 0,
+          totalPlaytime: 0,
+          rank: 'Novice'
+        }));
+        setCustomGames(getUserData('customGames', []));
+        setRecentAchievements(getUserData('recentAchievements', []));
+        setRecentActivity(getUserData('recentActivity', []));
+      } catch (_) {}
+    };
+
+    window.addEventListener('user-changed', handleUserChange);
+    return () => window.removeEventListener('user-changed', handleUserChange);
+  }, []);
+
+  // Calculate stats from actual games
+  useEffect(() => {
+    if (customGames.length > 0) {
+      const totalPlaytime = customGames.reduce((sum, game) => sum + (parseInt(game.playtime) || 0), 0);
+      const updatedStats = {
+        ...userStats,
+        totalGames: customGames.length,
+        totalPlaytime: totalPlaytime
+      };
+      setUserStats(updatedStats);
+      saveUserData('userStats', updatedStats);
+    }
+  }, [customGames]);
+
+  const userName = authUser?.name || authUser?.username || authUser?.email?.split('@')[0] || 'Player';
+  const expPercentage = userStats.expToNext > 0 ? (userStats.exp / userStats.expToNext) * 100 : 0;
+
+  // Get library games (user's games with playtime info)
+  const gameLibrary = customGames.slice(0, 3).map(game => ({
+    id: game.gameId || game.id,
+    name: game.name || game.gameName || 'Untitled Game',
+    hours: parseInt(game.playtime) || 0,
+    lastPlayed: game.lastPlayed || 'Never',
+    progress: game.progress || 0,
+    favorite: game.favorite || false
+  }));
 
   return (
     <div className="profile">
       <div className="profile-container">
-        {/* Hero Section with Gradient Background */}
-        <div className="profile-hero">
-          <div className="profile-avatar-large">
-            <User size={80} />
-          </div>
-          <div className="profile-hero-content">
-            <div className="profile-username">{userStats.username}</div>
-            <div className="profile-meta">
-              <span className="profile-rank-badge">{userStats.rank}</span>
-              <span className="profile-level-badge">Level {userStats.level}</span>
+        {/* Header Section */}
+        <div className="profile-header">
+          <div className="profile-header-left">
+            <div className="profile-avatar">
+              <User size={40} />
             </div>
-            <div className="profile-progress-bar">
-              <div 
-                className="profile-progress-fill" 
-                style={{ width: `${expPercentage}%` }}
-              />
-              <div className="profile-progress-text">
-                {userStats.exp} / {userStats.expToNext} EXP
+            <div className="profile-header-info">
+              <div className="profile-username">{userName}</div>
+              <div className="profile-badges">
+                <span className="profile-rank-badge">{userStats.rank}</span>
+                <span className="profile-level-badge">Level {userStats.level}</span>
+              </div>
+              <div className="profile-progress-bar">
+                <div 
+                  className="profile-progress-fill" 
+                  style={{ width: `${expPercentage}%` }}
+                />
+                <div className="profile-progress-text">
+                  {userStats.exp} / {userStats.expToNext} EXP
+                </div>
               </div>
             </div>
           </div>
-          <div className="profile-stats-quick">
-            <div className="quick-stat">
+          <div className="profile-header-right">
+            <div className="profile-quick-stat">
               <Gamepad2 size={20} />
               <span>{userStats.totalGames}</span>
             </div>
-            <div className="quick-stat">
+            <div className="profile-quick-stat">
               <Trophy size={20} />
               <span>{userStats.achievements}</span>
             </div>
-            <div className="quick-stat">
+            <div className="profile-quick-stat">
               <Clock size={20} />
               <span>{userStats.totalPlaytime}h</span>
             </div>
@@ -81,132 +165,119 @@ const Profile = ({ navigate }) => {
         <div className="profile-grid">
           {/* Left Column */}
           <div className="profile-left">
-            {/* Stats Cards */}
-            <div className="stats-section">
-              <h2 className="section-title">
-                <TrendingUp size={20} />
-                Stats Overview
+            {/* Stats Overview */}
+            <div className="profile-section">
+              <h2 className="profile-section-title">
+                <TrendingUp size={18} />
+                STATS OVERVIEW
               </h2>
               <div className="stats-grid">
-                <div className="stat-card stat-card-primary">
-                  <div className="stat-card-icon">
-                    <Gamepad2 size={24} />
-                  </div>
-                  <div className="stat-card-content">
-                    <div className="stat-value">{userStats.totalGames}</div>
-                    <div className="stat-label">Games Owned</div>
-                  </div>
+                <div className="stat-card">
+                  <Gamepad2 size={24} />
+                  <div className="stat-value">{userStats.totalGames}</div>
+                  <div className="stat-label">GAMES OWNED</div>
                 </div>
-                <div className="stat-card stat-card-success">
-                  <div className="stat-card-icon">
-                    <Trophy size={24} />
-                  </div>
-                  <div className="stat-card-content">
-                    <div className="stat-value">{userStats.achievements}</div>
-                    <div className="stat-label">Achievements</div>
-                  </div>
+                <div className="stat-card">
+                  <Trophy size={24} />
+                  <div className="stat-value">{userStats.achievements}</div>
+                  <div className="stat-label">ACHIEVEMENTS</div>
                 </div>
-                <div className="stat-card stat-card-warning">
-                  <div className="stat-card-icon">
-                    <Clock size={24} />
-                  </div>
-                  <div className="stat-card-content">
-                    <div className="stat-value">{userStats.totalPlaytime}h</div>
-                    <div className="stat-label">Playtime</div>
-                  </div>
+                <div className="stat-card">
+                  <Clock size={24} />
+                  <div className="stat-value">{userStats.totalPlaytime}h</div>
+                  <div className="stat-label">PLAYTIME</div>
                 </div>
-                <div className="stat-card stat-card-info">
-                  <div className="stat-card-icon">
-                    <Star size={24} />
-                  </div>
-                  <div className="stat-card-content">
-                    <div className="stat-value">{userStats.rank}</div>
-                    <div className="stat-label">Rank</div>
-                  </div>
+                <div className="stat-card">
+                  <Star size={24} />
+                  <div className="stat-value">{userStats.rank}</div>
+                  <div className="stat-label">RANK</div>
                 </div>
               </div>
             </div>
 
             {/* Recent Activity */}
-            <div className="activity-section">
-              <h2 className="section-title">
-                <Activity size={20} />
-                Recent Activity
+            <div className="profile-section">
+              <h2 className="profile-section-title">
+                <Activity size={18} />
+                RECENT ACTIVITY
               </h2>
               <div className="activity-list">
-                {recentActivity.map(activity => (
-                  <div key={activity.id} className="activity-item">
-                    <div className="activity-dot" />
-                    <div className="activity-content">
-                      <p>{activity.text}</p>
-                      <span>{activity.time}</span>
+                {recentActivity.length > 0 ? (
+                  recentActivity.slice(0, 3).map((activity, index) => (
+                    <div key={activity.id || index} className="activity-item">
+                      <div className="activity-dot" />
+                      <div className="activity-content">
+                        <p>{activity.text || activity.message}</p>
+                        <span>{activity.time || activity.date}</span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <div className="activity-empty">No recent activity</div>
+                )}
               </div>
             </div>
           </div>
 
           {/* Right Column */}
           <div className="profile-right">
-            {/* Game Library */}
-            <div className="library-section">
-              <h2 className="section-title">
-                <Gamepad2 size={20} />
-                Your Library
+            {/* Your Library */}
+            <div className="profile-section">
+              <h2 className="profile-section-title">
+                <Gamepad2 size={18} />
+                YOUR LIBRARY
               </h2>
               <div className="library-list">
-                {gameLibrary.map(game => (
-                  <div key={game.id} className="library-card">
-                    <div className="library-card-header">
-                      <div className="library-game-info">
-                        <h3>{game.name}</h3>
-                        {game.favorite && <Star size={16} className="favorite-icon" />}
+                {gameLibrary.length > 0 ? (
+                  gameLibrary.map(game => (
+                    <div key={game.id} className="library-card">
+                      <div className="library-card-header">
+                        <div className="library-game-info">
+                          <h3>{game.name}</h3>
+                          {game.favorite && <Star size={16} className="favorite-icon" fill="currentColor" />}
+                        </div>
+                        <div className="library-hours">{game.hours}h</div>
                       </div>
-                      <div className="library-hours">{game.hours}h</div>
+                      <div className="library-progress">
+                        <div 
+                          className="library-progress-bar"
+                          style={{ width: `${game.progress}%` }}
+                        />
+                      </div>
+                      <div className="library-footer">
+                        <span>Last played: {game.lastPlayed}</span>
+                      </div>
                     </div>
-                    <div className="library-progress">
-                      <div 
-                        className="library-progress-bar"
-                        style={{ width: `${game.progress}%` }}
-                      />
-                    </div>
-                    <div className="library-footer">
-                      <Calendar size={14} />
-                      <span>Last played: {game.lastPlayed}</span>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <div className="library-empty">No games in library</div>
+                )}
               </div>
             </div>
 
-            {/* Achievements */}
-            <div className="achievements-section">
-              <h2 className="section-title">
-                <Trophy size={20} />
-                Recent Achievements
+            {/* Recent Achievements */}
+            <div className="profile-section">
+              <h2 className="profile-section-title">
+                <Trophy size={18} />
+                RECENT ACHIEVEMENTS
               </h2>
               <div className="achievements-list">
-                {recentAchievements.map(achievement => (
-                  <div key={achievement.id} className="achievement-card">
-                    <div className="achievement-icon-large">{achievement.icon}</div>
-                    <div className="achievement-info">
-                      <h3>{achievement.name}</h3>
-                      <p>{achievement.date}</p>
+                {recentAchievements.length > 0 ? (
+                  recentAchievements.slice(0, 3).map((achievement, index) => (
+                    <div key={achievement.id || index} className="achievement-card">
+                      <div className="achievement-icon">{achievement.icon || '🏆'}</div>
+                      <div className="achievement-info">
+                        <h3>{achievement.name}</h3>
+                        <p>{achievement.date || achievement.time}</p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <div className="achievements-empty">No achievements yet</div>
+                )}
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Game Studio Button */}
-        <div className="profile-studio-section">
-          <button className="game-studio-btn" onClick={handleGameStudioClick}>
-            <Building size={24} />
-            <span>Game Studio</span>
-          </button>
         </div>
       </div>
     </div>

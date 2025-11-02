@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { getUserData, getUserScopedKey } from '../utils/UserDataManager';
 import { setSpeed as setGlobalDownloadSpeed, clearSpeed as clearGlobalDownloadSpeed, subscribe as subscribeDownloadSpeed, setPaused as setGlobalPaused, getPaused as getGlobalPaused, startDownload as startGlobalDownload, stopDownload as stopGlobalDownload } from '../utils/DownloadSpeedStore';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Star, Users, TrendingUp, TrendingDown, Clock, Download, Play, MessageSquare, ShoppingCart, Image as ImageIcon, X, Settings, Info, FolderOpen, Trash2, EyeOff, RefreshCw, HardDrive, Activity, Save, Download as DownloadIcon, Package, Calendar, Check, ChevronUp, ChevronDown, ArrowDownUp, Pause } from 'lucide-react';
@@ -349,11 +350,10 @@ const Game = () => {
     }
   }, [gameId]);
 
-  // Load custom games from localStorage
+  // Load custom games from user-specific storage
   const [customGames, setCustomGames] = useState(() => {
     try {
-      const stored = localStorage.getItem('customGames');
-      return stored ? JSON.parse(stored) : [];
+      return getUserData('customGames', []);
     } catch (e) {
       console.error('Error loading custom games:', e);
       return [];
@@ -364,10 +364,8 @@ const Game = () => {
   useEffect(() => {
     const loadCustomGames = () => {
       try {
-        const stored = localStorage.getItem('customGames');
-        if (stored) {
-          setCustomGames(JSON.parse(stored));
-        }
+        const userGames = getUserData('customGames', []);
+        setCustomGames(userGames);
       } catch (e) {
         console.error('Error loading custom games:', e);
       }
@@ -378,9 +376,13 @@ const Game = () => {
     };
     
     const handleStorageChange = (e) => {
-      if (e.key === 'customGames') {
+      if (e.key === getUserScopedKey('customGames')) {
         loadCustomGames();
       }
+    };
+    
+    const handleUserChange = () => {
+      loadCustomGames();
     };
     
     // Load on mount
@@ -388,10 +390,12 @@ const Game = () => {
     
     window.addEventListener('customGameUpdate', handleCustomGameUpdate);
     window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('user-changed', handleUserChange);
     
     return () => {
       window.removeEventListener('customGameUpdate', handleCustomGameUpdate);
       window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('user-changed', handleUserChange);
     };
   }, [gameId]);
 

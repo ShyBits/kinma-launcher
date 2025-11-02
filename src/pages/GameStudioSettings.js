@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Settings as SettingsIcon, DollarSign, Users, Globe, Shield, Mail, Bell, LogOut } from 'lucide-react';
+import { getUserData, saveUserData, getUserScopedKey } from '../utils/UserDataManager';
 import './Settings.css';
 
 const GameStudioSettings = () => {
@@ -39,9 +40,9 @@ const GameStudioSettings = () => {
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    const savedSettings = localStorage.getItem('gameStudioSettings');
+    const savedSettings = getUserData('gameStudioSettings', null);
     if (savedSettings) {
-      setSettings(JSON.parse(savedSettings));
+      setSettings(savedSettings);
     }
   }, []);
 
@@ -55,7 +56,7 @@ const GameStudioSettings = () => {
   const saveSettings = async () => {
     setIsSaving(true);
     try {
-      localStorage.setItem('gameStudioSettings', JSON.stringify(settings));
+      saveUserData('gameStudioSettings', settings);
       setTimeout(() => setIsSaving(false), 1000);
     } catch (error) {
       console.error('Failed to save settings:', error);

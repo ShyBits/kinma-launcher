@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Download, Star, Clock, Heart, TrendingUp, Filter, Search, Package, FileText, Image as ImageIcon } from 'lucide-react';
 import steamAPI from '../utils/SteamAPI';
+import { getAllUsersData, getUserData, saveUserData } from '../utils/UserDataManager';
 import './WorkshopSection.css';
 
 const WorkshopSection = ({ gameId }) => {
@@ -24,95 +25,101 @@ const WorkshopSection = ({ gameId }) => {
   const loadWorkshopItems = async () => {
     setLoading(true);
     try {
-      // Mock data for demonstration
-      // In production, this would call: await steamAPI.getWorkshopItems(gameId)
+      // Get all workshop items from all users (shared marketplace)
+      const allItems = getAllUsersData('workshopItems');
       
-      const mockItems = [
-        {
-          id: 1,
-          title: 'Realistic Weapon Pack',
-          author: 'ModMaster',
-          subscribers: 45230,
-          rating: 4.8,
-          downloads: 125000,
-          size: '250 MB',
-          updated: '2 days ago',
-          category: 'mods',
-          tags: ['weapons', 'realistic', 'combat'],
-          description: 'Adds 50+ realistic weapons with detailed models and animations.',
-          thumbnail: '/api/placeholder/300/200',
-          type: 'mod'
-        },
-        {
-          id: 2,
-          title: 'Custom Map: Desert Fortress',
-          author: 'LevelDesigner',
-          subscribers: 28900,
-          rating: 4.9,
-          downloads: 78000,
-          size: '150 MB',
-          updated: '5 days ago',
-          category: 'maps',
-          tags: ['map', 'desert', 'pvp'],
-          description: 'An intense desert fortress map perfect for PvP battles.',
-          thumbnail: '/api/placeholder/300/200',
-          type: 'map'
-        },
-        {
-          id: 3,
-          title: 'Ninja Character Skin',
-          author: 'SkinArtist',
-          subscribers: 12850,
-          rating: 4.6,
-          downloads: 34000,
-          size: '45 MB',
-          updated: '1 week ago',
-          category: 'skins',
-          tags: ['skin', 'ninja', 'character'],
-          description: 'Badass ninja outfit with special effects.',
-          thumbnail: '/api/placeholder/300/200',
-          type: 'skin'
-        },
-        {
-          id: 4,
-          title: 'Weapon Modifier Tools',
-          author: 'TechMaven',
-          subscribers: 56700,
-          rating: 4.7,
-          downloads: 156000,
-          size: '80 MB',
-          updated: '3 days ago',
-          category: 'mods',
-          tags: ['tools', 'weapons', 'utility'],
-          description: 'Advanced tools for customizing weapons in game.',
-          thumbnail: '/api/placeholder/300/200',
-          type: 'mod'
-        },
-        {
-          id: 5,
-          title: 'Hidden Items Collection',
-          author: 'Collector',
-          subscribers: 18900,
-          rating: 4.5,
-          downloads: 52000,
-          size: '120 MB',
-          updated: '6 days ago',
-          category: 'items',
-          tags: ['items', 'collection', 'rare'],
-          description: '100+ rare hidden items with unique effects.',
-          thumbnail: '/api/placeholder/300/200',
-          type: 'items'
-        }
-      ];
+      // Filter to only show published items
+      const publishedItems = allItems.filter(item => {
+        const status = item.status || 'published';
+        return status === 'public' || status === 'published';
+      });
 
-      setWorkshopItems(mockItems);
-      setFilteredItems(mockItems);
+      // Filter by gameId if specified
+      let filteredByGame = publishedItems;
+      if (gameId && gameId !== 'all') {
+        filteredByGame = publishedItems.filter(item => item.gameId === gameId);
+      }
+
+      // Load user's subscriptions (account-separated)
+      const userSubscriptions = getUserData('workshopSubscriptions', []);
+
+      // Mark items as subscribed if user has subscribed
+      const itemsWithSubscriptionStatus = filteredByGame.map(item => ({
+        ...item,
+        subscribed: userSubscriptions.includes(item.id)
+      }));
+
+      // If no items found, use mock data as fallback
+      if (itemsWithSubscriptionStatus.length === 0) {
+        const mockItems = [
+          {
+            id: 1,
+            title: 'Realistic Weapon Pack',
+            author: 'ModMaster',
+            subscribers: 45230,
+            rating: 4.8,
+            downloads: 125000,
+            size: '250 MB',
+            updated: '2 days ago',
+            category: 'mods',
+            tags: ['weapons', 'realistic', 'combat'],
+            description: 'Adds 50+ realistic weapons with detailed models and animations.',
+            thumbnail: '/api/placeholder/300/200',
+            type: 'mod',
+            status: 'published'
+          },
+          {
+            id: 2,
+            title: 'Custom Map: Desert Fortress',
+            author: 'LevelDesigner',
+            subscribers: 28900,
+            rating: 4.9,
+            downloads: 78000,
+            size: '150 MB',
+            updated: '5 days ago',
+            category: 'maps',
+            tags: ['map', 'desert', 'pvp'],
+            description: 'An intense desert fortress map perfect for PvP battles.',
+            thumbnail: '/api/placeholder/300/200',
+            type: 'map',
+            status: 'published'
+          }
+        ];
+        const mockWithSubscriptions = mockItems.map(item => ({
+          ...item,
+          subscribed: userSubscriptions.includes(item.id)
+        }));
+        setWorkshopItems(mockWithSubscriptions);
+        setFilteredItems(mockWithSubscriptions);
+      } else {
+        setWorkshopItems(itemsWithSubscriptionStatus);
+        setFilteredItems(itemsWithSubscriptionStatus);
+      }
     } catch (error) {
       console.error('Error loading workshop items:', error);
+      setWorkshopItems([]);
+      setFilteredItems([]);
     } finally {
       setLoading(false);
     }
   };
+
+  // Reload workshop items when user changes or items are updated
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key && e.key.startsWith('workshopItems_')) {
+        loadWorkshopItems();
+      }
+    };
+
+    window.addEventListener('user-changed', loadWorkshopItems);
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('user-changed', loadWorkshopItems);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [gameId]);
 
   const filterItems = () => {
     let filtered = [...workshopItems];
@@ -159,9 +166,27 @@ const WorkshopSection = ({ gameId }) => {
 
   const handleSubscribe = (itemId) => {
     console.log('Subscribing to workshop item:', itemId);
-    // Update local state to show subscribed
+    
+    // Get current subscriptions (account-separated)
+    const subscriptions = getUserData('workshopSubscriptions', []);
+    
+    // Toggle subscription
+    let updatedSubscriptions;
+    if (subscriptions.includes(itemId)) {
+      updatedSubscriptions = subscriptions.filter(id => id !== itemId);
+    } else {
+      updatedSubscriptions = [...subscriptions, itemId];
+    }
+    
+    // Save subscriptions (account-separated)
+    saveUserData('workshopSubscriptions', updatedSubscriptions);
+    
+    // Update local state to show subscribed status
     setWorkshopItems(prev => prev.map(item => 
-      item.id === itemId ? { ...item, subscribed: true } : item
+      item.id === itemId ? { ...item, subscribed: updatedSubscriptions.includes(itemId) } : item
+    ));
+    setFilteredItems(prev => prev.map(item => 
+      item.id === itemId ? { ...item, subscribed: updatedSubscriptions.includes(itemId) } : item
     ));
   };
 

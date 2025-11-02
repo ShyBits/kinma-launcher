@@ -16,7 +16,9 @@ import GameStudioSettings from './pages/GameStudioSettings';
 import Game from './pages/Game';
 import DeveloperOnboarding from './pages/DeveloperOnboarding';
 import Auth from './pages/Auth';
+import AccountSwitcherPage from './pages/AccountSwitcher';
 import oauthExample from './config/oauth.config.example.js';
+import './components/AccountSwitcher.css';
 
 const AppContent = () => {
   const [currentPage, setCurrentPage] = useState('home');
@@ -25,6 +27,8 @@ const AppContent = () => {
   const [updateProgress, setUpdateProgress] = useState(0);
   const [selectedGame, setSelectedGame] = useState('the-finals');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [isAccountSwitching, setIsAccountSwitching] = useState(false);
+  const [switchingToUser, setSwitchingToUser] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -112,10 +116,65 @@ const AppContent = () => {
     setSidebarCollapsed(!sidebarCollapsed);
   };
 
+  // Listen for account switching events
+  useEffect(() => {
+    const handleAccountSwitchStart = (event) => {
+      const user = event.detail?.user;
+      if (user) {
+        setSwitchingToUser(user);
+        setIsAccountSwitching(true);
+      }
+    };
+
+    const handleAccountSwitchComplete = () => {
+      setIsAccountSwitching(false);
+      setSwitchingToUser(null);
+      // Dispatch user-changed event to reload user-specific data
+      window.dispatchEvent(new Event('user-changed'));
+    };
+
+    window.addEventListener('main-window-account-switch-start', handleAccountSwitchStart);
+    window.addEventListener('main-window-account-switch-complete', handleAccountSwitchComplete);
+
+    return () => {
+      window.removeEventListener('main-window-account-switch-start', handleAccountSwitchStart);
+      window.removeEventListener('main-window-account-switch-complete', handleAccountSwitchComplete);
+    };
+  }, []);
+
+  // Helper function to get user initials
+  const getInitials = (user) => {
+    const name = user.name || user.username || user.email || 'U';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
   return (
     <div className="app">
-      <TitleBar onToggleSidebar={toggleSidebar} />
-      {location.pathname !== '/auth' && (
+      {isAccountSwitching ? (
+        <div className="account-switcher-loading-screen">
+          <div className="account-switcher-loading-circle">
+            {switchingToUser && (
+              <div className="account-switcher-loading-circle-content">
+                <div className="account-switcher-loading-circle-content-inner">
+                  <div className="account-switcher-loading-avatar">
+                    {getInitials(switchingToUser)}
+                  </div>
+                  <h2 className="account-switcher-loading-name">
+                    {switchingToUser.name || switchingToUser.username || switchingToUser.email?.split('@')[0] || 'User'}
+                  </h2>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <>
+          <TitleBar onToggleSidebar={toggleSidebar} />
+          {location.pathname !== '/auth' && location.pathname !== '/account-switcher' && (
         <TopNavigation 
           currentPage={currentPageId}
           setCurrentPage={setCurrentPage}
@@ -131,7 +190,7 @@ const AppContent = () => {
         />
       )}
       <div className="app-layout">
-        {location.pathname !== '/auth' && location.pathname !== '/game-studio' && location.pathname !== '/game-studio-settings' && (
+        {location.pathname !== '/auth' && location.pathname !== '/account-switcher' && location.pathname !== '/game-studio' && location.pathname !== '/game-studio-settings' && (
           <SideBar 
             currentGame={selectedGame}
             onGameSelect={handleGameSelect}
@@ -139,11 +198,12 @@ const AppContent = () => {
             isCollapsed={sidebarCollapsed}
           />
         )}
-        <div className="app-content-wrapper" style={{ width: (location.pathname === '/game-studio' || location.pathname === '/game-studio-settings' || location.pathname === '/auth') ? '100%' : 'auto' }}>
+        <div className="app-content-wrapper" style={{ width: (location.pathname === '/game-studio' || location.pathname === '/game-studio-settings' || location.pathname === '/auth' || location.pathname === '/account-switcher') ? '100%' : 'auto' }}>
           <div className="main-content">
             <Routes>
               <Route path="/" element={<Navigate to="/library" replace />} />
               <Route path="/auth" element={<Auth navigate={navigate} />} />
+              <Route path="/account-switcher" element={<AccountSwitcherPage navigate={navigate} />} />
               <Route path="/library" element={<Library />} />
               <Route path="/game-studio" element={<GameStudio navigate={navigate} />} />
               <Route path="/store" element={<Store navigate={navigate} gamesData={{}} />} />
@@ -161,7 +221,8 @@ const AppContent = () => {
           </div>
         </div>
       </div>
-      
+        </>
+      )}
     </div>
   );
 };

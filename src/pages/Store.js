@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Star, Download, Play, Users, TrendingUp, TrendingDown, Share2, Bookmark, MessageSquare, Bell, Search, X, Filter, ChevronDown, DollarSign, Settings, Save } from 'lucide-react';
+import { getUserData, getUserScopedKey, getAllUsersData, saveUserData } from '../utils/UserDataManager';
 import './Store.css';
 
 const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navigate }) => {
@@ -198,28 +199,51 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
     setCurrentBannerIndex((prev) => (prev - 1 + featuredGames.length) % featuredGames.length);
   };
 
-  // Load custom games for store listing
+  // Load ALL published games from ALL users for store listing (marketplace)
   useEffect(() => {
     const load = () => {
       try {
-        const stored = localStorage.getItem('customGames');
-        setCustomGames(stored ? JSON.parse(stored) : []);
+        // Get all games from all users for the Store (shared marketplace)
+        const allGames = getAllUsersData('customGames');
+        // Filter to only show published games
+        const publishedGames = allGames.filter(game => {
+          const status = game.status || game.fullFormData?.status || 'draft';
+          return status === 'public' || status === 'published';
+        });
+        setCustomGames(publishedGames);
       } catch (_) {
         setCustomGames([]);
       }
     };
     load();
+    
+    // Reload whenever any user's games are updated (for marketplace updates)
     const handler = () => load();
+    
+    // Listen for storage changes from any user
+    const handleStorageChange = (e) => {
+      // Reload if any user's customGames were updated
+      if (e.key && e.key.startsWith('customGames_')) {
+        load();
+      }
+    };
+    
     window.addEventListener('customGameUpdate', handler);
-    window.addEventListener('storage', (e) => { if (e.key === 'customGames') load(); });
-    return () => window.removeEventListener('customGameUpdate', handler);
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('user-changed', load);
+    
+    return () => {
+      window.removeEventListener('customGameUpdate', handler);
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('user-changed', load);
+    };
   }, []);
 
-  // Load/save bookmarks
+  // Load/save bookmarks (account-separated)
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('bookmarkedGames');
-      setBookmarkedGames(saved ? new Set(JSON.parse(saved)) : new Set());
+      const saved = getUserData('bookmarkedGames', []);
+      setBookmarkedGames(saved ? new Set(saved) : new Set());
     } catch (_) {
       setBookmarkedGames(new Set());
     }
@@ -227,7 +251,7 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
 
   useEffect(() => {
     try {
-      localStorage.setItem('bookmarkedGames', JSON.stringify(Array.from(bookmarkedGames)));
+      saveUserData('bookmarkedGames', Array.from(bookmarkedGames));
     } catch (_) {}
   }, [bookmarkedGames]);
 

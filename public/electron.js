@@ -10,6 +10,8 @@ const settingsStore = new Store({ name: 'settings' });
 
 let mainWindow;
 let authWindow;
+let accountSwitcherWindow; // Track account switcher window
+let pendingMainWindowShow = false; // Flag to show main window after account switcher closes
 
 function getZoomLimits() {
   const [width, height] = mainWindow.getSize();
@@ -49,7 +51,10 @@ function createMainWindow() {
   mainWindow.loadURL(startUrl);
 
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
+    // Don't auto-show if we're waiting for account switcher to close
+    if (!pendingMainWindowShow) {
+      mainWindow.show();
+    }
   });
 
   // Zoom functionality removed
@@ -100,7 +105,7 @@ function createMainWindow() {
 function createAuthWindow() {
   authWindow = new BrowserWindow({
     width: 600,
-    height: 700,
+    height: 220,
     resizable: false,
     maximizable: false,
     fullscreenable: false,
@@ -146,13 +151,77 @@ function createAuthWindow() {
   }
 }
 
-app.whenReady().then(() => {
-  const existingUser = settingsStore.get('authUser');
+app.whenReady().then(async () => {
   const forceAuth = process.env.KINMA_FORCE_AUTH === '1';
-  if (forceAuth || !existingUser) {
+  if (forceAuth) {
     createAuthWindow();
-  } else {
+    return;
+  }
+  
+  // Check for existing auth user first
+  let existingUser = settingsStore.get('authUser');
+  
+  // If no auth user, try to get the last logged-in user
+  if (!existingUser) {
+    try {
+      const appPath = isDev 
+        ? __dirname
+        : path.join(app.getAppPath());
+      
+      let projectRoot = appPath;
+      if (isDev) {
+        projectRoot = path.resolve(appPath, '..');
+      } else {
+        projectRoot = path.join(appPath, '..');
+      }
+      
+      const usersPath = path.join(projectRoot, 'user');
+      const usersFile = path.join(usersPath, 'users.json');
+      
+      if (fs.existsSync(usersFile)) {
+        const fileContent = fs.readFileSync(usersFile, 'utf8');
+        const users = JSON.parse(fileContent);
+        
+        if (Array.isArray(users) && users.length > 0) {
+          // Find user with most recent lastLoginTime
+          const usersWithLoginTime = users.filter(u => u.lastLoginTime);
+          if (usersWithLoginTime.length > 0) {
+            // Sort by lastLoginTime (most recent first)
+            usersWithLoginTime.sort((a, b) => {
+              const timeA = new Date(a.lastLoginTime).getTime();
+              const timeB = new Date(b.lastLoginTime).getTime();
+              return timeB - timeA; // Descending order (most recent first)
+            });
+            
+            const lastUser = usersWithLoginTime[0];
+            // Auto-login to last logged-in user
+            settingsStore.set('authUser', {
+              id: lastUser.id,
+              email: lastUser.email,
+              name: lastUser.name || lastUser.username || lastUser.email?.split('@')[0] || 'User'
+            });
+            existingUser = settingsStore.get('authUser');
+          } else {
+            // No users have login time, use first user
+            const firstUser = users[0];
+            settingsStore.set('authUser', {
+              id: firstUser.id,
+              email: firstUser.email,
+              name: firstUser.name || firstUser.username || firstUser.email?.split('@')[0] || 'User'
+            });
+            existingUser = settingsStore.get('authUser');
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error getting last logged-in user on startup:', error);
+    }
+  }
+  
+  if (existingUser) {
     createMainWindow();
+  } else {
+    createAuthWindow();
   }
 });
 
@@ -168,13 +237,42 @@ app.on('activate', () => {
   }
 });
 
-ipcMain.handle('get-games', () => {
-  return store.get('games', []);
+ipcMain.handle('get-games', (event) => {
+  try {
+    // Get current auth user
+    const authUser = settingsStore.get('authUser');
+    if (!authUser || !authUser.id) {
+      return [];
+    }
+    
+    // Get games for this specific user
+    const userGamesKey = `games_${authUser.id}`;
+    const userGames = store.get(userGamesKey, []);
+    
+    return userGames;
+  } catch (error) {
+    console.error('Error getting games:', error);
+    return [];
+  }
 });
 
 ipcMain.handle('save-games', (event, games) => {
-  store.set('games', games);
-  return true;
+  try {
+    // Get current auth user
+    const authUser = settingsStore.get('authUser');
+    if (!authUser || !authUser.id) {
+      return false;
+    }
+    
+    // Save games for this specific user
+    const userGamesKey = `games_${authUser.id}`;
+    store.set(userGamesKey, games);
+    
+    return true;
+  } catch (error) {
+    console.error('Error saving games:', error);
+    return false;
+  }
 });
 
 ipcMain.handle('select-game-executable', async () => {
@@ -207,15 +305,168 @@ ipcMain.handle('maximize-window', (event) => {
   } catch (_) {}
 });
 
-ipcMain.handle('close-window', () => {
-  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close();
-  if (authWindow && !authWindow.isDestroyed()) authWindow.close();
+ipcMain.handle('close-window', async (event) => {
+  // Close the window that sent the message
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  if (!senderWindow || senderWindow.isDestroyed()) {
+    return;
+  }
+
+  // Check if this is the account switcher window
+  let isAccountSwitcher = false;
+  try {
+    const url = senderWindow.webContents.getURL();
+    if (url.includes('/account-switcher')) {
+      isAccountSwitcher = true;
+    }
+  } catch (e) {
+    // Ignore error
+  }
+
+  // If closing account switcher, login with last account and show main window
+  if (isAccountSwitcher) {
+    try {
+      console.log('Account switcher window closing - logging in with last account');
+      
+      // Get last logged-in user directly
+      let lastUser = null;
+      try {
+        const usersFile = path.join(app.getPath('userData'), 'users.json');
+        if (fs.existsSync(usersFile)) {
+          const fileContent = fs.readFileSync(usersFile, 'utf8');
+          const users = JSON.parse(fileContent);
+          
+          if (Array.isArray(users) && users.length > 0) {
+            const usersWithLoginTime = users.filter(u => u.lastLoginTime);
+            if (usersWithLoginTime.length > 0) {
+              usersWithLoginTime.sort((a, b) => {
+                const timeA = new Date(a.lastLoginTime).getTime();
+                const timeB = new Date(b.lastLoginTime).getTime();
+                return timeB - timeA; // Descending order (most recent first)
+              });
+              lastUser = usersWithLoginTime[0];
+            } else {
+              lastUser = users[0];
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error getting last logged-in user:', error);
+      }
+      
+      if (lastUser) {
+        console.log('Last logged-in user:', lastUser.email || lastUser.username);
+        
+        // Set auth user in Electron store
+        const authUserData = {
+          id: lastUser.id,
+          email: lastUser.email,
+          name: lastUser.name || lastUser.username || lastUser.email?.split('@')[0] || 'User'
+        };
+        settingsStore.set('authUser', authUserData);
+        
+        // Ensure main window exists and is shown
+        if (!mainWindow || mainWindow.isDestroyed()) {
+          createMainWindow();
+        } else {
+          if (!mainWindow.isVisible()) {
+            mainWindow.show();
+          }
+          mainWindow.focus();
+          
+          // Update localStorage in main window and dispatch user-changed event
+          const updateScript = `
+            try {
+              localStorage.setItem('authUser', JSON.stringify(${JSON.stringify(authUserData)}));
+              window.dispatchEvent(new Event('user-changed'));
+            } catch (e) {
+              console.error('Error updating auth user:', e);
+            }
+          `;
+          mainWindow.webContents.executeJavaScript(updateScript).catch(err => {
+            console.error('Error executing update script:', err);
+          });
+        }
+      } else {
+        console.log('No last logged-in user found');
+        // Still show/create main window
+        if (!mainWindow || mainWindow.isDestroyed()) {
+          createMainWindow();
+        } else {
+          if (!mainWindow.isVisible()) {
+            mainWindow.show();
+          }
+          mainWindow.focus();
+        }
+      }
+    } catch (error) {
+      console.error('Error handling account switcher close:', error);
+      // Still show/create main window even if login fails
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        createMainWindow();
+      } else {
+        if (!mainWindow.isVisible()) {
+          mainWindow.show();
+        }
+        mainWindow.focus();
+      }
+    }
+  }
+
+  // Close the window
+  senderWindow.close();
 });
 
 ipcMain.handle('resize-window', (event, width, height) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (!win) return;
-  try { win.setSize(parseInt(width, 10), parseInt(height, 10)); } catch (e) {}
+  try {
+    const w = parseInt(width, 10);
+    const h = parseInt(height, 10);
+    win.setSize(w, h);
+    // Ensure window is opaque and has proper background
+    win.setOpacity(1);
+    win.setBackgroundColor('#0a0a0a'); // Dark background color
+  } catch (e) {
+    console.error('Error resizing window:', e);
+  }
+});
+
+ipcMain.handle('get-window-size', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return { width: 600, height: 800 };
+  try {
+    const [width, height] = win.getSize();
+    return { width, height };
+  } catch (e) {
+    return { width: 600, height: 800 };
+  }
+});
+
+// Check if main window is open and visible
+ipcMain.handle('is-main-window-ready', () => {
+  try {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      console.log('Main window check: not created or destroyed');
+      return { ready: false, visible: false };
+    }
+    
+    const isVisible = mainWindow.isVisible();
+    const isReady = !mainWindow.webContents.isLoading();
+    
+    console.log(`Main window check: exists=${true}, visible=${isVisible}, ready=${isReady}`);
+    
+    if (isVisible && isReady) {
+      return { ready: true, visible: true };
+    }
+    if (!mainWindow.isDestroyed()) {
+      return { ready: isReady, visible: isVisible };
+    }
+    return { ready: false, visible: false };
+  } catch (e) {
+    console.error('Error checking main window:', e);
+    return { ready: false, visible: false };
+  }
 });
 
 ipcMain.handle('center-window', () => {
@@ -234,14 +485,197 @@ ipcMain.handle('get-auth-user', () => {
   try { return settingsStore.get('authUser') || null; } catch (_) { return null; }
 });
 
+// Get the last logged-in user from all users
+ipcMain.handle('get-last-logged-in-user', async () => {
+  try {
+    const appPath = isDev 
+      ? __dirname
+      : path.join(app.getAppPath());
+    
+    let projectRoot = appPath;
+    if (isDev) {
+      projectRoot = path.resolve(appPath, '..');
+    } else {
+      projectRoot = path.join(appPath, '..');
+    }
+    
+    const usersPath = path.join(projectRoot, 'user');
+    const usersFile = path.join(usersPath, 'users.json');
+    
+    // Check if users file exists
+    if (!fs.existsSync(usersFile)) {
+      return { success: false, user: null };
+    }
+    
+    // Read and parse users file
+    const fileContent = fs.readFileSync(usersFile, 'utf8');
+    const users = JSON.parse(fileContent);
+    
+    if (!Array.isArray(users) || users.length === 0) {
+      return { success: false, user: null };
+    }
+    
+    // Find user with most recent lastLoginTime
+    const usersWithLoginTime = users.filter(u => u.lastLoginTime);
+    if (usersWithLoginTime.length === 0) {
+      // If no users have login time, return the first user
+      return { success: true, user: users[0] };
+    }
+    
+    // Sort by lastLoginTime (most recent first)
+    usersWithLoginTime.sort((a, b) => {
+      const timeA = new Date(a.lastLoginTime).getTime();
+      const timeB = new Date(b.lastLoginTime).getTime();
+      return timeB - timeA; // Descending order (most recent first)
+    });
+    
+    return { success: true, user: usersWithLoginTime[0] };
+  } catch (error) {
+    console.error('Error getting last logged-in user:', error);
+    return { success: false, user: null };
+  }
+});
+
 ipcMain.handle('auth-success', (event, user) => {
-  try { settingsStore.set('authUser', user); } catch (_) {}
-  if (authWindow && !authWindow.isDestroyed()) {
+  try {
+    // Ensure we save the auth user in the correct format
+    const authUserData = {
+      id: user.id,
+      email: user.email,
+      name: user.name || user.username || user.email?.split('@')[0] || 'User'
+    };
+    settingsStore.set('authUser', authUserData);
+  } catch (_) {}
+  
+  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  
+  // Check if this is coming from account switcher
+  let isFromAccountSwitcher = false;
+  if (senderWindow && !senderWindow.isDestroyed()) {
+    try {
+      const url = senderWindow.webContents.getURL();
+      if (url.includes('/account-switcher')) {
+        isFromAccountSwitcher = true;
+      }
+    } catch (e) {
+      // Ignore error
+    }
+  }
+  
+  // Close auth window if it exists and it's the sender
+  if (authWindow && !authWindow.isDestroyed() && authWindow === senderWindow) {
     authWindow.close();
     authWindow = null;
   }
+  
+  // If sender is an auth window or account switcher window, close it
+  if (senderWindow && senderWindow !== mainWindow && !senderWindow.isDestroyed()) {
+    // Don't close it here - let the renderer handle it
+    // senderWindow.close();
+  }
+  
+  // If coming from account switcher, store reference and set flag
+  if (isFromAccountSwitcher && senderWindow && !senderWindow.isDestroyed()) {
+    accountSwitcherWindow = senderWindow;
+    pendingMainWindowShow = true;
+    
+    // Listen for account switcher window to close
+    senderWindow.once('closed', () => {
+      console.log('Account switcher window closed, showing main window');
+      accountSwitcherWindow = null;
+      pendingMainWindowShow = false;
+      
+      // Now show the main window
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        if (!mainWindow.isVisible()) {
+          mainWindow.show();
+          console.log('Main window shown after account switcher closed');
+        }
+        mainWindow.focus();
+      }
+    });
+  }
+  
   if (!mainWindow || mainWindow.isDestroyed()) {
+    console.log('Creating main window...');
     createMainWindow();
+    
+    // If coming from account switcher, don't show main window yet - wait for account switcher to close
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (isFromAccountSwitcher) {
+        // Don't show the main window - wait for account switcher to close
+        console.log('Main window created but hidden - waiting for account switcher to close');
+      } else {
+        // Normal flow - show window when ready
+        let windowShown = false;
+        
+        const showMainWindow = () => {
+          if (mainWindow && !mainWindow.isDestroyed() && !windowShown) {
+            if (!mainWindow.isVisible()) {
+              mainWindow.show();
+              console.log('Main window shown');
+            }
+            mainWindow.focus();
+            windowShown = true;
+          }
+        };
+
+        // Show when ready-to-show event fires
+        mainWindow.once('ready-to-show', () => {
+          console.log('Main window ready-to-show event fired');
+          showMainWindow();
+        });
+        
+        // Also check if already ready
+        if (mainWindow.webContents) {
+          if (!mainWindow.webContents.isLoading()) {
+            console.log('Main window already loaded, showing immediately');
+            showMainWindow();
+          } else {
+            // Listen for when content finishes loading
+            mainWindow.webContents.once('did-finish-load', () => {
+              console.log('Main window did-finish-load event fired');
+              setTimeout(showMainWindow, 100);
+            });
+          }
+        }
+
+        // Multiple fallbacks to ensure window is shown
+        setTimeout(() => {
+          if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+            console.log('Fallback: showing main window after timeout');
+            mainWindow.show();
+            mainWindow.focus();
+          }
+        }, 500);
+        
+        setTimeout(() => {
+          if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+            console.log('Second fallback: showing main window');
+            mainWindow.show();
+            mainWindow.focus();
+          }
+        }, 1000);
+      }
+    }
+  } else {
+    // If main window exists
+    if (!mainWindow.isDestroyed()) {
+      if (isFromAccountSwitcher) {
+        // If coming from account switcher, hide it and wait for account switcher to close
+        if (mainWindow.isVisible()) {
+          mainWindow.hide();
+          console.log('Main window hidden - waiting for account switcher to close');
+        }
+      } else {
+        // Normal flow - focus and show
+        console.log('Main window exists, ensuring it is visible');
+        if (!mainWindow.isVisible()) {
+          mainWindow.show();
+        }
+        mainWindow.focus();
+      }
+    }
   }
 });
 
@@ -964,6 +1398,153 @@ ipcMain.handle('clear-all-users', async () => {
     return { success: true };
   } catch (error) {
     console.error('Error clearing users:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Open a new auth window with the same dimensions as the current window
+ipcMain.handle('open-auth-window', (event) => {
+  try {
+    const currentWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!currentWindow) {
+      return { success: false, error: 'Current window not found' };
+    }
+    
+    // Get current window dimensions BEFORE closing
+    const [width, height] = currentWindow.getSize();
+    
+    // Create new auth window with same dimensions BEFORE closing the old one
+    const newAuthWindow = new BrowserWindow({
+      width: width,
+      height: height,
+      resizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        enableRemoteModule: false,
+        preload: path.join(__dirname, 'preload.js')
+      },
+      frame: false,
+      titleBarStyle: 'hidden',
+      show: false,
+      icon: path.join(__dirname, 'assets/icon.png')
+    });
+    
+    const startUrl = isDev 
+      ? 'http://localhost:3000#/auth?addAccount=true' 
+      : `file://${path.join(__dirname, '../build/index.html')}#/auth?addAccount=true`;
+    
+    newAuthWindow.loadURL(startUrl);
+    
+    newAuthWindow.once('ready-to-show', () => {
+      newAuthWindow.center();
+      newAuthWindow.show();
+      newAuthWindow.focus();
+      
+      // Close the old window after the new one is shown
+      setTimeout(() => {
+        if (currentWindow && !currentWindow.isDestroyed()) {
+          currentWindow.close();
+        }
+      }, 100);
+    });
+    
+    // Ensure the renderer is on the /auth route with addAccount parameter (works in dev and prod)
+    newAuthWindow.webContents.once('did-finish-load', () => {
+      const navigateToAuth = `
+        try {
+          if (window.location.pathname !== '/auth' || !window.location.search.includes('addAccount=true')) {
+            window.history.pushState({}, '', '/auth?addAccount=true');
+            window.dispatchEvent(new Event('popstate'));
+          }
+        } catch (e) {}
+      `;
+      newAuthWindow.webContents.executeJavaScript(navigateToAuth).catch(() => {});
+    });
+    
+    if (isDev) {
+      newAuthWindow.webContents.openDevTools({ mode: 'detach' });
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error opening auth window:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('open-account-switcher-window', (event) => {
+  try {
+    const currentWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!currentWindow) {
+      return { success: false, error: 'Current window not found' };
+    }
+    
+    // Get current window dimensions BEFORE closing
+    const [width, height] = currentWindow.getSize();
+    
+    // Account switcher should always be 700px wide
+    const accountSwitcherWidth = 700;
+    
+    // Create new account switcher window FIRST (before closing old one)
+    accountSwitcherWindow = new BrowserWindow({
+      width: accountSwitcherWidth,
+      height: height,
+      resizable: false, // User cannot resize, but app can resize programmatically
+      maximizable: false,
+      fullscreenable: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        enableRemoteModule: false,
+        preload: path.join(__dirname, 'preload.js')
+      },
+      frame: false,
+      titleBarStyle: 'hidden',
+      show: false,
+      icon: path.join(__dirname, 'assets/icon.png')
+    });
+    
+    const startUrl = isDev 
+      ? 'http://localhost:3000/account-switcher' 
+      : `file://${path.join(__dirname, '../build/index.html')}#/account-switcher`;
+    
+    accountSwitcherWindow.loadURL(startUrl);
+    
+    // Center the window
+    accountSwitcherWindow.center();
+    
+    // Show window when ready, THEN close the old window
+    accountSwitcherWindow.once('ready-to-show', () => {
+      accountSwitcherWindow.show();
+      accountSwitcherWindow.focus();
+      
+      // Close the old window AFTER the new one is shown
+      setTimeout(() => {
+        if (currentWindow && !currentWindow.isDestroyed()) {
+          currentWindow.close();
+        }
+      }, 150);
+    });
+    
+    // Ensure the renderer is on the /account-switcher route
+    accountSwitcherWindow.webContents.once('did-finish-load', () => {
+      const navigateToAccountSwitcher = `
+        try {
+          if (window.location.pathname !== '/account-switcher') {
+            window.history.pushState({}, '', '/account-switcher');
+            window.dispatchEvent(new Event('popstate'));
+          }
+        } catch (e) {}
+      `;
+      accountSwitcherWindow.webContents.executeJavaScript(navigateToAccountSwitcher);
+    });
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error opening account switcher window:', error);
     return { success: false, error: error.message };
   }
 });

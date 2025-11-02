@@ -8,11 +8,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   maximizeWindow: () => ipcRenderer.invoke('maximize-window'),
   closeWindow: () => ipcRenderer.invoke('close-window'),
   resizeWindow: (width, height) => ipcRenderer.invoke('resize-window', width, height),
+  getWindowSize: () => ipcRenderer.invoke('get-window-size'),
   centerWindow: () => ipcRenderer.invoke('center-window'),
+  isMainWindowReady: () => ipcRenderer.invoke('is-main-window-ready'),
 
   // Auth bridge
   setAuthUser: (user) => ipcRenderer.invoke('set-auth-user', user),
   getAuthUser: () => ipcRenderer.invoke('get-auth-user'),
+  getLastLoggedInUser: () => ipcRenderer.invoke('get-last-logged-in-user'),
   authSuccess: (user) => ipcRenderer.invoke('auth-success', user),
   logout: () => ipcRenderer.invoke('logout'),
   isForceAuth: () => ipcRenderer.invoke('is-force-auth'),
@@ -44,6 +47,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveUsers: (users) => ipcRenderer.invoke('save-users', users),
   getUsers: () => ipcRenderer.invoke('get-users'),
   clearAllUsers: () => ipcRenderer.invoke('clear-all-users'),
+  openAuthWindow: () => ipcRenderer.invoke('open-auth-window'),
+  openAccountSwitcherWindow: () => ipcRenderer.invoke('open-account-switcher-window'),
   
   onMenuAddGame: (callback) => {
     ipcRenderer.on('menu-add-game', callback);

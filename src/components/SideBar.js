@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { subscribe as subscribeDownloadSpeed, setSpeed as setGlobalDownloadSpeed, setPaused as setGlobalPaused, clearSpeed as clearGlobalDownloadSpeed, getPaused } from "../utils/DownloadSpeedStore";
+import { getUserData, saveUserData, getUserScopedKey } from "../utils/UserDataManager";
 import "./SideBar.css";
 
 const SideBar = ({ currentGame, onGameSelect, navigate, isCollapsed }) => {
@@ -25,11 +26,10 @@ const SideBar = ({ currentGame, onGameSelect, navigate, isCollapsed }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [expanded, setExpanded] = useState(() => {
     try {
-      const stored = localStorage.getItem('sidebarExpanded');
+      const stored = getUserData('sidebarExpanded', null);
       if (stored) {
-        const parsed = JSON.parse(stored);
         // Ensure defaults are set
-        return { recent: true, myOwn: true, ...parsed };
+        return { recent: true, myOwn: true, ...stored };
       }
     } catch (_) {}
     return { recent: true, myOwn: true };
@@ -39,10 +39,9 @@ const SideBar = ({ currentGame, onGameSelect, navigate, isCollapsed }) => {
   const [gameStatus, setGameStatus] = useState({}); // track status type: "download", "update", "verify", "install"
   const [pausedGames, setPausedGames] = useState({}); // track paused games
   const [playingGames, setPlayingGames] = useState(() => {
-    // Load playing games from localStorage on mount
+    // Load playing games from user-specific storage on mount
     try {
-      const stored = localStorage.getItem('playingGames');
-      return stored ? JSON.parse(stored) : {};
+      return getUserData('playingGames', {});
     } catch (e) {
       return {};
     }
@@ -63,8 +62,7 @@ const SideBar = ({ currentGame, onGameSelect, navigate, isCollapsed }) => {
   const [renameCategoryName, setRenameCategoryName] = useState(""); // name for renaming category
   const [customCategories, setCustomCategories] = useState(() => {
     try {
-      const stored = localStorage.getItem('sidebarCategories');
-      return stored ? JSON.parse(stored) : [];
+      return getUserData('sidebarCategories', []);
     } catch (e) {
       return [];
     }
@@ -109,6 +107,8 @@ const SideBar = ({ currentGame, onGameSelect, navigate, isCollapsed }) => {
         } else {
           delete newState[gameId];
         }
+        // Save to user-specific storage
+        saveUserData('playingGames', newState);
         return newState;
       });
     };
@@ -117,33 +117,54 @@ const SideBar = ({ currentGame, onGameSelect, navigate, isCollapsed }) => {
     return () => window.removeEventListener('gameStatusChanged', handleGameStatusChange);
   }, []);
 
-  // Load custom games from localStorage - MUST be before allGames definition
+  // Load custom games from user-specific storage - MUST be before allGames definition
   const [customGames, setCustomGames] = useState(() => {
     try {
-      const stored = localStorage.getItem('customGames');
-      return stored ? JSON.parse(stored) : [];
+      return getUserData('customGames', []);
     } catch (e) {
       console.error('Error loading custom games:', e);
       return [];
     }
   });
 
-  // Listen for storage changes to update custom games
+  // Listen for storage changes to update custom games and sidebar data
   useEffect(() => {
     const loadCustomGames = () => {
       try {
-        const stored = localStorage.getItem('customGames');
-        if (stored) {
-          setCustomGames(JSON.parse(stored));
-        }
+        const userGames = getUserData('customGames', []);
+        setCustomGames(userGames);
       } catch (e) {
         console.error('Error loading custom games:', e);
       }
     };
     
+    const loadSidebarData = () => {
+      try {
+        // Reload categories
+        const categories = getUserData('sidebarCategories', []);
+        setCustomCategories(categories);
+        
+        // Reload expanded state
+        const expandedState = getUserData('sidebarExpanded', null);
+        if (expandedState) {
+          setExpanded({ recent: true, myOwn: true, ...expandedState });
+        }
+        
+        // Reload playing games
+        const playing = getUserData('playingGames', {});
+        setPlayingGames(playing);
+      } catch (e) {
+        console.error('Error loading sidebar data:', e);
+      }
+    };
+    
     const handleStorageChange = (e) => {
-      if (e.key === 'customGames') {
+      if (e.key === getUserScopedKey('customGames')) {
         loadCustomGames();
+      } else if (e.key === getUserScopedKey('sidebarCategories') || 
+                 e.key === getUserScopedKey('sidebarExpanded') ||
+                 e.key === getUserScopedKey('playingGames')) {
+        loadSidebarData();
       }
     };
     
@@ -151,15 +172,23 @@ const SideBar = ({ currentGame, onGameSelect, navigate, isCollapsed }) => {
       loadCustomGames();
     };
     
+    const handleUserChange = () => {
+      loadCustomGames();
+      loadSidebarData();
+    };
+    
     // Load on mount
     loadCustomGames();
+    loadSidebarData();
     
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('customGameUpdate', handleCustomGameUpdate);
+    window.addEventListener('user-changed', handleUserChange);
     
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('customGameUpdate', handleCustomGameUpdate);
+      window.removeEventListener('user-changed', handleUserChange);
     };
   }, []);
 
@@ -211,9 +240,9 @@ const SideBar = ({ currentGame, onGameSelect, navigate, isCollapsed }) => {
   const toggle = (section) => {
     setExpanded((prev) => {
       const newExpanded = { ...prev, [section]: !prev[section] };
-      // Save to localStorage
+      // Save to user-specific storage
       try {
-        localStorage.setItem('sidebarExpanded', JSON.stringify(newExpanded));
+        saveUserData('sidebarExpanded', newExpanded);
       } catch (e) {
         console.error('Error saving expanded state:', e);
       }
@@ -291,7 +320,7 @@ const SideBar = ({ currentGame, onGameSelect, navigate, isCollapsed }) => {
     const updated = [...customCategories, newCategory];
     setCustomCategories(updated);
     try {
-      localStorage.setItem('sidebarCategories', JSON.stringify(updated));
+      saveUserData('sidebarCategories', updated);
     } catch (e) {
       console.error('Error saving categories:', e);
     }
@@ -313,7 +342,7 @@ const SideBar = ({ currentGame, onGameSelect, navigate, isCollapsed }) => {
     const updated = customCategories.filter(cat => cat.id !== categoryId);
     setCustomCategories(updated);
     try {
-      localStorage.setItem('sidebarCategories', JSON.stringify(updated));
+      saveUserData('sidebarCategories', updated);
     } catch (e) {
       console.error('Error saving categories:', e);
     }
@@ -352,7 +381,7 @@ const SideBar = ({ currentGame, onGameSelect, navigate, isCollapsed }) => {
     );
     setCustomCategories(updated);
     try {
-      localStorage.setItem('sidebarCategories', JSON.stringify(updated));
+      saveUserData('sidebarCategories', updated);
     } catch (e) {
       console.error('Error saving categories:', e);
     }
@@ -590,9 +619,9 @@ const SideBar = ({ currentGame, onGameSelect, navigate, isCollapsed }) => {
   const handleConfirmUpdate = () => {
     if (pendingUpdateGameId) {
       // Terminate the game
-      const playingGames = JSON.parse(localStorage.getItem('playingGames') || '{}');
+      const playingGames = getUserData('playingGames', {});
       delete playingGames[pendingUpdateGameId];
-      localStorage.setItem('playingGames', JSON.stringify(playingGames));
+      saveUserData('playingGames', playingGames);
       // Dispatch custom event to notify
       window.dispatchEvent(new CustomEvent('gameStatusChanged', { detail: { gameId: pendingUpdateGameId, status: null } }));
       
@@ -600,6 +629,8 @@ const SideBar = ({ currentGame, onGameSelect, navigate, isCollapsed }) => {
       setPlayingGames((prev) => {
         const newState = { ...prev };
         delete newState[pendingUpdateGameId];
+        // Save to user-specific storage
+        saveUserData('playingGames', newState);
         return newState;
       });
       
@@ -752,11 +783,23 @@ const SideBar = ({ currentGame, onGameSelect, navigate, isCollapsed }) => {
           ref={sidebarContentRef}
           onContextMenu={handleContextMenu}
         >
-          {Object.entries(filteredGames).map(([section, games]) => {
+          {Object.entries(filteredGames)
+            .sort(([a], [b]) => {
+              // Always put "myOwn" first
+              if (a === 'myOwn') return -1;
+              if (b === 'myOwn') return 1;
+              // Then "recent"
+              if (a === 'recent') return -1;
+              if (b === 'recent') return 1;
+              // Then all other categories (custom categories) alphabetically
+              return a.localeCompare(b);
+            })
+            .map(([section, games]) => {
             const category = customCategories.find(c => c.id === section);
             const categoryName = category ? category.name : (section === 'myOwn' ? 'MY OWN GAMES' : section.toUpperCase());
             
-            return games.length || section === 'recent' || section === 'myOwn' || category ? (
+            // Only show "My Own Games" section when there are games in it
+            return games.length || section === 'recent' || (section === 'myOwn' && games.length) || category ? (
               <div key={section} className="sidebar-section">
                 {renamingCategoryId === section && category ? (
                   <div className="sidebar-rename-category">

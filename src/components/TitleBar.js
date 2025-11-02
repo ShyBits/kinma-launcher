@@ -84,15 +84,16 @@ const TitleBar = ({ onToggleSidebar }) => {
     }
   };
 
-  // Hide hamburger menu in Game Studio views; hide all left buttons on auth page
+  // Hide hamburger menu in Game Studio views; hide all left buttons on auth page and account switcher
   const isGameStudio = location.pathname === '/game-studio' || location.pathname === '/game-studio-settings';
   const isAuth = location.pathname === '/auth';
+  const isAccountSwitcher = location.pathname === '/account-switcher';
 
   return (
     <div className="title-bar">
       <div className="title-bar-content">
         <div className="title-bar-left">
-          {!isAuth && (
+          {!isAuth && !isAccountSwitcher && (
             <>
               {!isGameStudio && (
                 <button 
@@ -132,9 +133,11 @@ const TitleBar = ({ onToggleSidebar }) => {
           <button className="title-bar-button minimize" onClick={minimizeWindow}>
             <Minus size={14} />
           </button>
-          <button className="title-bar-button maximize" onClick={maximizeWindow}>
-            <Maximize size={14} />
-          </button>
+          {!isAccountSwitcher && !isAuth && (
+            <button className="title-bar-button maximize" onClick={maximizeWindow}>
+              <Maximize size={14} />
+            </button>
+          )}
           <button className="title-bar-button close" onClick={closeWindow}>
             <X size={14} />
           </button>

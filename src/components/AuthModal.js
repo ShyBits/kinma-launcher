@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { X, CheckSquare } from 'lucide-react';
+import { X } from 'lucide-react';
 import './AuthModal.css';
 import oauthConfig from '../config/oauth.config.example.js';
 
@@ -15,9 +15,12 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
   const [city, setCity] = useState('');
   const [zipCode, setZipCode] = useState('');
   const [country, setCountry] = useState('');
-  const [gender, setGender] = useState('');
+  const [gender, setGender] = useState('none');
+  const [customGender, setCustomGender] = useState('');
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [isExistingUser, setIsExistingUser] = useState(null); // null = not checked yet, true = exists, false = new
+  const [authMode, setAuthMode] = useState('login'); // 'login' or 'register' - explicit mode switch
+  const [showOptionalFields, setShowOptionalFields] = useState(false); // Toggle for optional fields visibility
   const [devIntent, setDevIntent] = useState(() => {
     try { return localStorage.getItem('developerIntent') === 'pending'; } catch (_) { return false; }
   });
@@ -26,9 +29,67 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
   const containerRef = useRef(null);
   const [qrPending, setQrPending] = useState(false);
   const bodyRef = useRef(null);
+  const footerRef = useRef(null);
+
+  // Reset additional fields when switching auth mode
+  useEffect(() => {
+    if (authMode === 'login') {
+      setConfirmPassword('');
+      setFullName('');
+      setEmail('');
+      setPhone('');
+      setDateOfBirth('');
+      setAddress('');
+      setCity('');
+      setZipCode('');
+      setCountry('');
+      setGender('none');
+      setCustomGender('');
+      setAcceptTerms(false);
+      setShowOptionalFields(false);
+      setIsExistingUser(null);
+    }
+    setError(null);
+    
+    // Reset scroll position to top when switching tabs
+    if (bodyRef.current) {
+      bodyRef.current.scrollTop = 0;
+    }
+    if (containerRef.current) {
+      containerRef.current.scrollTop = 0;
+    }
+  }, [authMode]);
+
+  // Reduce scrolling speed to half
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const handleWheel = (e) => {
+      const scrollableElement = bodyRef.current;
+      if (scrollableElement && (scrollableElement === e.target || scrollableElement.contains(e.target))) {
+        // Only intercept if the element is scrollable and not at scroll boundaries
+        const { scrollTop, scrollHeight, clientHeight } = scrollableElement;
+        const isScrollable = scrollHeight > clientHeight;
+        const isAtTop = scrollTop <= 0 && e.deltaY < 0;
+        const isAtBottom = scrollTop >= scrollHeight - clientHeight && e.deltaY > 0;
+        
+        if (isScrollable && !isAtTop && !isAtBottom) {
+          e.preventDefault();
+          scrollableElement.scrollTop += e.deltaY * 0.5; // Half the scroll speed
+        }
+      }
+    };
+
+    const element = bodyRef.current;
+    if (element) {
+      element.addEventListener('wheel', handleWheel, { passive: false });
+      return () => element.removeEventListener('wheel', handleWheel);
+    }
+  }, [isOpen]);
 
   // Reset additional fields and check status when identifier changes (user switches)
   useEffect(() => {
+    if (authMode === 'register') return; // Don't auto-reset in register mode
     setConfirmPassword('');
     setFullName('');
     setEmail('');
@@ -38,23 +99,24 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
     setCity('');
     setZipCode('');
     setCountry('');
-    setGender('');
+    setGender('none');
     setAcceptTerms(false);
     // Don't reset isExistingUser when identifier changes - only reset on blur
     setError(null); // Clear error when identifier changes
-  }, [identifier]);
+  }, [identifier, authMode]);
 
   // Clear error when password changes
   useEffect(() => {
     setError(null);
   }, [password, confirmPassword]);
 
-  useEffect(() => {
-    if (!isOpen) return;
-    const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, [isOpen, onClose]);
+  // Removed Escape key handler - users should not be able to skip authentication
+  // useEffect(() => {
+  //   if (!isOpen) return;
+  //   const onKey = (e) => { if (e.key === 'Escape') onClose?.(); };
+  //   document.addEventListener('keydown', onKey);
+  //   return () => document.removeEventListener('keydown', onKey);
+  // }, [isOpen, onClose]);
 
   const persistUsers = async (users) => {
     try {
@@ -341,9 +403,8 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
     }
   };
 
-  // Show additional fields only if we know it's a new user (not existing)
-  // Also check if identifier is complete and check has been performed
-  const showAdditionalFields = isExistingUser === false && isIdentifierComplete(identifier);
+  // Show additional fields in register mode OR if auto-detected as new user
+  const showAdditionalFields = authMode === 'register' || (isExistingUser === false && isIdentifierComplete(identifier));
 
   // Update window height when fields change
   useEffect(() => {
@@ -359,23 +420,25 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
       // Get the actual rendered height
       const bodyHeight = body.scrollHeight;
       const containerHeight = container.offsetHeight;
+      const footer = footerRef.current;
+      const footerHeight = footer ? footer.offsetHeight : 0;
       
-      // Calculate total needed height with more generous spacing:
+      // Calculate total needed height with consistent spacing
       // - Title bar: 32px
-      // - Header + title: ~60px
-      // - Body content height (QR + fields + buttons + social)
+      // - Header: ~48px (tabs + border)
+      // - Body content height (calculated dynamically)
       // - Extra padding for comfortable spacing
       const titleBarHeight = 32;
-      const headerHeight = 70; // Header + title + margins
-      const extraPadding = 150; // Generous bottom and top padding for comfortable spacing
+      const headerHeight = 48; // Tab header height
+      const extraPadding = 80; // Consistent bottom and top padding
       
-      const calculatedHeight = titleBarHeight + headerHeight + bodyHeight + extraPadding;
+      // Calculate the actual needed height based on content
+      const calculatedHeight = titleBarHeight + headerHeight + bodyHeight + footerHeight + extraPadding;
       
-      // Set reasonable min/max bounds - increased minimum for better spacing
-      const minHeight = 900; // Increased minimum for comfortable login
-      const maxHeight = 1200;
-      
-      const windowHeight = Math.min(Math.max(calculatedHeight, minHeight), maxHeight);
+      // Use the calculated height directly - no minimum enforced
+      // This ensures the window fits the content exactly, matching startup behavior
+      const maxHeight = 1200; // Maximum height to prevent it from getting too large
+      const windowHeight = Math.min(maxHeight, calculatedHeight);
       
       console.log('📐 Window height calculation:', {
         bodyHeight,
@@ -388,7 +451,9 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
       onHeightChange(windowHeight);
     };
 
-    // Use multiple timeouts to ensure DOM is fully updated
+    // Calculate immediately first, then use multiple timeouts to ensure DOM is fully updated
+    updateHeight();
+    
     const timeout1 = setTimeout(updateHeight, 50);
     const timeout2 = setTimeout(updateHeight, 200);
     const timeout3 = setTimeout(updateHeight, 500);
@@ -398,30 +463,32 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
       clearTimeout(timeout2);
       clearTimeout(timeout3);
     };
-  }, [isOpen, identifier, password, confirmPassword, fullName, email, phone, dateOfBirth, address, city, zipCode, country, gender, acceptTerms, showAdditionalFields, variant, onHeightChange]);
+  }, [isOpen, identifier, password, confirmPassword, fullName, email, phone, dateOfBirth, address, city, zipCode, country, gender, customGender, acceptTerms, showAdditionalFields, variant, authMode, onHeightChange]);
 
   // Validation for submit button
   const canSubmit = useMemo(() => {
     if (!identifier || !password) return false;
     
-    // For new accounts, check additional required fields
-    if (showAdditionalFields) {
+    // For register mode or new accounts, check additional required fields
+    if (authMode === 'register' || showAdditionalFields) {
+      // Email is required in register mode
+      if (!email || !email.trim()) return false;
       // Passwords must match
       if (password !== confirmPassword) return false;
       // Password must be at least 6 characters
       if (password.length < 6) return false;
-      // Full name is required
-      if (!fullName || !fullName.trim()) return false;
       // Terms must be accepted
       if (!acceptTerms) return false;
+      // Full name is now optional, so we don't require it
     }
     
     return true;
-  }, [identifier, password, confirmPassword, fullName, acceptTerms, showAdditionalFields]);
+  }, [identifier, password, confirmPassword, email, acceptTerms, authMode, showAdditionalFields]);
 
-  const handleBackdrop = (e) => {
-    if (e.target === e.currentTarget) onClose?.();
-  };
+  // Removed backdrop click handler - users should not be able to skip authentication
+  // const handleBackdrop = (e) => {
+  //   if (e.target === e.currentTarget) onClose?.();
+  // };
 
   const handleContinue = async () => {
     setError(null);
@@ -436,12 +503,20 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
     setSubmitting(true);
     await new Promise((r) => setTimeout(r, 250));
     
-    // Re-check if user exists (final verification)
+    // Re-check if user exists (final verification) - but only in login mode
     const users = await loadUsers();
     const existing = findUserByIdentifier(identifier, users);
     let user;
     
-    if (existing) {
+    // In register mode, always create a new account (don't allow duplicate check)
+    if (authMode === 'register') {
+      // Check if user already exists - show error instead of allowing registration
+      if (existing) {
+        setError('An account with this identifier already exists. Please sign in instead.');
+        setSubmitting(false);
+        return;
+      }
+    } else if (existing) {
       // Existing user - login
       // Verify password matches
       if (existing.password !== password) {
@@ -457,7 +532,10 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
         phone: existing.phone,
         name: existing.name || existing.email?.split('@')[0] || existing.username || 'User'
       };
-    } else {
+    }
+    
+    // If not an existing user (or in register mode), create new account
+    if (!user) {
       // New user - register
       // Validate that additional required fields are filled correctly
       if (password !== confirmPassword) {
@@ -472,8 +550,8 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
         return;
       }
       
-      if (!fullName || !fullName.trim()) {
-        setError('Full name is required.');
+      if (!email || !email.trim()) {
+        setError('Email is required.');
         setSubmitting(false);
         return;
       }
@@ -484,46 +562,61 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
         return;
       }
       
-      // Heuristically classify identifier
-      let data = {};
-      if (identifier.includes('@')) {
-        data.email = identifier.trim();
-      } else if (/^\+?[\d\s-]{6,}$/.test(identifier.replace(/\s/g, ''))) {
-        // Phone number (allows spaces, dashes, optional +)
-        data.phone = identifier.trim().replace(/\s/g, '');
-      } else {
-        data.username = identifier.trim();
+      // Validate date of birth is not in the future
+      if (dateOfBirth) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Reset time to start of day
+        const selectedDate = new Date(dateOfBirth);
+        if (selectedDate > today) {
+          setError('Date of birth cannot be in the future.');
+          setSubmitting(false);
+          return;
+        }
       }
       
-      // Use provided email/phone if available (might be different from identifier)
-      if (email && email.trim()) {
-        data.email = email.trim();
-      }
-      if (phone && phone.trim()) {
-        data.phone = phone.trim().replace(/\s/g, '');
-      }
+      // Generate name from full name or username or email
+      const name = fullName.trim() || identifier.trim() || (email ? email.split('@')[0] : 'User');
       
-      // Generate name from full name or identifier
-      const name = fullName.trim() || data.username || (data.email ? data.email.split('@')[0] : 'User');
-      
+      // Save ALL fields from the registration form
       user = { 
         id: Date.now().toString(), 
-        ...data, 
-        name: name,
-        fullName: fullName.trim(),
+        // Required fields
+        username: identifier.trim(),
+        email: email.trim(),
         password,
-        dateOfBirth: dateOfBirth || null,
-        address: address.trim() || null,
-        city: city.trim() || null,
-        zipCode: zipCode.trim() || null,
-        country: country.trim() || null,
-        gender: gender || null,
-        createdAt: new Date().toISOString()
+        name: name,
+        // Optional fields - save everything (even empty strings)
+        fullName: fullName.trim() || '',
+        phone: (phone && phone.trim()) ? phone.trim().replace(/\s/g, '') : '',
+        dateOfBirth: dateOfBirth || '',
+        gender: (gender === 'other' || gender === 'none') && customGender.trim() ? customGender.trim() : (gender || ''),
+        address: address.trim() || '',
+        city: city.trim() || '',
+        zipCode: zipCode.trim() || '',
+        country: country.trim() || '',
+        // Checkbox fields
+        acceptTerms: acceptTerms,
+        devIntent: devIntent,
+        // Metadata
+        createdAt: new Date().toISOString(),
+        lastLoginTime: new Date().toISOString() // Set login time on registration
       };
       
       users.push(user);
       await persistUsers(users); // This will sort the users automatically
       setIsExistingUser(true); // Mark as existing after creation
+    }
+    
+    // Update last login time for this user
+    try {
+      const users = await loadUsers();
+      const userIndex = users.findIndex(u => u.id === user.id);
+      if (userIndex !== -1) {
+        users[userIndex].lastLoginTime = new Date().toISOString();
+        await persistUsers(users);
+      }
+    } catch (error) {
+      console.error('Error updating last login time:', error);
     }
     
     try { localStorage.setItem('authUser', JSON.stringify({ id: user.id, email: user.email, name: user.name })); } catch (_) {}
@@ -539,7 +632,7 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
   useEffect(() => {
     const token = Math.random().toString(36).slice(2);
     const link = `https://kinma.app/qr-login?token=${token}`; // placeholder login link
-    const url = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(link)}`;
+    const url = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(link)}`;
     setQrUrl(url);
     setQrPending(false);
   }, []);
@@ -550,7 +643,7 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
-      const size = 180;
+      const size = 160;
       const canvas = document.createElement('canvas');
       canvas.width = size; canvas.height = size;
       const ctx = canvas.getContext('2d');
@@ -589,6 +682,28 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
       setSubmitting(false);
       if (!res || !res.success) return;
       const user = res.user;
+      
+      // Update last login time for this user
+      try {
+        const users = await loadUsers();
+        const userIndex = users.findIndex(u => u.id === user.id || u.email === user.email);
+        if (userIndex !== -1) {
+          users[userIndex].lastLoginTime = new Date().toISOString();
+          await persistUsers(users);
+        } else {
+          // If user doesn't exist in our system, add them
+          const newUser = {
+            ...user,
+            lastLoginTime: new Date().toISOString(),
+            createdAt: new Date().toISOString()
+          };
+          users.push(newUser);
+          await persistUsers(users);
+        }
+      } catch (error) {
+        console.error('Error updating last login time:', error);
+      }
+      
       try { localStorage.setItem('authUser', JSON.stringify(user)); } catch (_) {}
       try { localStorage.setItem('developerIntent', devIntent ? 'pending' : 'none'); } catch (_) {}
       onAuthenticated?.({ user, developerChosen: devIntent });
@@ -632,213 +747,368 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
   const Container = (
       <div className="auth-modal" onMouseDown={(e) => e.stopPropagation()} ref={containerRef}>
         <div className="auth-header">
-          <div className="auth-title">Sign in or create account</div>
+          <div className="auth-tabs">
+            <button 
+              className={`auth-tab ${authMode === 'login' ? 'active' : ''}`}
+              onClick={() => setAuthMode('login')}
+              type="button"
+            >
+              Login
+            </button>
+            <button 
+              className={`auth-tab ${authMode === 'register' ? 'active' : ''}`}
+              onClick={() => setAuthMode('register')}
+              type="button"
+            >
+              Register
+            </button>
+          </div>
         </div>
 
         <div className="auth-body" ref={bodyRef}>
-          <div className="auth-qr">
-            {qrDataUrl && <img className="qr-code" alt="QR code" src={qrDataUrl} />}
-            <div className="qr-help">Scan with mobile app to sign in</div>
-          </div>
-
-          <div className="auth-field">
-            <label>Email, username, or phone</label>
-            <input 
-              type="text" 
-              value={identifier} 
-              onChange={(e) => {
-                const newValue = e.target.value;
-                setIdentifier(newValue);
-                // Reset check status when typing - no check while typing!
-                setIsExistingUser(null);
-                // Don't check while typing - only on blur or field switch
-              }}
-              onBlur={() => {
-                // Only check when leaving the identifier field AND identifier is complete
-                // For email: must have @domain.extension (dot after @ with at least one char after dot)
-                if (isIdentifierComplete(identifier)) {
-                  checkUserExists();
-                } else {
-                  // If not complete, reset the check status
-                  setIsExistingUser(null);
-                }
-              }}
-              onFocus={() => {
-                // When clicking back into the field, don't check - user might still be editing
-                // Only reset status if we had a previous result
-                if (isExistingUser !== null && !isIdentifierComplete(identifier)) {
-                  setIsExistingUser(null);
-                }
-              }}
-              placeholder="Email / Username / Phone" 
-              autoComplete="username" 
-            />
-          </div>
-          <div className="auth-field">
-            <label>Password</label>
-            <input 
-              type="password" 
-              value={password} 
-              onChange={(e) => setPassword(e.target.value)} 
-              onFocus={() => {
-                // Check when switching TO password field (user clicked away from identifier field)
-                // This counts as field switch - check if identifier is complete
-                if (isIdentifierComplete(identifier)) {
-                  checkUserExists();
-                }
-              }}
-              onBlur={() => {
-                // Also check when leaving password field (another field switch)
-                if (isIdentifierComplete(identifier)) {
-                  checkUserExists();
-                }
-              }}
-              placeholder="Password" 
-              autoComplete="current-password" 
-            />
-          </div>
-
-          {/* Debug info - only show when identifier is complete */}
-          {isIdentifierComplete(identifier) && (
-            <div style={{ fontSize: '11px', color: '#888', marginTop: '-8px', marginBottom: '4px' }}>
-              Status: {isExistingUser === null ? 'Checking...' : isExistingUser === true ? 'Account exists' : 'New account'}
+          {authMode === 'login' && (
+            <div className="auth-qr">
+              {qrDataUrl && <img className="qr-code" alt="QR code" src={qrDataUrl} />}
+              <div className="qr-help">Scan with mobile app to sign in</div>
             </div>
           )}
 
-          {/* Additional fields for new accounts - Registration Form */}
-          {showAdditionalFields && (
-            <div className="auth-registration-form">
-              <div className="auth-form-section">
-                <div className="auth-field-row">
-                  <div className="auth-field">
-                    <label>Full Name <span className="auth-required">*</span></label>
-                    <input 
-                      type="text" 
-                      value={fullName} 
-                      onChange={(e) => setFullName(e.target.value)} 
-                      placeholder="Your full name" 
-                      autoComplete="name" 
-                    />
-                  </div>
-                  <div className="auth-field">
-                    <label>Confirm Password <span className="auth-required">*</span></label>
-                    <input 
-                      type="password" 
-                      value={confirmPassword} 
-                      onChange={(e) => setConfirmPassword(e.target.value)} 
-                      placeholder="Confirm Password" 
-                      autoComplete="new-password" 
-                    />
-                    {confirmPassword && password !== confirmPassword && (
-                      <div className="auth-field-error">Passwords do not match</div>
-                    )}
-                    {password && password.length < 6 && (
-                      <div className="auth-field-error">Password must be at least 6 characters</div>
-                    )}
-                  </div>
-                </div>
+          {authMode === 'login' && (
+            <>
+              <div className="auth-field">
+                <label>Email, username, or phone</label>
+                <input 
+                  type="text" 
+                  value={identifier} 
+                  onChange={(e) => {
+                    const newValue = e.target.value;
+                    setIdentifier(newValue);
+                    // Reset check status when typing - no check while typing!
+                    setIsExistingUser(null);
+                    // Don't check while typing - only on blur or field switch
+                  }}
+                  onBlur={() => {
+                    // Only check in login mode when leaving the identifier field AND identifier is complete
+                    if (authMode === 'login' && isIdentifierComplete(identifier)) {
+                      checkUserExists();
+                    } else if (authMode === 'login') {
+                      // If not complete, reset the check status
+                      setIsExistingUser(null);
+                    }
+                  }}
+                  onFocus={() => {
+                    // When clicking back into the field, don't check - user might still be editing
+                    // Only reset status if we had a previous result and in login mode
+                    if (authMode === 'login' && isExistingUser !== null && !isIdentifierComplete(identifier)) {
+                      setIsExistingUser(null);
+                    }
+                  }}
+                  placeholder="Email / Username / Phone" 
+                  autoComplete="username" 
+                />
+              </div>
+              <div className="auth-field">
+                <label>Password</label>
+                <input 
+                  type="password" 
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)} 
+                  onFocus={() => {
+                    // Check when switching TO password field (user clicked away from identifier field)
+                    // This counts as field switch - check if identifier is complete (only in login mode)
+                    if (authMode === 'login' && isIdentifierComplete(identifier)) {
+                      checkUserExists();
+                    }
+                  }}
+                  onBlur={() => {
+                    // Also check when leaving password field (another field switch, only in login mode)
+                    if (authMode === 'login' && isIdentifierComplete(identifier)) {
+                      checkUserExists();
+                    }
+                  }}
+                  placeholder="Password" 
+                  autoComplete="current-password" 
+                />
               </div>
 
-              <div className="auth-form-section">
-                <div className="auth-field-row">
-                  <div className="auth-field">
-                    <label>Email Address</label>
-                    <input 
-                      type="email" 
-                      value={email} 
-                      onChange={(e) => setEmail(e.target.value)} 
-                      placeholder="your.email@example.com" 
-                      autoComplete="email" 
-                    />
-                  </div>
-                  <div className="auth-field">
-                    <label>Phone Number</label>
-                    <input 
-                      type="tel" 
-                      value={phone} 
-                      onChange={(e) => setPhone(e.target.value)} 
-                      placeholder="+1 234 567 8900" 
-                      autoComplete="tel" 
-                    />
-                  </div>
+              {/* Debug info - only show in login mode when identifier is complete */}
+              {isIdentifierComplete(identifier) && (
+                <div style={{ fontSize: '11px', color: '#888', marginTop: '-8px', marginBottom: '4px' }}>
+                  Status: {isExistingUser === null ? 'Checking...' : isExistingUser === true ? 'Account exists' : 'New account'}
                 </div>
+              )}
+
+              {error && (
+                <div className="auth-error-message">
+                  {error}
+                </div>
+              )}
+
+              <div className="auth-actions inline">
+                <button className="auth-submit" onClick={handleContinue} disabled={!canSubmit || submitting}>
+                  {isExistingUser === true ? 'Login' : isExistingUser === false ? 'Create Account' : 'Continue'}
+                </button>
               </div>
 
-              <div className="auth-form-section">
-                <div className="auth-field-row">
-                  <div className="auth-field">
-                    <label>Date of Birth</label>
-                    <input 
-                      type="date" 
-                      value={dateOfBirth} 
-                      onChange={(e) => setDateOfBirth(e.target.value)} 
-                      placeholder="YYYY-MM-DD" 
-                      autoComplete="bday" 
-                    />
-                  </div>
-                  <div className="auth-field">
-                    <label>Gender</label>
-                    <select 
-                      value={gender} 
-                      onChange={(e) => setGender(e.target.value)}
-                      className="auth-select"
-                    >
-                      <option value="">Select...</option>
-                      <option value="male">Male</option>
-                      <option value="female">Female</option>
-                      <option value="other">Other</option>
-                      <option value="prefer-not-to-say">Prefer not to say</option>
-                    </select>
-                  </div>
-                </div>
+              <div className="auth-separator"><span>or</span></div>
+              <div className="auth-social">
+                <button className="auth-social-btn discord" onClick={() => handleSocial('discord')} disabled={submitting}>
+                  Login with Discord
+                </button>
+                <button className="auth-social-btn google" onClick={() => handleSocial('google')} disabled={submitting}>
+                  Login with Google
+                </button>
+              </div>
+              
+              <div className="auth-separator"><span>or</span></div>
+              <button className="auth-skip-btn" onClick={handleSkip} disabled={submitting}>
+                Skip and continue as guest
+              </button>
+            </>
+          )}
+
+          {/* Registration Form - Completely Reorganized */}
+          {authMode === 'register' && (
+            <div className="auth-register-form">
+              {/* Title */}
+              <h2 className="auth-register-title">Create Account</h2>
+
+              {/* Social Login Buttons at Top */}
+              <div className="auth-social">
+                <button className="auth-social-btn discord" onClick={() => handleSocial('discord')} disabled={submitting}>
+                  Register with Discord
+                </button>
+                <button className="auth-social-btn google" onClick={() => handleSocial('google')} disabled={submitting}>
+                  Register with Google
+                </button>
               </div>
 
-              <div className="auth-form-section">
-                <div className="auth-field">
-                  <label>Street Address</label>
-                  <input 
-                    type="text" 
-                    value={address} 
-                    onChange={(e) => setAddress(e.target.value)} 
-                    placeholder="123 Main Street" 
-                    autoComplete="street-address" 
-                  />
-                </div>
-                <div className="auth-field-row">
-                  <div className="auth-field">
-                    <label>City</label>
-                    <input 
-                      type="text" 
-                      value={city} 
-                      onChange={(e) => setCity(e.target.value)} 
-                      placeholder="City" 
-                      autoComplete="address-level2" 
-                    />
-                  </div>
-                  <div className="auth-field">
-                    <label>ZIP / Postal Code</label>
-                    <input 
-                      type="text" 
-                      value={zipCode} 
-                      onChange={(e) => setZipCode(e.target.value)} 
-                      placeholder="12345" 
-                      autoComplete="postal-code" 
-                    />
-                  </div>
-                  <div className="auth-field">
-                    <label>Country</label>
-                    <input 
-                      type="text" 
-                      value={country} 
-                      onChange={(e) => setCountry(e.target.value)} 
-                      placeholder="Country" 
-                      autoComplete="country-name" 
-                    />
-                  </div>
-                </div>
+              <div className="auth-separator"><span>or</span></div>
+
+              {/* Required Fields */}
+              <div className="auth-field">
+                <label>Username <span className="auth-required">*</span></label>
+                <input 
+                  type="text" 
+                  value={identifier} 
+                  onChange={(e) => setIdentifier(e.target.value)} 
+                  placeholder="Choose a username" 
+                  autoComplete="username" 
+                />
               </div>
 
-              <div className="auth-form-section">
+              <div className="auth-field">
+                <label>Email <span className="auth-required">*</span></label>
+                <input 
+                  type="email" 
+                  value={email} 
+                  onChange={(e) => setEmail(e.target.value)} 
+                  placeholder="your.email@example.com" 
+                  autoComplete="email" 
+                />
+              </div>
+
+              <div className="auth-field">
+                <label>Password <span className="auth-required">*</span></label>
+                <input 
+                  type="password" 
+                  value={password} 
+                  onChange={(e) => setPassword(e.target.value)} 
+                  placeholder="Create a password" 
+                  autoComplete="new-password" 
+                />
+                {password && password.length < 6 && (
+                  <div className="auth-field-error">Password must be at least 6 characters</div>
+                )}
+              </div>
+
+              <div className="auth-field">
+                <label>Confirm Password <span className="auth-required">*</span></label>
+                <input 
+                  type="password" 
+                  value={confirmPassword} 
+                  onChange={(e) => setConfirmPassword(e.target.value)} 
+                  placeholder="Confirm your password" 
+                  autoComplete="new-password" 
+                />
+                {confirmPassword && password !== confirmPassword && (
+                  <div className="auth-field-error">Passwords do not match</div>
+                )}
+              </div>
+
+              {/* Optional Information Section - Combined Container */}
+              <div className="auth-optional-section">
+                <button 
+                  type="button"
+                  className={`auth-optional-toggle ${showOptionalFields ? 'expanded' : 'collapsed'}`}
+                  onClick={() => setShowOptionalFields(!showOptionalFields)}
+                >
+                  <span>{showOptionalFields ? '−' : '+'}</span>
+                  <span>Optional Information</span>
+                </button>
+
+                {/* Optional Fields - Displayed Conditionally */}
+                {showOptionalFields && (
+                  <div className="auth-optional-fields-container">
+                    <div className="auth-field">
+                      <label>Full Name</label>
+                      <input 
+                        type="text" 
+                        value={fullName} 
+                        onChange={(e) => setFullName(e.target.value)} 
+                        placeholder="Your full name" 
+                        autoComplete="name" 
+                      />
+                    </div>
+
+                    <div className="auth-field">
+                      <label>Phone Number</label>
+                      <input 
+                        type="tel" 
+                        value={phone} 
+                        onChange={(e) => setPhone(e.target.value)} 
+                        placeholder="+1 234 567 8900" 
+                        autoComplete="tel" 
+                      />
+                    </div>
+
+                    <div className="auth-field-row">
+                      <div className="auth-field">
+                        <label>Date of Birth</label>
+                        <input 
+                          type="date" 
+                          value={dateOfBirth} 
+                          onChange={(e) => {
+                            const selectedDate = e.target.value;
+                            const today = new Date().toISOString().split('T')[0];
+                            // Only set if the date is not in the future
+                            if (!selectedDate || selectedDate <= today) {
+                              setDateOfBirth(selectedDate);
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            // Handle backspace/delete to navigate backwards through date parts
+                            if (e.key === 'Backspace' || e.key === 'Delete') {
+                              const input = e.target;
+                              // Use setTimeout to check selection after the key event
+                              setTimeout(() => {
+                                const selectionStart = input.selectionStart;
+                                const value = input.value;
+                                // If we're in the year section (positions 0-4) and it's cleared, focus month
+                                // If we're in the month section (positions 5-7) and it's cleared, focus day
+                                // Try to move focus to the left part programmatically
+                                if (value && input.setSelectionRange) {
+                                  // For date inputs, we can try to simulate navigation
+                                  // This helps with the flow of deletion
+                                  const parts = value.split('-');
+                                  if (parts.length === 3) {
+                                    // If year is empty or being cleared, move to month
+                                    if (selectionStart <= 4 && (!parts[0] || parts[0].length === 0)) {
+                                      input.setSelectionRange(5, 7);
+                                    }
+                                    // If month is empty or being cleared, move to day
+                                    else if (selectionStart >= 5 && selectionStart <= 7 && (!parts[1] || parts[1].length === 0)) {
+                                      input.setSelectionRange(8, 10);
+                                    }
+                                  }
+                                }
+                              }, 0);
+                            }
+                          }}
+                          max={new Date().toISOString().split('T')[0]}
+                          autoComplete="bday" 
+                        />
+                      </div>
+                      <div className="auth-field">
+                        <label>Gender</label>
+                        <div className={`auth-gender-input-group ${gender === 'other' ? 'expanded' : ''}`}>
+                          <select 
+                            value={gender} 
+                            onChange={(e) => {
+                              // Prevent selecting separator lines (empty values)
+                              if (e.target.value === '') {
+                                e.target.value = gender; // Reset to previous value
+                                return;
+                              }
+                              setGender(e.target.value);
+                              if (e.target.value !== 'other') {
+                                setCustomGender('');
+                              }
+                            }}
+                            className={`auth-select ${gender === 'other' ? 'expanded' : ''}`}
+                          >
+                            <option value="none">None</option>
+                            <option value="" disabled>&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                            <option value="" disabled>&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;&#8212;</option>
+                            <option value="other">Other</option>
+                          </select>
+                          {gender === 'other' && (
+                            <div className="auth-custom-gender-container">
+                              <input 
+                                type="text" 
+                                value={customGender} 
+                                onChange={(e) => setCustomGender(e.target.value)} 
+                                placeholder="Specify your gender"
+                                className="auth-field-input"
+                                autoComplete="off"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="auth-field">
+                      <label>Street Address</label>
+                      <input 
+                        type="text" 
+                        value={address} 
+                        onChange={(e) => setAddress(e.target.value)} 
+                        placeholder="123 Main Street" 
+                        autoComplete="street-address" 
+                      />
+                    </div>
+                    
+                    <div className="auth-field-row">
+                      <div className="auth-field">
+                        <label>City</label>
+                        <input 
+                          type="text" 
+                          value={city} 
+                          onChange={(e) => setCity(e.target.value)} 
+                          placeholder="City" 
+                          autoComplete="address-level2" 
+                        />
+                      </div>
+                      <div className="auth-field">
+                        <label>Postal Code</label>
+                        <input 
+                          type="text" 
+                          value={zipCode} 
+                          onChange={(e) => setZipCode(e.target.value)} 
+                          placeholder="12345" 
+                          autoComplete="postal-code" 
+                        />
+                      </div>
+                      <div className="auth-field">
+                        <label>Country</label>
+                        <input 
+                          type="text" 
+                          value={country} 
+                          onChange={(e) => setCountry(e.target.value)} 
+                          placeholder="Country" 
+                          autoComplete="country-name" 
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Checkboxes Section */}
+              <div className="auth-register-checkboxes">
                 <label className="auth-checkbox">
                   <input 
                     type="checkbox" 
@@ -849,44 +1119,35 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
                     I accept the <a href="#" onClick={(e) => { e.preventDefault(); }}>Terms of Service</a> and <a href="#" onClick={(e) => { e.preventDefault(); }}>Privacy Policy</a> <span className="auth-required">*</span>
                   </span>
                 </label>
+
+                <label className="auth-checkbox">
+                  <input type="checkbox" checked={devIntent} onChange={(e) => setDevIntent(e.target.checked)} />
+                  <span>Request developer access</span>
+                </label>
               </div>
+
+              {error && (
+                <div className="auth-error-message">
+                  {error}
+                </div>
+              )}
+
+              <div className="auth-actions inline">
+                <button className="auth-submit" onClick={handleContinue} disabled={!canSubmit || submitting}>
+                  Create Account
+                </button>
+              </div>
+
+              <div className="auth-separator"><span>or</span></div>
+              <button className="auth-skip-btn" onClick={handleSkip} disabled={submitting}>
+                Skip and continue as guest
+              </button>
             </div>
           )}
-
-          <label className="auth-checkbox">
-            <input type="checkbox" checked={devIntent} onChange={(e) => setDevIntent(e.target.checked)} />
-            <span><CheckSquare size={14} /> Request developer access</span>
-          </label>
-
-          {error && (
-            <div className="auth-error-message">
-              {error}
-            </div>
-          )}
-
-          <div className="auth-actions inline">
-            <button className="auth-submit" onClick={handleContinue} disabled={!canSubmit || submitting}>
-              {isExistingUser === true ? 'Sign In' : isExistingUser === false ? 'Create Account' : 'Continue'}
-            </button>
-          </div>
-
-          <div className="auth-separator" style={{ marginTop: '12px' }}><span>or</span></div>
-          <div className="auth-social">
-            <button className="auth-social-btn discord" onClick={() => handleSocial('discord')} disabled={submitting}>
-              Continue with Discord
-            </button>
-            <button className="auth-social-btn google" onClick={() => handleSocial('google')} disabled={submitting}>
-              Continue with Google
-            </button>
-          </div>
-          
-          <div className="auth-separator" style={{ marginTop: '16px' }}><span>or</span></div>
-          <button className="auth-skip-btn" onClick={handleSkip} disabled={submitting}>
-            Skip and continue as guest
-          </button>
         </div>
 
-        
+        {/* Footer ref kept for height calculation, but empty in login mode */}
+        <div className="auth-footer" ref={footerRef} style={{ display: 'none' }}></div>
       </div>
   );
 
@@ -899,7 +1160,7 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
   }
 
   return (
-    <div className={`auth-modal-overlay ${fullscreen ? 'fullscreen' : ''}`} onMouseDown={handleBackdrop}>
+    <div className={`auth-modal-overlay ${fullscreen ? 'fullscreen' : ''}`}>
       {Container}
     </div>
   );
