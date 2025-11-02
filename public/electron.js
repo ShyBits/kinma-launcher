@@ -1,5 +1,6 @@
 ﻿const { app, BrowserWindow, Menu, ipcMain, dialog, shell, globalShortcut } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const isDev = require('electron-is-dev');
 const Store = require('electron-store');
 const { autoUpdater } = require('electron-updater');
@@ -8,6 +9,7 @@ const store = new Store();
 const settingsStore = new Store({ name: 'settings' });
 
 let mainWindow;
+let authWindow;
 
 function getZoomLimits() {
   const [width, height] = mainWindow.getSize();
@@ -22,12 +24,12 @@ function getZoomLimits() {
   return { minZoom, maxZoom };
 }
 
-function createWindow() {
+function createMainWindow() {
   mainWindow = new BrowserWindow({
-    width: 1200,
+    width: 1350,
     height: 800,
-    minWidth: 1200,
-    minHeight: 800,
+    minWidth: 1240,
+    minHeight: 900,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -95,7 +97,64 @@ function createWindow() {
   // Zoom shortcuts removed
 }
 
-app.whenReady().then(createWindow);
+function createAuthWindow() {
+  authWindow = new BrowserWindow({
+    width: 600,
+    height: 700,
+    resizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      enableRemoteModule: false,
+      preload: path.join(__dirname, 'preload.js')
+    },
+    frame: false,
+    titleBarStyle: 'hidden',
+    show: false,
+    icon: path.join(__dirname, 'assets/icon.png')
+  });
+
+  const startUrl = isDev 
+    ? 'http://localhost:3000' 
+    : `file://${path.join(__dirname, '../build/index.html')}`;
+
+  authWindow.loadURL(startUrl);
+
+  authWindow.once('ready-to-show', () => {
+    authWindow.center();
+    authWindow.show();
+    try { authWindow.setAspectRatio(1/1.5); } catch (_) {}
+  });
+
+  // Ensure the renderer is on the /auth route (works in dev and prod)
+  authWindow.webContents.once('did-finish-load', () => {
+    const navigateToAuth = `
+      try {
+        if (window.location.pathname !== '/auth') {
+          window.history.pushState({}, '', '/auth');
+          window.dispatchEvent(new Event('popstate'));
+        }
+      } catch (e) {}
+    `;
+    authWindow.webContents.executeJavaScript(navigateToAuth).catch(() => {});
+  });
+
+  if (isDev) {
+    authWindow.webContents.openDevTools({ mode: 'detach' });
+  }
+}
+
+app.whenReady().then(() => {
+  const existingUser = settingsStore.get('authUser');
+  const forceAuth = process.env.KINMA_FORCE_AUTH === '1';
+  if (forceAuth || !existingUser) {
+    createAuthWindow();
+  } else {
+    createMainWindow();
+  }
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -130,20 +189,199 @@ ipcMain.handle('select-game-executable', async () => {
   return result.canceled ? null : result.filePaths[0];
 });
 
-ipcMain.handle('minimize-window', () => {
-  mainWindow.minimize();
+ipcMain.handle('minimize-window', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow() || mainWindow || authWindow;
+  try { win && win.minimize(); } catch (_) {}
 });
 
-ipcMain.handle('maximize-window', () => {
-  if (mainWindow.isMaximized()) {
-    mainWindow.unmaximize();
-  } else {
-    mainWindow.maximize();
-  }
+ipcMain.handle('maximize-window', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow() || mainWindow || authWindow;
+  if (!win) return;
+  if (win === authWindow) return; // lock auth window size/aspect
+  try {
+    if (win.isMaximized()) {
+      win.unmaximize();
+    } else {
+      win.maximize();
+    }
+  } catch (_) {}
 });
 
 ipcMain.handle('close-window', () => {
-  mainWindow.close();
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close();
+  if (authWindow && !authWindow.isDestroyed()) authWindow.close();
+});
+
+ipcMain.handle('resize-window', (event, width, height) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return;
+  try { win.setSize(parseInt(width, 10), parseInt(height, 10)); } catch (e) {}
+});
+
+ipcMain.handle('center-window', () => {
+  try {
+    BrowserWindow.getFocusedWindow()?.center();
+  } catch (e) {}
+});
+
+// Auth bridge
+ipcMain.handle('set-auth-user', (event, user) => {
+  try { settingsStore.set('authUser', user); } catch (_) {}
+  return true;
+});
+
+ipcMain.handle('get-auth-user', () => {
+  try { return settingsStore.get('authUser') || null; } catch (_) { return null; }
+});
+
+ipcMain.handle('auth-success', (event, user) => {
+  try { settingsStore.set('authUser', user); } catch (_) {}
+  if (authWindow && !authWindow.isDestroyed()) {
+    authWindow.close();
+    authWindow = null;
+  }
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createMainWindow();
+  }
+});
+
+ipcMain.handle('logout', () => {
+  try { settingsStore.delete('authUser'); } catch (_) {}
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.close();
+    mainWindow = null;
+  }
+  if (!authWindow || authWindow.isDestroyed()) {
+    createAuthWindow();
+  }
+});
+
+ipcMain.handle('is-force-auth', () => {
+  try { return process.env.KINMA_FORCE_AUTH === '1'; } catch (_) { return false; }
+});
+
+// OAuth (PKCE) flow in main process
+function buildPkce() {
+  const crypto = require('crypto');
+  const verifier = crypto.randomBytes(32).toString('base64url');
+  const challenge = crypto.createHash('sha256').update(verifier).digest('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return { verifier, challenge };
+}
+
+function providerConfig(provider) {
+  const cfg = settingsStore.get('oauthConfig') || {};
+  if (provider === 'google') {
+    return {
+      authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+      tokenUrl: 'https://oauth2.googleapis.com/token',
+      userUrl: 'https://openidconnect.googleapis.com/v1/userinfo',
+      clientId: cfg.googleClientId,
+      scope: 'openid email profile'
+    };
+  }
+  if (provider === 'discord') {
+    return {
+      authUrl: 'https://discord.com/api/oauth2/authorize',
+      tokenUrl: 'https://discord.com/api/oauth2/token',
+      userUrl: 'https://discord.com/api/users/@me',
+      clientId: cfg.discordClientId,
+      scope: 'identify email'
+    };
+  }
+  if (provider === 'github') {
+    return {
+      authUrl: 'https://github.com/login/oauth/authorize',
+      tokenUrl: 'https://github.com/login/oauth/access_token',
+      userUrl: 'https://api.github.com/user',
+      clientId: cfg.githubClientId,
+      scope: 'read:user user:email'
+    };
+  }
+  if (provider === 'microsoft') {
+    const base = 'https://login.microsoftonline.com/common/oauth2/v2.0';
+    return {
+      authUrl: `${base}/authorize`,
+      tokenUrl: `${base}/token`,
+      userUrl: 'https://graph.microsoft.com/oidc/userinfo',
+      clientId: cfg.microsoftClientId,
+      scope: 'openid email profile'
+    };
+  }
+  throw new Error('Unknown provider');
+}
+
+ipcMain.handle('oauth-start', async (event, { provider, params }) => {
+  try {
+    const { authUrl, tokenUrl, userUrl, clientId, scope } = providerConfig(provider);
+    const redirectUri = (params && params.redirectUri) || (settingsStore.get('oauthConfig') || {}).redirectUri;
+    if (!clientId || !redirectUri) throw new Error('OAuth not configured');
+
+    const { verifier, challenge } = buildPkce();
+    const state = Math.random().toString(36).slice(2);
+    const url = new URL(authUrl);
+    url.searchParams.set('client_id', clientId);
+    url.searchParams.set('redirect_uri', redirectUri);
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('scope', scope);
+    url.searchParams.set('code_challenge', challenge);
+    url.searchParams.set('code_challenge_method', 'S256');
+    url.searchParams.set('state', state);
+
+    const win = new BrowserWindow({
+      width: 480, height: 720, show: true, modal: true, parent: authWindow || mainWindow,
+      webPreferences: { nodeIntegration: false, contextIsolation: true }
+    });
+
+    const result = await new Promise((resolve, reject) => {
+      const handler = async (e, navigationUrl) => {
+        if (!navigationUrl.startsWith(redirectUri)) return;
+        e.preventDefault();
+        try { win.destroy(); } catch (_) {}
+        const u = new URL(navigationUrl);
+        if (u.searchParams.get('state') !== state) return reject(new Error('Invalid state'));
+        const code = u.searchParams.get('code');
+        if (!code) return reject(new Error('No code'));
+        try {
+          const params = new URLSearchParams({
+            client_id: clientId,
+            grant_type: 'authorization_code',
+            code,
+            redirect_uri: redirectUri,
+            code_verifier: verifier
+          });
+          const tokenResp = await fetch(tokenUrl, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params.toString() });
+          const token = await tokenResp.json();
+          if (!token.access_token) return reject(new Error('Token error'));
+          const userResp = await fetch(userUrl, { headers: { Authorization: `Bearer ${token.access_token}` }});
+          const profile = await userResp.json();
+          resolve({ token, profile });
+        } catch (err) {
+          reject(err);
+        }
+      };
+      win.webContents.on('will-redirect', handler);
+      win.on('closed', () => reject(new Error('Window closed')));
+      win.loadURL(url.toString());
+    });
+
+    // Normalize profile
+    let user;
+    if (provider === 'google') {
+      user = { id: result.profile.sub, email: result.profile.email, name: result.profile.name, avatar: result.profile.picture };
+    } else if (provider === 'discord') {
+      const p = result.profile; const avatarUrl = p.avatar ? `https://cdn.discordapp.com/avatars/${p.id}/${p.avatar}.png` : null;
+      user = { id: p.id, email: p.email, name: p.username, avatar: avatarUrl };
+    } else if (provider === 'github') {
+      const p = result.profile; // emails may require extra call; fallback
+      user = { id: String(p.id), email: p.email || null, name: p.name || p.login, avatar: p.avatar_url };
+    } else if (provider === 'microsoft') {
+      const p = result.profile; // OIDC userinfo
+      user = { id: p.sub, email: p.email || p.preferred_username, name: p.name, avatar: null };
+    }
+    return { success: true, user };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 });
 
 ipcMain.handle('launch-game', async (event, gamePath) => {
@@ -246,6 +484,486 @@ ipcMain.handle('check-for-updates', async () => {
     }
     return { success: true, message: 'Update check completed' };
   } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Save game files
+ipcMain.handle('save-game-files', async (event, gameId, files) => {
+  try {
+    // Use the app's base directory instead of user data
+    const appPath = isDev 
+      ? __dirname  // In development, this is the project folder
+      : path.join(app.getAppPath());
+    
+    // Navigate to the project root
+    let projectRoot = appPath;
+    if (isDev) {
+      // In development, go up from electron.js to get to project root
+      projectRoot = path.resolve(appPath, '..');
+    } else {
+      // In production, look for games folder
+      projectRoot = path.join(appPath, '..');
+    }
+    
+    const gamesPath = path.join(projectRoot, 'games', gameId);
+    const imgPath = path.join(gamesPath, 'IMG');
+    
+    // Create game folder and IMG subfolder if they don't exist
+    if (!fs.existsSync(gamesPath)) {
+      fs.mkdirSync(gamesPath, { recursive: true });
+    }
+    if (!fs.existsSync(imgPath)) {
+      fs.mkdirSync(imgPath, { recursive: true });
+    }
+    
+    const savedPaths = {};
+    
+    // Define which files are images (go to IMG folder) vs executable (go to root)
+    const imageKeys = ['banner', 'logo', 'title', 'card'];
+    const screenshotRegex = /^screenshot_\d+$/;
+    
+    // Save each file
+    for (const [key, fileData] of Object.entries(files)) {
+      // Determine if this is an image file
+      const isImage = imageKeys.includes(key) || screenshotRegex.test(key);
+      const targetFolder = isImage ? imgPath : gamesPath;
+      
+      // Get the extension from the original filename or default
+      const ext = path.extname(fileData.name || '');
+      const filename = `${key}${ext}`;
+      const filePath = path.join(targetFolder, filename);
+      
+      // Delete old files with the same key but different extensions
+      // Check in both the IMG folder and root folder to be safe
+      const foldersToCheck = isImage ? [imgPath] : [gamesPath];
+      foldersToCheck.forEach(folder => {
+        if (fs.existsSync(folder)) {
+          const existingFiles = fs.readdirSync(folder);
+          existingFiles.forEach(file => {
+            // Check if it's the same file type (banner, logo, etc.) but different extension
+            const fileBase = file.substring(0, file.lastIndexOf('.'));
+            if (fileBase === key && file !== filename) {
+              try {
+                fs.unlinkSync(path.join(folder, file));
+              } catch (err) {
+                console.warn(`Could not delete old file ${file}:`, err);
+              }
+            }
+          });
+        }
+      });
+      
+      // If it's a data URL, convert to buffer
+      let buffer;
+      if (fileData.dataURL) {
+        const base64Data = fileData.dataURL.split(',')[1];
+        buffer = Buffer.from(base64Data, 'base64');
+      } else if (fileData.buffer) {
+        buffer = Buffer.from(fileData.buffer);
+      } else {
+        continue;
+      }
+      
+      fs.writeFileSync(filePath, buffer);
+      // Store the actual file path for use in Electron
+      // Use relative path: IMG/... for images, ... for root files
+      const relativePath = isImage ? `IMG/${filename}` : filename;
+      savedPaths[key] = `file://${path.join(gamesPath, relativePath).replace(/\\/g, '/')}`;
+    }
+    
+    return { success: true, paths: savedPaths };
+  } catch (error) {
+    console.error('Error saving game files:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Save game metadata to JSON
+ipcMain.handle('save-game-metadata', async (event, gameId, metadata) => {
+  try {
+    const appPath = isDev ? __dirname : path.join(app.getAppPath());
+    
+    let projectRoot = appPath;
+    if (isDev) {
+      projectRoot = path.resolve(appPath, '..');
+    } else {
+      projectRoot = path.join(appPath, '..');
+    }
+    
+    const gamesPath = path.join(projectRoot, 'games', gameId);
+    
+    // Create game folder if it doesn't exist
+    if (!fs.existsSync(gamesPath)) {
+      fs.mkdirSync(gamesPath, { recursive: true });
+    }
+    
+    // Save metadata to JSON file
+    const metadataPath = path.join(gamesPath, 'metadata.json');
+    fs.writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving game metadata:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get game folder path
+ipcMain.handle('get-game-folder-path', async (event, gameId) => {
+  try {
+    // Use the app's base directory instead of user data
+    const appPath = isDev 
+      ? __dirname  // In development, this is the project folder
+      : path.join(app.getAppPath());
+    
+    // Navigate to the project root
+    let projectRoot = appPath;
+    if (isDev) {
+      // In development, go up from electron.js to get to project root
+      projectRoot = path.resolve(appPath, '..');
+    } else {
+      // In production, look for games folder
+      projectRoot = path.join(appPath, '..');
+    }
+    
+    const gamesPath = path.join(projectRoot, 'games', gameId);
+    return gamesPath;
+  } catch (error) {
+    console.error('Error getting game folder path:', error);
+    return null;
+  }
+});
+
+// Delete specific file from game folder
+ipcMain.handle('delete-game-file', async (event, gameId, filename) => {
+  try {
+    const appPath = isDev ? __dirname : path.join(app.getAppPath());
+    let projectRoot = appPath;
+    if (isDev) {
+      projectRoot = path.resolve(appPath, '..');
+    } else {
+      projectRoot = path.join(appPath, '..');
+    }
+    
+    const gamesPath = path.join(projectRoot, 'games', gameId);
+    const filePath = path.join(gamesPath, filename);
+    
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      return { success: true };
+    }
+    return { success: true, message: 'File does not exist' };
+  } catch (error) {
+    console.error('Error deleting game file:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Save game executable
+ipcMain.handle('save-game-executable', async (event, gameId, fileData) => {
+  try {
+    const appPath = isDev ? __dirname : path.join(app.getAppPath());
+    
+    let projectRoot = appPath;
+    if (isDev) {
+      projectRoot = path.resolve(appPath, '..');
+    } else {
+      projectRoot = path.join(appPath, '..');
+    }
+    
+    const gamesPath = path.join(projectRoot, 'games', gameId);
+    
+    // Create game folder if it doesn't exist
+    if (!fs.existsSync(gamesPath)) {
+      fs.mkdirSync(gamesPath, { recursive: true });
+    }
+    
+    // Get the original filename or use default
+    const originalName = fileData.name || 'game.exe';
+    const ext = path.extname(originalName) || '.exe';
+    const baseName = path.basename(originalName, ext) || 'game';
+    const executableName = `${baseName}${ext}`;
+    const executablePath = path.join(gamesPath, executableName);
+    
+    // Delete old executables in the root folder
+    if (fs.existsSync(gamesPath)) {
+      const existingFiles = fs.readdirSync(gamesPath);
+      existingFiles.forEach(file => {
+        // Check if it's an executable file (but not our new file)
+        const fileExt = path.extname(file).toLowerCase();
+        if ((fileExt === '.exe' || fileExt === '.app' || fileExt === '.deb' || fileExt === '.rpm' || fileExt === '.sh') && file !== executableName) {
+          try {
+            fs.unlinkSync(path.join(gamesPath, file));
+          } catch (err) {
+            console.warn(`Could not delete old executable ${file}:`, err);
+          }
+        }
+      });
+    }
+    
+    // Convert file data to buffer
+    let buffer;
+    if (fileData.buffer) {
+      buffer = Buffer.from(fileData.buffer);
+    } else if (fileData.dataURL) {
+      const base64Data = fileData.dataURL.split(',')[1];
+      buffer = Buffer.from(base64Data, 'base64');
+    } else if (fileData.filePath && fs.existsSync(fileData.filePath)) {
+      // If it's a file path, read the file
+      buffer = fs.readFileSync(fileData.filePath);
+    } else {
+      return { success: false, error: 'No file data provided' };
+    }
+    
+    fs.writeFileSync(executablePath, buffer);
+    
+    return { 
+      success: true, 
+      path: `file://${executablePath.replace(/\\/g, '/')}`,
+      filename: executableName,
+      size: buffer.length
+    };
+  } catch (error) {
+    console.error('Error saving game executable:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get game metadata from JSON
+ipcMain.handle('get-game-metadata', async (event, gameId) => {
+  try {
+    const appPath = isDev ? __dirname : path.join(app.getAppPath());
+    
+    let projectRoot = appPath;
+    if (isDev) {
+      projectRoot = path.resolve(appPath, '..');
+    } else {
+      projectRoot = path.join(appPath, '..');
+    }
+    
+    const gamesPath = path.join(projectRoot, 'games', gameId);
+    const metadataPath = path.join(gamesPath, 'metadata.json');
+    
+    if (fs.existsSync(metadataPath)) {
+      const metadataContent = fs.readFileSync(metadataPath, 'utf8');
+      return { success: true, metadata: JSON.parse(metadataContent) };
+    }
+    
+    return { success: false, error: 'Metadata file not found' };
+  } catch (error) {
+    console.error('Error getting game metadata:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Convert file:// URL to data URL for display
+ipcMain.handle('file-to-data-url', async (event, filePath) => {
+  try {
+    // Remove file:// prefix if present
+    let actualPath = filePath.replace(/^file:\/\//, '');
+    
+    // Decode URL encoding
+    actualPath = decodeURIComponent(actualPath);
+    
+    // Normalize path separators
+    actualPath = actualPath.replace(/\//g, path.sep);
+    
+    // Check if file exists
+    if (!fs.existsSync(actualPath)) {
+      return { success: false, error: 'File not found' };
+    }
+    
+    // Read file as buffer
+    const buffer = fs.readFileSync(actualPath);
+    
+    // Get file extension to determine MIME type
+    const ext = path.extname(actualPath).toLowerCase();
+    const mimeTypes = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.bmp': 'image/bmp',
+      '.svg': 'image/svg+xml'
+    };
+    
+    const mimeType = mimeTypes[ext] || 'image/png';
+    
+    // Convert to base64 data URL
+    const base64 = buffer.toString('base64');
+    const dataURL = `data:${mimeType};base64,${base64}`;
+    
+    return { success: true, dataURL };
+  } catch (error) {
+    console.error('Error converting file to data URL:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Delete game folder
+ipcMain.handle('delete-game-folder', async (event, gameId) => {
+  try {
+    const appPath = isDev 
+      ? __dirname  
+      : path.join(app.getAppPath());
+    
+    let projectRoot = appPath;
+    if (isDev) {
+      projectRoot = path.resolve(appPath, '..');
+    } else {
+      projectRoot = path.join(appPath, '..');
+    }
+    
+    const gamesPath = path.join(projectRoot, 'games', gameId);
+    
+    // Check if folder exists
+    if (fs.existsSync(gamesPath)) {
+      // Recursively delete all files and folders
+      const deleteFolderRecursive = (folderPath) => {
+        if (fs.existsSync(folderPath)) {
+          fs.readdirSync(folderPath).forEach((file) => {
+            const curPath = path.join(folderPath, file);
+            if (fs.lstatSync(curPath).isDirectory()) {
+              deleteFolderRecursive(curPath);
+            } else {
+              fs.unlinkSync(curPath);
+            }
+          });
+          fs.rmdirSync(folderPath);
+        }
+      };
+      
+      deleteFolderRecursive(gamesPath);
+      
+      return { success: true };
+    } else {
+      return { success: true, message: 'Folder does not exist' };
+    }
+  } catch (error) {
+    console.error('Error deleting game folder:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Save users to file system
+ipcMain.handle('save-users', async (event, users) => {
+  try {
+    // Use the app's base directory
+    const appPath = isDev 
+      ? __dirname  // In development, this is the public folder
+      : path.join(app.getAppPath());
+    
+    // Navigate to the project root (same logic as games)
+    let projectRoot = appPath;
+    if (isDev) {
+      // In development, go up from public/electron.js to get to project root
+      projectRoot = path.resolve(appPath, '..');
+    } else {
+      // In production, go up from app path
+      projectRoot = path.join(appPath, '..');
+    }
+    
+    const usersPath = path.join(projectRoot, 'user');
+    
+    // Log the path for debugging
+    console.log('Saving users to:', usersPath);
+    
+    // Create user folder if it doesn't exist
+    if (!fs.existsSync(usersPath)) {
+      fs.mkdirSync(usersPath, { recursive: true });
+      console.log('Created user directory:', usersPath);
+    }
+    
+    // Save users as JSON file
+    const usersFile = path.join(usersPath, 'users.json');
+    fs.writeFileSync(usersFile, JSON.stringify(users, null, 2), 'utf8');
+    
+    console.log('Users saved successfully to:', usersFile);
+    return { success: true, path: usersFile };
+  } catch (error) {
+    console.error('Error saving users:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Load users from file system
+ipcMain.handle('get-users', async () => {
+  try {
+    // Use the app's base directory (same logic as save-users)
+    const appPath = isDev 
+      ? __dirname  // In development, this is the public folder
+      : path.join(app.getAppPath());
+    
+    // Navigate to the project root
+    let projectRoot = appPath;
+    if (isDev) {
+      // In development, go up from public/electron.js to get to project root
+      projectRoot = path.resolve(appPath, '..');
+    } else {
+      // In production, go up from app path
+      projectRoot = path.join(appPath, '..');
+    }
+    
+    const usersPath = path.join(projectRoot, 'user');
+    const usersFile = path.join(usersPath, 'users.json');
+    
+    // Log the path for debugging
+    console.log('Loading users from:', usersFile);
+    
+    // Check if users file exists
+    if (!fs.existsSync(usersFile)) {
+      console.log('Users file does not exist, returning empty array');
+      return { success: true, users: [] };
+    }
+    
+    // Read and parse users file
+    const fileContent = fs.readFileSync(usersFile, 'utf8');
+    const users = JSON.parse(fileContent);
+    
+    console.log('Loaded', users.length, 'users from file');
+    return { success: true, users: Array.isArray(users) ? users : [] };
+  } catch (error) {
+    console.error('Error loading users:', error);
+    // Return empty array on error
+    return { success: true, users: [] };
+  }
+});
+
+// Delete all users from file system and cache
+ipcMain.handle('clear-all-users', async () => {
+  try {
+    // Clear from file system
+    const appPath = isDev 
+      ? __dirname
+      : path.join(app.getAppPath());
+    
+    let projectRoot = appPath;
+    if (isDev) {
+      projectRoot = path.resolve(appPath, '..');
+    } else {
+      projectRoot = path.join(appPath, '..');
+    }
+    
+    const usersPath = path.join(projectRoot, 'user');
+    const usersFile = path.join(usersPath, 'users.json');
+    
+    // Delete users.json file if it exists
+    if (fs.existsSync(usersFile)) {
+      fs.unlinkSync(usersFile);
+      console.log('Deleted users.json file');
+    }
+    
+    // Optionally delete the entire user folder (you can remove this if you want to keep the folder)
+    // if (fs.existsSync(usersPath)) {
+    //   fs.rmdirSync(usersPath);
+    //   console.log('Deleted user folder');
+    // }
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error clearing users:', error);
     return { success: false, error: error.message };
   }
 });

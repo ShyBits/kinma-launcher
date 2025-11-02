@@ -1,17 +1,33 @@
 # Kinma Launcher Startup Script
 $ErrorActionPreference = "Stop"
 
-Write-Host "================================" -ForegroundColor Cyan
-Write-Host "   Kinma Launcher Startup" -ForegroundColor Cyan
-Write-Host "================================" -ForegroundColor Cyan
-Write-Host ""
+# Check if choice was provided as argument
+if ($args.Count -gt 0) {
+    $choice = $args[0]
+}
+else {
+    Write-Host "================================" -ForegroundColor Cyan
+    Write-Host "   Kinma Launcher Startup" -ForegroundColor Cyan
+    Write-Host "================================" -ForegroundColor Cyan
+    Write-Host ""
+    
+    Write-Host "Select mode:"
+    Write-Host "  1. Development Mode (with hot reload)"
+    Write-Host "  2. Production Mode (built app)"
+    Write-Host ""
+    
+    $choice = Read-Host "Enter choice (1 or 2)"
+    
+    Write-Host ""
+}
 
-Write-Host "Select mode:"
-Write-Host "  1. Development Mode (with hot reload)"
-Write-Host "  2. Production Mode (built app)"
-Write-Host ""
-
-$choice = Read-Host "Enter choice (1 or 2)"
+# Display selected mode
+if ($choice -eq "1") {
+    Write-Host "Mode: Development" -ForegroundColor Cyan
+}
+elseif ($choice -eq "2") {
+    Write-Host "Mode: Production" -ForegroundColor Cyan
+}
 
 Write-Host ""
 

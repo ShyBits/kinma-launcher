@@ -3,7 +3,7 @@ import {
   Upload, Plus, Edit, Trash2, Package, Play, X, Box,
   FileText, Image, Settings, ChevronLeft, ChevronRight, Check, X as XIcon, Edit2,
   Download, MessageSquare, ShoppingCart, Calendar, ChevronUp, ChevronDown,
-  Star, Users, TrendingUp, Lock, Unlock
+  Star, Users, TrendingUp, Lock, Unlock, RefreshCw
 } from 'lucide-react';
 import './GameStudio.css';
 import './Game.css';
@@ -18,38 +18,84 @@ import ImageUpload from '../components/ImageUpload';
 import CustomVideoPlayer from '../components/CustomVideoPlayer';
 
 const GameStudio = ({ navigate }) => {
-  const [games, setGames] = useState([
-    {
-      id: 1,
-      name: 'My Awesome Game',
-      version: '1.0.0',
-      status: 'public',
-      downloads: 1234,
-      revenue: '$2,450.50',
-      banner: '/public/images/games/pathline-banner.jpg',
-      lastUpdated: '2 days ago'
-    },
-    {
-      id: 2,
-      name: 'Epic Adventure RPG',
-      version: '0.8.5',
-      status: 'beta',
-      downloads: 567,
-      revenue: '$890.20',
-      banner: '/public/images/games/pathline-banner.jpg',
-      lastUpdated: '1 week ago'
-    },
-    {
-      id: 3,
-      name: 'Secret Project',
-      version: '0.2.1',
-      status: 'private',
-      downloads: 0,
-      revenue: '$0.00',
-      banner: '/public/images/games/pathline-banner.jpg',
-      lastUpdated: '3 days ago'
+  // Load custom games from localStorage on mount
+  const [games, setGames] = useState(() => {
+    // No dummy games - only load real custom games
+    try {
+      const stored = localStorage.getItem('customGames');
+      if (stored) {
+        const customGames = JSON.parse(stored);
+        // Convert custom games to Studio format
+        const customGamesFormatted = customGames.map((game, index) => ({
+          id: index + 1,
+          name: game.name,
+          version: game.version || '1.0.0',
+          status: game.status || 'public',
+          downloads: game.downloads || 0,
+          revenue: `$${((game.downloads || 0) * 2.5).toFixed(2)}`,
+          banner: game.banner || (game.banner?.startsWith('file://') || game.banner?.startsWith('data:') ? game.banner : '/public/images/games/pathline-banner.jpg'),
+          lastUpdated: game.lastUpdated || 'just now',
+          gameId: game.gameId // Store reference to the actual game
+        }));
+        return customGamesFormatted;
+      }
+    } catch (e) {
+      console.error('Error loading custom games in GameStudio:', e);
     }
-  ]);
+    
+    return []; // Return empty array if no games
+  });
+
+  // Listen for custom game updates to reload the games list
+  useEffect(() => {
+    const loadCustomGames = () => {
+      try {
+        const stored = localStorage.getItem('customGames');
+        if (stored) {
+          const customGames = JSON.parse(stored);
+          
+          const customGamesFormatted = customGames.map((game, index) => ({
+            id: index + 1,
+            name: game.name,
+            version: game.version || '1.0.0',
+            status: game.status || 'public',
+            downloads: game.downloads || 0,
+            revenue: `$${((game.downloads || 0) * 2.5).toFixed(2)}`,
+            banner: game.banner || (game.banner?.startsWith('file://') || game.banner?.startsWith('data:') ? game.banner : '/public/images/games/pathline-banner.jpg'),
+            lastUpdated: game.lastUpdated || 'just now',
+            gameId: game.gameId
+          }));
+          
+          setGames(customGamesFormatted);
+        } else {
+          setGames([]);
+        }
+      } catch (e) {
+        console.error('Error loading custom games in GameStudio:', e);
+      }
+    };
+    
+    const handleCustomGameUpdate = () => {
+      loadCustomGames();
+    };
+    
+    const handleStorageChange = (e) => {
+      if (e.key === 'customGames') {
+        loadCustomGames();
+      }
+    };
+    
+    // Load on mount
+    loadCustomGames();
+    
+    window.addEventListener('customGameUpdate', handleCustomGameUpdate);
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('customGameUpdate', handleCustomGameUpdate);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
 
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [hoveredCard, setHoveredCard] = useState(null);
@@ -114,10 +160,189 @@ const GameStudio = ({ navigate }) => {
   // Image URL cache to prevent flickering on re-renders
   const imageUrlCache = useRef(new Map());
   
+  // Refs for input fields to enable immediate focus
+  const gameNameInputRef = useRef(null);
+  const developerInputRef = useRef(null);
+
+  // Draggable image handler
+  const handleImageDrag = (imageType) => {
+    return (e) => {
+      // Only handle left mouse button
+      if (e.button !== undefined && e.button !== 0) return;
+      
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const container = e.currentTarget.closest('[data-drag-container]');
+      if (!container) return;
+
+      const rect = container.getBoundingClientRect();
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startPos = formData[`${imageType}Position`] || { x: 50, y: 50 };
+
+      const handleMouseMove = (moveEvent) => {
+        moveEvent.preventDefault();
+        const deltaX = ((moveEvent.clientX - startX) / rect.width) * 100;
+        const deltaY = ((moveEvent.clientY - startY) / rect.height) * 100;
+
+        const newX = Math.max(0, Math.min(100, startPos.x + deltaX));
+        const newY = Math.max(0, Math.min(100, startPos.y + deltaY));
+
+        setFormData(prev => ({
+          ...prev,
+          [`${imageType}Position`]: { x: newX, y: newY }
+        }));
+      };
+
+      const handleMouseUp = () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'move';
+      document.body.style.userSelect = 'none';
+    };
+  };
+
+  // Zoom and bounded drag state for previews
+  const bannerNaturalSize = useRef({ w: 0, h: 0 });
+  const cardNaturalSize = useRef({ w: 0, h: 0 });
+  const bannerStateRef = useRef({ scale: 1, x: 0, y: 0, initialized: false });
+  const cardStateRef = useRef({ scale: 1, x: 0, y: 0, initialized: false });
+
+  // Placeholder; actual sync added after formData initialization
+
+  const clampPosition = (container, natural, state) => {
+    if (!container || !natural.w || !natural.h) return { x: 0, y: 0 };
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    // Height-fit logic
+    const scaledHeight = containerHeight * state.scale;
+    const scaledWidth = (natural.w / natural.h) * scaledHeight;
+
+    // Center when image smaller than container in a dimension
+    const minX = scaledWidth > containerWidth ? (containerWidth - scaledWidth) : 0;
+    const maxX = 0;
+    const minY = scaledHeight > containerHeight ? (containerHeight - scaledHeight) : 0;
+    const maxY = 0;
+
+    let x = state.x;
+    let y = state.y;
+    if (scaledWidth <= containerWidth) {
+      x = (containerWidth - scaledWidth) / 2;
+    } else {
+      x = Math.min(maxX, Math.max(minX, x));
+    }
+    if (scaledHeight <= containerHeight) {
+      y = (containerHeight - scaledHeight) / 2;
+    } else {
+      y = Math.min(maxY, Math.max(minY, y));
+    }
+    return { x, y };
+  };
+
+  const initCentered = (container, natural, stateRef) => {
+    if (!container || !natural.w || !natural.h) return;
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    const scaledHeight = containerHeight * stateRef.current.scale;
+    const scaledWidth = (natural.w / natural.h) * scaledHeight;
+    stateRef.current.x = (containerWidth - scaledWidth) / 2;
+    stateRef.current.y = (containerHeight - scaledHeight) / 2;
+    stateRef.current.initialized = true;
+  };
+
+  const handleWheelZoom = (type, containerEl) => (e) => {
+    e.preventDefault();
+    const stateRef = type === 'banner' ? bannerStateRef : cardStateRef;
+    const natural = type === 'banner' ? bannerNaturalSize.current : cardNaturalSize.current;
+    const delta = -e.deltaY; // up to zoom in
+    const factor = delta > 0 ? 1.1 : 0.9;
+    const newScale = Math.min(6, Math.max(1, stateRef.current.scale * factor));
+    stateRef.current.scale = newScale;
+    // Persist zoom in formData so it can be saved and used elsewhere
+    setFormData((prev) => ({ ...prev, [`${type}Zoom`]: newScale }));
+    const bounded = clampPosition(containerEl, natural, stateRef.current);
+    stateRef.current.x = bounded.x;
+    stateRef.current.y = bounded.y;
+    // persist offsets and trigger re-render
+    setFormData((prev) => ({ 
+      ...prev, 
+      [`${type}Offset`]: { x: bounded.x, y: bounded.y },
+      [`${type}Zoom`]: newScale
+    }));
+  };
+
+  const handleBoundedDrag = (type, containerEl) => (e) => {
+    // Only when zoomed or larger than container; otherwise ignore
+    const stateRef = type === 'banner' ? bannerStateRef : cardStateRef;
+    const natural = type === 'banner' ? bannerNaturalSize.current : cardNaturalSize.current;
+    if (!containerEl || !natural.w || !natural.h) return;
+    const containerWidth = containerEl.clientWidth;
+    const containerHeight = containerEl.clientHeight;
+    const scaledHeight = containerHeight * stateRef.current.scale;
+    const scaledWidth = (natural.w / natural.h) * scaledHeight;
+    const draggable = scaledWidth > containerWidth || scaledHeight > containerHeight;
+    if (!draggable) return;
+
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const initX = stateRef.current.x;
+    const initY = stateRef.current.y;
+    const onMove = (me) => {
+      const dx = me.clientX - startX;
+      const dy = me.clientY - startY;
+      stateRef.current.x = initX + dx;
+      stateRef.current.y = initY + dy;
+      const bounded = clampPosition(containerEl, natural, stateRef.current);
+      stateRef.current.x = bounded.x;
+      stateRef.current.y = bounded.y;
+      setFormData((prev) => ({ ...prev, [`${type}Offset`]: { x: bounded.x, y: bounded.y } }));
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+
+  // Center image on double click
+  const handleDoubleCenter = (type, containerEl) => (e) => {
+    const stateRef = type === 'banner' ? bannerStateRef : cardStateRef;
+    const natural = type === 'banner' ? bannerNaturalSize.current : cardNaturalSize.current;
+    if (!containerEl || !natural.w || !natural.h) return;
+    initCentered(containerEl, natural, stateRef);
+    setFormData((prev) => ({ ...prev }));
+  };
+  
   // Helper function to get image URL (handles both File/Blob objects and URL strings)
   const getImageUrl = (image) => {
     if (!image) return null;
-    if (typeof image === 'string') return image;
+    
+    // If it's a string URL
+    if (typeof image === 'string') {
+      // If it's already a data URL or http/https, return it
+      if (image.startsWith('data:') || image.startsWith('http://') || image.startsWith('https://')) {
+        return image;
+      }
+      
+      // If it's a file:// URL, we need to convert it to data URL
+      // This will be handled by the component that uses it - we'll return it as-is
+      // and let the component handle conversion via Electron API
+      return image;
+    }
+    
+    // If it's not a File or Blob, return null
+    if (!(image instanceof File) && !(image instanceof Blob)) {
+      return null;
+    }
     
     // Check cache first
     if (imageUrlCache.current.has(image)) {
@@ -125,9 +350,14 @@ const GameStudio = ({ navigate }) => {
     }
     
     // Create and cache URL
-    const url = URL.createObjectURL(image);
-    imageUrlCache.current.set(image, url);
-    return url;
+    try {
+      const url = URL.createObjectURL(image);
+      imageUrlCache.current.set(image, url);
+      return url;
+    } catch (error) {
+      console.error('Error creating object URL:', error);
+      return null;
+    }
   };
 
   // Clean up URLs when component unmounts
@@ -140,300 +370,9 @@ const GameStudio = ({ navigate }) => {
     };
   }, []);
 
-  // Design presets state - start with default empty preset
-  const [designPresets, setDesignPresets] = useState([{
-    id: 'default',
-    name: 'Default',
-    screenshots: [],
-    bannerImage: null,
-    cardImage: null,
-    gameLogo: null,
-    titleImage: null,
-    gameName: '',
-    developer: '',
-    version: '',
-    genre: '',
-    ageRating: '',
-    description: '',
-    price: '',
-    releaseDate: '',
-    tags: '',
-    requirements: '',
-  }]);
-  const [selectedPresetId, setSelectedPresetId] = useState('default'); // Always start with default selected
-  const [presetForSteps, setPresetForSteps] = useState({}); // Track which preset is applied to each step
-  const [previewPresetId, setPreviewPresetId] = useState(null); // Preset currently being previewed (not applied)
-
-  // Add new design preset
-  const addDesignPreset = () => {
-    // First, save current preset's data if one is selected
-    if (selectedPresetId) {
-      setDesignPresets(prev => prev.map(p => 
-        p.id === selectedPresetId ? {
-          ...p,
-          screenshots: formData.screenshots,
-          bannerImage: formData.bannerImage,
-          cardImage: formData.cardImage,
-          gameLogo: formData.gameLogo,
-          titleImage: formData.titleImage,
-          gameName: formData.gameName,
-          developer: formData.developer,
-          version: formData.version,
-          genre: formData.genre,
-          ageRating: formData.ageRating,
-          description: formData.description,
-          price: formData.price,
-          releaseDate: formData.releaseDate,
-          tags: formData.tags,
-          requirements: formData.requirements,
-        } : p
-      ));
-    }
-    
-    // Create new empty preset
-    const newPreset = {
-      id: Date.now(),
-      name: `Preset ${designPresets.length + 1}`,
-      screenshots: [],
-      bannerImage: null,
-      cardImage: null,
-      gameLogo: null,
-      titleImage: null,
-      gameName: '',
-      developer: '',
-      version: '',
-      genre: '',
-      ageRating: '',
-      description: '',
-      price: '',
-      releaseDate: '',
-      tags: '',
-      requirements: '',
-    };
-    
-    // Add new preset and switch to it (with empty data)
-    setDesignPresets(prev => [...prev, newPreset]);
-    
-    // Reset formData to empty values for the new preset
-    setFormData(prev => ({
-      ...prev,
-      screenshots: [],
-      bannerImage: null,
-      cardImage: null,
-      gameLogo: null,
-      titleImage: null,
-      gameName: '',
-      developer: '',
-      version: '',
-      genre: '',
-      ageRating: '',
-      description: '',
-      price: '',
-      releaseDate: '',
-      tags: '',
-      requirements: '',
-    }));
-    
-    setSelectedPresetId(newPreset.id);
-    setPreviewPresetId(newPreset.id);
-  };
-
-  // Delete design preset (cannot delete default preset or last remaining preset)
-  const deleteDesignPreset = (id) => {
-    // Don't allow deleting the default preset
-    if (id === 'default') {
-      return;
-    }
-    
-    // Don't allow deleting if it's the last remaining preset
-    if (designPresets.length === 1) {
-      return;
-    }
-    
-    // If this preset was selected, select another one
-    if (selectedPresetId === id) {
-      // Find the first available preset (prefer default)
-      const defaultPreset = designPresets.find(p => p.id === 'default');
-      const otherPreset = designPresets.find(p => p.id !== id && p.id !== selectedPresetId);
-      const newSelectedId = defaultPreset ? defaultPreset.id : (otherPreset ? otherPreset.id : designPresets[0].id);
-      
-      // Load that preset's data
-      const presetToSelect = designPresets.find(p => p.id === newSelectedId);
-      if (presetToSelect) {
-        setFormData(prev => ({
-          ...prev,
-          screenshots: presetToSelect.screenshots,
-          bannerImage: presetToSelect.bannerImage,
-          cardImage: presetToSelect.cardImage,
-          gameLogo: presetToSelect.gameLogo,
-          titleImage: presetToSelect.titleImage,
-          gameName: presetToSelect.gameName,
-          developer: presetToSelect.developer,
-          version: presetToSelect.version,
-          genre: presetToSelect.genre,
-          ageRating: presetToSelect.ageRating,
-          description: presetToSelect.description,
-          price: presetToSelect.price,
-          releaseDate: presetToSelect.releaseDate,
-          tags: presetToSelect.tags,
-          requirements: presetToSelect.requirements,
-        }));
-      }
-      
-      setSelectedPresetId(newSelectedId);
-      setPreviewPresetId(newSelectedId);
-    }
-    
-    setDesignPresets(designPresets.filter(p => p.id !== id));
-    
-    // Remove preset from all steps that used it
-    const newPresetForSteps = { ...presetForSteps };
-    Object.keys(newPresetForSteps).forEach(step => {
-      if (newPresetForSteps[step] === id) {
-        delete newPresetForSteps[step];
-      }
-    });
-    setPresetForSteps(newPresetForSteps);
-    
-    if (previewPresetId === id) {
-      setPreviewPresetId(null);
-    }
-  };
-
-  // Handle preset selection - load that preset's data into form
-  const handlePresetSelect = (presetId) => {
-    if (selectedPresetId === presetId) {
-      // Deselect - save current data back to preset
-      if (selectedPresetId) {
-        const preset = designPresets.find(p => p.id === selectedPresetId);
-        if (preset) {
-          // Save current formData to preset before deselecting
-          setDesignPresets(prev => prev.map(p => 
-            p.id === selectedPresetId ? {
-              ...p,
-              screenshots: formData.screenshots,
-              bannerImage: formData.bannerImage,
-              cardImage: formData.cardImage,
-              gameLogo: formData.gameLogo,
-              titleImage: formData.titleImage,
-              gameName: formData.gameName,
-              developer: formData.developer,
-              version: formData.version,
-              genre: formData.genre,
-              ageRating: formData.ageRating,
-              description: formData.description,
-              price: formData.price,
-              releaseDate: formData.releaseDate,
-              tags: formData.tags,
-              requirements: formData.requirements,
-            } : p
-          ));
-        }
-      }
-      setSelectedPresetId(null);
-      setPreviewPresetId(null);
-    } else {
-      // Save current preset's data first
-      if (selectedPresetId) {
-        const currentPreset = designPresets.find(p => p.id === selectedPresetId);
-        if (currentPreset) {
-          setDesignPresets(prev => prev.map(p => 
-            p.id === selectedPresetId ? {
-              ...p,
-              screenshots: formData.screenshots,
-              bannerImage: formData.bannerImage,
-              cardImage: formData.cardImage,
-              gameLogo: formData.gameLogo,
-              titleImage: formData.titleImage,
-              gameName: formData.gameName,
-              developer: formData.developer,
-              version: formData.version,
-              genre: formData.genre,
-              ageRating: formData.ageRating,
-              description: formData.description,
-              price: formData.price,
-              releaseDate: formData.releaseDate,
-              tags: formData.tags,
-              requirements: formData.requirements,
-            } : p
-          ));
-        }
-      }
-      
-      // Load new preset's data into form
-      const newPreset = designPresets.find(p => p.id === presetId);
-      if (newPreset) {
-        setFormData(prev => ({
-          ...prev,
-          screenshots: newPreset.screenshots,
-          bannerImage: newPreset.bannerImage,
-          cardImage: newPreset.cardImage,
-          gameLogo: newPreset.gameLogo,
-          titleImage: newPreset.titleImage,
-          gameName: newPreset.gameName,
-          developer: newPreset.developer,
-          version: newPreset.version,
-          genre: newPreset.genre,
-          ageRating: newPreset.ageRating,
-          description: newPreset.description,
-          price: newPreset.price,
-          releaseDate: newPreset.releaseDate,
-          tags: newPreset.tags,
-          requirements: newPreset.requirements,
-        }));
-      }
-      
-      setSelectedPresetId(presetId);
-      setPreviewPresetId(presetId);
-    }
-  };
-
-  // Apply preset to all steps
-  const applyPresetToAll = (presetId) => {
-    const allSteps = [1, 2, 3, 4, 5, 6, 7];
-    const newPresetForSteps = {};
-    allSteps.forEach(step => {
-      newPresetForSteps[step] = presetId;
-    });
-    setPresetForSteps(newPresetForSteps);
-    setSelectedPresetId(null);
-    setPreviewPresetId(null);
-  };
-
-  // Apply preset to current step only
-  const applyPresetToCurrentStep = (presetId) => {
-    const preset = designPresets.find(p => p.id === presetId);
-    if (preset) {
-      // Apply preset data to formData
-      setFormData(prev => ({
-        ...prev,
-        screenshots: preset.screenshots || prev.screenshots,
-        bannerImage: preset.bannerImage || prev.bannerImage,
-        cardImage: preset.cardImage || prev.cardImage,
-        gameLogo: preset.gameLogo || prev.gameLogo,
-        titleImage: preset.titleImage || prev.titleImage,
-        gameName: preset.gameName || prev.gameName,
-        developer: preset.developer || prev.developer,
-        version: preset.version || prev.version,
-        genre: preset.genre || prev.genre,
-        ageRating: preset.ageRating || prev.ageRating,
-        description: preset.description || prev.description,
-        price: preset.price || prev.price,
-        releaseDate: preset.releaseDate || prev.releaseDate,
-        tags: preset.tags || prev.tags,
-        requirements: preset.requirements || prev.requirements,
-      }));
-      
-      setPresetForSteps({
-        ...presetForSteps,
-        [currentStep]: presetId
-      });
-    }
-    setSelectedPresetId(null);
-    setPreviewPresetId(null);
-  };
+  // Removed presets feature completely
   
-  // Form data state to preserve across steps
+  // Form data state
   const [formData, setFormData] = useState({
     gameName: '',
     developer: '', // Who is uploading the game
@@ -446,6 +385,7 @@ const GameStudio = ({ navigate }) => {
     tags: '',
     requirements: '',
     bannerImage: null,
+    cardImage: null,
     gameLogo: null,
     titleImage: null,
     titleImageSize: 100, // Size in percentage (100 = full width)
@@ -456,7 +396,38 @@ const GameStudio = ({ navigate }) => {
     logoSize: 120,
     logoPosition: 'left', // left, center, right
     bannerHeight: 60, // vh
+    marketEnabled: true, // Enable/disable market for the game
+    // Image positions for drag-to-move functionality (in percentage: {x: 50, y: 50} = center)
+    bannerPosition: { x: 50, y: 50 },
+    logoPositionCustom: { x: 50, y: 50 },
+    titlePosition: { x: 50, y: 50 },
+    cardPosition: { x: 50, y: 50 },
+    // new: persisted zoom/offset defaults
+    bannerZoom: 1,
+    cardZoom: 1,
+    bannerOffset: { x: 0, y: 0 },
+    cardOffset: { x: 0, y: 0 },
   });
+
+  // Keep preview zoom in sync with saved formData zoom values
+  useEffect(() => {
+    if (typeof formData?.bannerZoom === 'number') {
+      bannerStateRef.current.scale = formData.bannerZoom;
+    }
+    if (typeof formData?.cardZoom === 'number') {
+      cardStateRef.current.scale = formData.cardZoom;
+    }
+    if (formData?.bannerOffset) {
+      bannerStateRef.current.x = formData.bannerOffset.x || 0;
+      bannerStateRef.current.y = formData.bannerOffset.y || 0;
+    }
+    if (formData?.cardOffset) {
+      cardStateRef.current.x = formData.cardOffset.x || 0;
+      cardStateRef.current.y = formData.cardOffset.y || 0;
+    }
+    // trigger preview re-render
+    setFormData(prev => ({ ...prev }));
+  }, [formData?.bannerZoom, formData?.cardZoom, formData?.bannerOffset, formData?.cardOffset]);
   
   // Error states for each step
   const [stepErrors, setStepErrors] = useState({
@@ -470,62 +441,7 @@ const GameStudio = ({ navigate }) => {
     8: false  // Confirmation
   });
 
-  // No need for displayData override anymore - each preset maintains its own data
-
-  // Auto-select preset based on current step's assignment - only on step change, not preset change
-  useEffect(() => {
-    // Save current preset's data before switching
-    if (selectedPresetId) {
-      setDesignPresets(prev => prev.map(p => 
-        p.id === selectedPresetId ? {
-          ...p,
-          screenshots: formData.screenshots,
-          bannerImage: formData.bannerImage,
-          cardImage: formData.cardImage,
-          gameLogo: formData.gameLogo,
-          titleImage: formData.titleImage,
-          gameName: formData.gameName,
-          developer: formData.developer,
-          version: formData.version,
-          genre: formData.genre,
-          ageRating: formData.ageRating,
-          description: formData.description,
-          price: formData.price,
-          releaseDate: formData.releaseDate,
-          tags: formData.tags,
-          requirements: formData.requirements,
-        } : p
-      ));
-    }
-    
-    // Load new step's preset if it has one assigned
-    const assignedPresetId = presetForSteps[currentStep];
-    if (assignedPresetId && assignedPresetId !== selectedPresetId) {
-      const preset = designPresets.find(p => p.id === assignedPresetId);
-      if (preset) {
-        setFormData(prev => ({
-          ...prev,
-          screenshots: preset.screenshots,
-          bannerImage: preset.bannerImage,
-          cardImage: preset.cardImage,
-          gameLogo: preset.gameLogo,
-          titleImage: preset.titleImage,
-          gameName: preset.gameName,
-          developer: preset.developer,
-          version: preset.version,
-          genre: preset.genre,
-          ageRating: preset.ageRating,
-          description: preset.description,
-          price: preset.price,
-          releaseDate: preset.releaseDate,
-          tags: preset.tags,
-          requirements: preset.requirements,
-        }));
-      }
-      setSelectedPresetId(assignedPresetId);
-      setPreviewPresetId(assignedPresetId);
-    }
-  }, [currentStep]);
+  // Removed all preset-related code
   
   // Helper function to check if a step is actually completed with valid data
   const isStepCompleted = (step) => {
@@ -640,12 +556,68 @@ const GameStudio = ({ navigate }) => {
   }, [formData.gameName, formData.version, formData.genre, formData.description, formData.bannerImage, formData.cardImage, formData.gameLogo, formData.titleImage, formData.screenshots, formData.gameExecutable, currentStep]);
 
   const handleUploadGame = () => {
-    setEditingGameId(null);
-    setUploadModalOpen(true);
-    setShowCreateMenu(false);
-    setCurrentStep(1);
-    setContentSection('description');
-    setPreviewView('game'); // Reset to game view when opening modal
+    // First close modal if open, then reset everything, then reopen
+    setUploadModalOpen(false);
+    
+    // Use setTimeout to ensure state updates are processed in order
+    setTimeout(() => {
+      // Reset form data completely in one call
+      setFormData({
+        gameName: '',
+        developer: '',
+        version: '',
+        genre: '',
+        ageRating: '',
+        description: '',
+        price: '',
+        releaseDate: '',
+        tags: '',
+        requirements: '',
+        bannerImage: null,
+        cardImage: null,
+        gameLogo: null,
+        titleImage: null,
+        titleImageSize: 100,
+        screenshots: null,
+        gameExecutable: null,
+        gameFileSize: 0,
+        logoSize: 120,
+        logoPosition: 'left',
+        bannerHeight: 60,
+        marketEnabled: true,
+        bannerPosition: { x: 50, y: 50 },
+        logoPositionCustom: { x: 50, y: 50 },
+        titlePosition: { x: 50, y: 50 },
+          cardPosition: { x: 50, y: 50 },
+          bannerZoom: 1,
+          cardZoom: 1,
+          bannerOffset: { x: 0, y: 0 },
+          cardOffset: { x: 0, y: 0 },
+      });
+      
+      // Reset step errors
+      setStepErrors({
+        1: false,
+        2: false,
+        3: false,
+        4: false,
+        5: false,
+        6: false,
+        7: false,
+        8: false
+      });
+      
+      setEditingGameId(null);
+      setCurrentStep(1);
+      setContentSection('description');
+      setPreviewView('game'); // Reset to game view when opening modal
+      setShowCreateMenu(false);
+      
+      // Open modal after a brief delay to ensure state is reset
+      setTimeout(() => {
+        setUploadModalOpen(true);
+      }, 50);
+    }, 50);
   };
   
   const handlePreviewCommunity = () => {
@@ -746,6 +718,47 @@ const GameStudio = ({ navigate }) => {
     // Step 7 (Files) and step 8 (Confirm) don't change preview - keep the last preview
   }, [currentStep, uploadModalOpen]);
 
+  // Focus first input when modal opens for new game
+  useEffect(() => {
+    if (uploadModalOpen && !editingGameId && currentStep === 1) {
+      // Use multiple strategies to ensure focus works and input is ready
+      const focusInput = () => {
+        const input = gameNameInputRef.current;
+        if (input) {
+          try {
+            // Ensure input is visible and enabled
+            if (input.offsetParent !== null && !input.disabled && !input.readOnly) {
+              input.focus();
+              // Set cursor position to end
+              if (input.setSelectionRange) {
+                input.setSelectionRange(input.value.length, input.value.length);
+              }
+            }
+          } catch (e) {
+            // Ignore focus errors
+          }
+        }
+      };
+      
+      // Try immediate focus (if DOM is ready)
+      const immediate = setTimeout(focusInput, 0);
+      
+      // Also try after short delay (for DOM rendering)
+      const delayed = setTimeout(focusInput, 50);
+      
+      // And try after animation completes
+      requestAnimationFrame(() => {
+        const animationDelay = setTimeout(focusInput, 100);
+        return () => clearTimeout(animationDelay);
+      });
+      
+      return () => {
+        clearTimeout(immediate);
+        clearTimeout(delayed);
+      };
+    }
+  }, [uploadModalOpen, editingGameId, currentStep]);
+
   // Listen for top-bar Upload button to open this modal
   useEffect(() => {
     const openUpload = () => {
@@ -782,24 +795,10 @@ const GameStudio = ({ navigate }) => {
   };
   
   const handleInputChange = (field, value) => {
-    setFormData(prev => {
-      const newFormData = {
+    setFormData(prev => ({
       ...prev,
       [field]: value
-      };
-      
-      // Save to current preset immediately
-      if (selectedPresetId) {
-        setDesignPresets(prevPresets => prevPresets.map(p => 
-          p.id === selectedPresetId ? {
-            ...p,
-            ...newFormData
-          } : p
-        ));
-      }
-      
-      return newFormData;
-    });
+    }));
     // Don't clear errors here - let the auto-validation useEffect handle it
   };
 
@@ -818,42 +817,22 @@ const GameStudio = ({ navigate }) => {
       tags: '',
       requirements: '',
       bannerImage: null,
+      cardImage: null,
       gameLogo: null,
       titleImage: null,
       titleImageSize: 100,
-      screenshots: null,
+      screenshots: [],
       gameExecutable: null,
       gameFileSize: 0,
       logoSize: 120,
       logoPosition: 'left',
       bannerHeight: 60,
+      marketEnabled: true,
+      bannerPosition: { x: 50, y: 50 },
+      logoPositionCustom: { x: 50, y: 50 },
+      titlePosition: { x: 50, y: 50 },
+      cardPosition: { x: 50, y: 50 },
     });
-    
-    // Reset presets
-    setDesignPresets([{
-      id: 'default',
-      name: 'Default',
-      screenshots: [],
-      bannerImage: null,
-      cardImage: null,
-      gameLogo: null,
-      titleImage: null,
-      gameName: '',
-      developer: '',
-      version: '',
-      genre: '',
-      ageRating: '',
-      description: '',
-      price: '',
-      releaseDate: '',
-      tags: '',
-      requirements: '',
-    }]);
-    
-    // Reset selected preset to default
-    setSelectedPresetId('default');
-    setPreviewPresetId(null);
-    setPresetForSteps({});
     
     // Reset step errors
     setStepErrors({
@@ -925,7 +904,32 @@ const GameStudio = ({ navigate }) => {
     }
   };
 
-  const handleEditGame = (gameId) => {
+  // Helper to convert file:// URLs to data URLs
+  const convertFileToDataUrl = async (filePath) => {
+    if (!filePath || typeof filePath !== 'string') return null;
+    
+    // If it's already a data URL, return it
+    if (filePath.startsWith('data:')) return filePath;
+    
+    // If it's not a file:// URL, return as-is
+    if (!filePath.startsWith('file://')) return filePath;
+    
+    // Convert file:// URL to data URL using Electron API
+    if (window.electronAPI && window.electronAPI.fileToDataUrl) {
+      try {
+        const result = await window.electronAPI.fileToDataUrl(filePath);
+        if (result.success) {
+          return result.dataURL;
+        }
+      } catch (error) {
+        console.warn('Error converting file to data URL:', error);
+      }
+    }
+    
+    return null;
+  };
+
+  const handleEditGame = async (gameId) => {
     const game = games.find(g => g.id === gameId);
     if (game) {
       setEditingGameId(gameId);
@@ -935,34 +939,161 @@ const GameStudio = ({ navigate }) => {
       setContentSection('description');
       setPreviewView('game');
       
-      // Populate form data with game data
+      // Try to load from metadata.json first (most reliable)
+      let metadata = null;
+      if (window.electronAPI && window.electronAPI.getGameMetadata) {
+        try {
+          const metaResult = await window.electronAPI.getGameMetadata(game.gameId);
+          if (metaResult.success) {
+            metadata = metaResult.metadata;
+            console.log('Loaded metadata from JSON:', metadata);
+          }
+        } catch (error) {
+          console.warn('Could not load metadata from JSON:', error);
+        }
+      }
+      
+      // Fallback to localStorage if metadata.json not available
+      let fd = null;
+      if (!metadata) {
+        const stored = localStorage.getItem('customGames');
+        const customGames = stored ? JSON.parse(stored) : [];
+        const customGame = customGames.find(g => g.gameId === game.gameId);
+        
+        if (customGame && customGame.fullFormData) {
+          fd = customGame.fullFormData;
+        }
+      } else {
+        // Use metadata.json data, but convert it to formData format
+        fd = {
+          gameName: metadata.gameName,
+          developer: metadata.developer,
+          version: metadata.version,
+          genre: metadata.genre,
+          ageRating: metadata.ageRating,
+          description: metadata.description,
+          price: metadata.price,
+          releaseDate: metadata.releaseDate,
+          tags: metadata.tags,
+          requirements: metadata.requirements,
+          bannerImage: metadata.bannerImage,
+          cardImage: metadata.cardImage,
+          gameLogo: metadata.gameLogo,
+          titleImage: metadata.titleImage,
+          titleImageSize: metadata.titleImageSize,
+          screenshots: metadata.screenshots || [],
+          gameExecutable: metadata.gameExecutable, // This will be the filename or path
+          gameFileSize: metadata.gameFileSize,
+          logoSize: metadata.logoSize,
+          logoPosition: metadata.logoPosition,
+          bannerHeight: metadata.bannerHeight,
+          bannerPosition: metadata.bannerPosition,
+          logoPositionCustom: metadata.logoPositionCustom,
+          titlePosition: metadata.titlePosition,
+          cardPosition: metadata.cardPosition,
+          marketEnabled: metadata.marketEnabled
+        };
+      }
+      
+      // Convert file:// URLs to data URLs for all images
+      const bannerImageUrl = await convertFileToDataUrl(fd?.bannerImage || metadata?.bannerImage || game.banner);
+      const cardImageUrl = await convertFileToDataUrl(fd?.cardImage || metadata?.cardImage);
+      const gameLogoUrl = await convertFileToDataUrl(fd?.gameLogo || metadata?.gameLogo || game.banner);
+      const titleImageUrl = await convertFileToDataUrl(fd?.titleImage || metadata?.titleImage || game.banner);
+      
+      // Convert screenshots array
+      const screenshotsArray = fd?.screenshots || metadata?.screenshots || [];
+      const convertedScreenshots = await Promise.all(
+        screenshotsArray.map(screenshot => convertFileToDataUrl(screenshot))
+      );
+      const validScreenshots = convertedScreenshots.filter(s => s !== null);
+      
+      // Set form data with loaded values or defaults
       setFormData({
-        gameName: game.name,
-        developer: 'Your Studio',
-        version: game.version,
-        genre: 'Action',
-        ageRating: '12+',
-        description: `Edit the details for ${game.name}`,
-        price: '0.00',
-        releaseDate: new Date().toISOString().split('T')[0],
-        tags: game.status,
-        requirements: 'Windows 10',
-        bannerImage: game.banner,
-        gameLogo: game.banner,
-        titleImage: game.banner,
-        titleImageSize: 100,
-        screenshots: [],
-        gameExecutable: null,
-        gameFileSize: 0,
-        logoSize: 120,
-        logoPosition: 'left',
-        bannerHeight: 60,
+        gameName: fd?.gameName || metadata?.gameName || game.name || '',
+        developer: fd?.developer || metadata?.developer || 'Your Studio',
+        version: fd?.version || metadata?.version || game.version || '1.0.0',
+        genre: fd?.genre || metadata?.genre || 'Action',
+        ageRating: fd?.ageRating || metadata?.ageRating || '12+',
+        description: fd?.description || metadata?.description || '',
+        price: fd?.price || metadata?.price || '0.00',
+        releaseDate: fd?.releaseDate || metadata?.releaseDate || new Date().toISOString().split('T')[0],
+        tags: fd?.tags || metadata?.tags || '',
+        requirements: fd?.requirements || metadata?.requirements || 'Windows 10',
+        bannerImage: bannerImageUrl || game.banner,
+        cardImage: cardImageUrl || null,
+        gameLogo: gameLogoUrl || game.banner,
+        titleImage: titleImageUrl || game.banner,
+        titleImageSize: fd?.titleImageSize || metadata?.titleImageSize || 100,
+        bannerZoom: fd?.bannerZoom || metadata?.bannerZoom || 1,
+        cardZoom: fd?.cardZoom || metadata?.cardZoom || 1,
+        bannerOffset: fd?.bannerOffset || metadata?.bannerOffset || { x: 0, y: 0 },
+        cardOffset: fd?.cardOffset || metadata?.cardOffset || { x: 0, y: 0 },
+        screenshots: validScreenshots.length > 0 ? validScreenshots : [],
+        // For executable: if we have a filename, create a File-like object reference
+        // Note: We can't load the actual file in browser context, but we can indicate it exists
+        gameExecutable: fd?.gameExecutable || metadata?.gameExecutable ? 
+          (typeof fd?.gameExecutable === 'object' ? fd.gameExecutable : 
+           typeof metadata?.gameExecutable === 'object' ? metadata.gameExecutable :
+           { name: fd?.gameExecutable || metadata?.gameExecutable, exists: true }) : null,
+        gameFileSize: fd?.gameFileSize || metadata?.gameFileSize || 0,
+        logoSize: fd?.logoSize || metadata?.logoSize || 120,
+        logoPosition: fd?.logoPosition || metadata?.logoPosition || 'left',
+        bannerHeight: fd?.bannerHeight || metadata?.bannerHeight || 60,
+        bannerPosition: fd?.bannerPosition || metadata?.bannerPosition || { x: 50, y: 50 },
+        logoPositionCustom: fd?.logoPositionCustom || metadata?.logoPositionCustom || { x: 50, y: 50 },
+        titlePosition: fd?.titlePosition || metadata?.titlePosition || { x: 50, y: 50 },
+        cardPosition: fd?.cardPosition || metadata?.cardPosition || { x: 50, y: 50 },
+        marketEnabled: fd?.marketEnabled !== false && metadata?.marketEnabled !== false,
       });
     }
   };
 
-  const handleDeleteGame = (gameId) => {
-    setGames(games.filter(game => game.id !== gameId));
+  // Quick action to update an existing game's build (opens modal on upload step)
+  const handleUpdateBuild = async (gameId) => {
+    await handleEditGame(gameId);
+    // Jump directly to the upload step after modal opens
+    setTimeout(() => {
+      setCurrentStep(6);
+      setPreviewView('upload');
+    }, 0);
+  };
+
+  const handleDeleteGame = async (gameId) => {
+    // Find the game to get the gameId
+    const gameToDelete = games.find(g => g.id === gameId);
+    if (!gameToDelete) return;
+    
+    // Confirm deletion
+    if (!window.confirm(`Are you sure you want to delete "${gameToDelete.name}"? This action cannot be undone.`)) {
+      return;
+    }
+    
+    try {
+      // Remove from games list in UI
+      setGames(games.filter(game => game.id !== gameId));
+      
+      // Remove from localStorage
+      const storedCustomGames = localStorage.getItem('customGames');
+      if (storedCustomGames) {
+        const customGames = JSON.parse(storedCustomGames);
+        const updatedGames = customGames.filter(game => game.gameId !== gameToDelete.gameId);
+        localStorage.setItem('customGames', JSON.stringify(updatedGames));
+        
+        // Dispatch event to update other components
+        window.dispatchEvent(new Event('customGameUpdate'));
+      }
+      
+      // If Electron API is available, delete the game files folder
+      if (window.electronAPI && window.electronAPI.deleteGameFolder) {
+        await window.electronAPI.deleteGameFolder(gameToDelete.gameId);
+      }
+      
+      alert('Game deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting game:', error);
+      alert('Error deleting game. Please try again.');
+    }
   };
 
   const handleMouseMove = (e, cardId) => {
@@ -991,6 +1122,19 @@ const GameStudio = ({ navigate }) => {
   };
   
   const stepTitles = ['GAME INFO', 'MEDIA', 'STORE', 'GAME MENU', 'COMMUNITY', 'MARKET', 'FILES', 'CONFIRM'];
+  const stepHelp = [
+    'Game Info: Enter name, developer, version, genre, age rating, description, price, release date, tags and system requirements.',
+    'Media: Upload card, banner, logo, stylized title and gallery. Use mouse wheel to zoom and drag to reposition (bounded) in previews.',
+    'Store (Preview): See how your game looks in the store. No inputs required.',
+    'Game Menu (Preview): Visualize in-game menu layout. No inputs required.',
+    'Community (Preview): Preview the community page for your game.',
+    'Market (Preview): Preview item marketplace presentation.',
+    'Files: Attach the executable. We save it into the game folder. Required to publish.',
+    'Confirm: Review everything and publish your game.'
+  ];
+  
+  // Help overlay hover state
+  const [helpHovered, setHelpHovered] = useState(false);
 
   // Handle hash navigation to scroll to sections
   useEffect(() => {
@@ -1253,6 +1397,9 @@ const GameStudio = ({ navigate }) => {
                     <div className="placeholder-icon">🎨</div>
                   </div>
                   <div className="studio-game-overlay">
+                    <button className="studio-action-btn update" onClick={() => handleUpdateBuild(game.id)} title="Update Build">
+                      <RefreshCw size={16} />
+                    </button>
                     <button className="studio-action-btn" onClick={() => handleEditGame(game.id)}>
                       <Edit size={16} />
                     </button>
@@ -1522,70 +1669,6 @@ const GameStudio = ({ navigate }) => {
                     </div>
               </div>
 
-                  {/* Design Presets Section */}
-                  <div className="upload-design-presets">
-                    <div className="upload-design-presets-header">
-                      <h4>Design Preset</h4>
-                      <button 
-                        className="upload-add-preset-btn"
-                        onClick={addDesignPreset}
-                        title="Add new preset"
-                      >
-                        <Plus size={18} />
-                        Add
-                      </button>
-                    </div>
-                    
-                    <div className="upload-preset-dropdown-wrapper">
-                      <select 
-                        className="upload-preset-dropdown"
-                        value={selectedPresetId}
-                        onChange={(e) => {
-                          const newPresetId = e.target.value;
-                          if (newPresetId !== selectedPresetId) {
-                            handlePresetSelect(newPresetId);
-                          }
-                        }}
-                      >
-                        {designPresets.map((preset, index) => (
-                          <option key={preset.id} value={preset.id}>
-                            Preset {index + 1}: {preset.name}
-                          </option>
-                        ))}
-                      </select>
-                      
-                      {selectedPresetId !== 'default' && designPresets.length > 1 && (
-                        <button 
-                          className="upload-preset-delete-btn"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            deleteDesignPreset(selectedPresetId);
-                          }}
-                          title="Delete current preset"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
-                    </div>
-
-                    {selectedPresetId && (
-                      <div className="upload-preset-actions">
-                        <button 
-                          className="upload-preset-apply-btn upload-preset-apply-all"
-                          onClick={() => applyPresetToAll(selectedPresetId)}
-                        >
-                          Apply to All Sections
-                        </button>
-                        <button 
-                          className="upload-preset-apply-btn"
-                          onClick={() => applyPresetToCurrentStep(selectedPresetId)}
-                        >
-                          Apply Here
-                        </button>
-                      </div>
-                    )}
-              </div>
-
                   {/* Form Content */}
               <div className="upload-modal-content">
                 {currentStep === 1 && (
@@ -1594,21 +1677,36 @@ const GameStudio = ({ navigate }) => {
                       <div className="upload-section">
                         <label className="upload-label">Game Name *</label>
                         <input 
+                          ref={gameNameInputRef}
                           type="text" 
                           className={`upload-input ${stepErrors[1] && !formData.gameName ? 'error' : ''}`}
                           placeholder="Enter game name" 
-                          value={formData.gameName}
-                          onChange={(e) => handleInputChange('gameName', e.target.value)}
+                          value={formData.gameName || ''}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            handleInputChange('gameName', e.target.value);
+                          }}
+                          onFocus={(e) => e.target.select()}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          autoFocus={!editingGameId && currentStep === 1}
+                          disabled={false}
                         />
                       </div>
                       <div className="upload-section">
                         <label className="upload-label">Developer / Publisher *</label>
                         <input 
+                          ref={developerInputRef}
                           type="text" 
                           className={`upload-input ${stepErrors[1] && !formData.developer ? 'error' : ''}`}
                           placeholder="Enter developer or publisher name" 
-                          value={formData.developer}
-                          onChange={(e) => handleInputChange('developer', e.target.value)}
+                          value={formData.developer || ''}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            handleInputChange('developer', e.target.value);
+                          }}
+                          onFocus={(e) => e.target.select()}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          disabled={false}
                         />
                       </div>
                       <div className="upload-section">
@@ -1617,16 +1715,26 @@ const GameStudio = ({ navigate }) => {
                           type="text" 
                           className={`upload-input ${stepErrors[1] && !formData.version ? 'error' : ''}`}
                           placeholder="e.g. 1.0.0"
-                          value={formData.version}
-                          onChange={(e) => handleInputChange('version', e.target.value)}
+                          value={formData.version || ''}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            handleInputChange('version', e.target.value);
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          disabled={false}
                         />
                       </div>
                       <div className="upload-section">
                         <label className="upload-label">Genre *</label>
                         <select 
                           className={`upload-input ${stepErrors[1] && !formData.genre ? 'error' : ''}`}
-                          value={formData.genre}
-                          onChange={(e) => handleInputChange('genre', e.target.value)}
+                          value={formData.genre || ''}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            handleInputChange('genre', e.target.value);
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          disabled={false}
                         >
                           <option value="">Select genre</option>
                           <option value="action">Action</option>
@@ -1650,8 +1758,13 @@ const GameStudio = ({ navigate }) => {
                         </label>
                         <select 
                           className="upload-input"
-                          value={formData.ageRating}
-                          onChange={(e) => handleInputChange('ageRating', e.target.value)}
+                          value={formData.ageRating || ''}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            handleInputChange('ageRating', e.target.value);
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          disabled={false}
                         >
                           <option value="">Select rating</option>
                           <option value="everyone">Everyone</option>
@@ -1685,8 +1798,13 @@ const GameStudio = ({ navigate }) => {
                           placeholder="0.00" 
                           step="0.01" 
                           min="0"
-                          value={formData.price}
-                          onChange={(e) => handleInputChange('price', e.target.value)}
+                          value={formData.price || ''}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            handleInputChange('price', e.target.value);
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          disabled={false}
                         />
                       </div>
                       <div className="upload-section">
@@ -1697,8 +1815,13 @@ const GameStudio = ({ navigate }) => {
                         <input 
                           type="date" 
                           className="upload-input"
-                          value={formData.releaseDate}
-                          onChange={(e) => handleInputChange('releaseDate', e.target.value)}
+                          value={formData.releaseDate || ''}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            handleInputChange('releaseDate', e.target.value);
+                          }}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          disabled={false}
                         />
                       </div>
                     </div>
@@ -1712,8 +1835,13 @@ const GameStudio = ({ navigate }) => {
                         type="text" 
                         className="upload-input" 
                         placeholder="Enter tags separated by commas (e.g. action, multiplayer, indie)"
-                        value={formData.tags}
-                        onChange={(e) => handleInputChange('tags', e.target.value)}
+                        value={formData.tags || ''}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleInputChange('tags', e.target.value);
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        disabled={false}
                       />
                     </div>
 
@@ -1726,8 +1854,13 @@ const GameStudio = ({ navigate }) => {
                         className="upload-textarea" 
                         placeholder="Minimum and recommended system requirements" 
                         rows={3}
-                        value={formData.requirements}
-                        onChange={(e) => handleInputChange('requirements', e.target.value)}
+                        value={formData.requirements || ''}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleInputChange('requirements', e.target.value);
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        disabled={false}
                       />
                     </div>
                   </div>
@@ -1946,10 +2079,29 @@ const GameStudio = ({ navigate }) => {
 
                 {currentStep === 6 && (
                   <div className="upload-tab-content">
-                    <h3 style={{ marginBottom: '24px', color: 'var(--text-primary)' }}>Preview: Market</h3>
+                    <h3 style={{ marginBottom: '24px', color: 'var(--text-primary)' }}>Market Settings</h3>
                     <p style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>
-                      Preview how your game items will be displayed in the marketplace. This is a sample market view.
+                      Enable or disable marketplace features for your game. Users can request markets for games that don't have them enabled.
                     </p>
+                    
+                    <div style={{ padding: '20px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '12px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={formData.marketEnabled}
+                          onChange={(e) => handleInputChange('marketEnabled', e.target.checked)}
+                          style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                        />
+                        <div>
+                          <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                            Enable Market
+                          </div>
+                          <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                            Allow users to buy and sell items in your game's marketplace
+                          </div>
+                        </div>
+                      </label>
+                    </div>
                   </div>
                 )}
 
@@ -2002,7 +2154,9 @@ const GameStudio = ({ navigate }) => {
                               <Trash2 size={14} /> Remove
                             </button>
                             <Package size={48} color="var(--accent-primary)" />
-                            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Game Executable</span>
+                            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                              {formData.gameExecutable?.name || formData.gameExecutable || 'Game Executable'}
+                            </span>
                             <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
                               {formatFileSize(formData.gameFileSize)}
                             </span>
@@ -2181,19 +2335,394 @@ const GameStudio = ({ navigate }) => {
                               validateStep(7);
                               alert('Please fill in all required fields before uploading.');
                             } else {
-                              if (editingGameId) {
-                                // Update existing game
-                                setGames(games.map(game => 
-                                  game.id === editingGameId 
-                                    ? { ...game, name: formData.gameName, version: formData.version }
-                                    : game
-                                ));
-                                alert('Game updated successfully!');
+                              // Get or initialize custom games from localStorage
+                              const storedCustomGames = localStorage.getItem('customGames');
+                              let customGames = storedCustomGames ? JSON.parse(storedCustomGames) : [];
+                              
+                              const gameId = formData.gameName.toLowerCase().replace(/\s+/g, '-');
+                              
+                              // Helper function to convert File to data URL
+                              const fileToDataURL = (file) => {
+                                return new Promise((resolve) => {
+                                  if (!file) {
+                                    resolve(null);
+                                    return;
+                                  }
+                                  if (typeof file === 'string') {
+                                    resolve(file);
+                                    return;
+                                  }
+                                  const reader = new FileReader();
+                                  reader.onload = (e) => resolve(e.target.result);
+                                  reader.onerror = () => resolve(null);
+                                  reader.readAsDataURL(file);
+                                });
+                              };
+                              
+                              // Convert images to data URLs
+                              const bannerImagePromise = fileToDataURL(formData.bannerImage);
+                              const gameLogoPromise = fileToDataURL(formData.gameLogo);
+                              const titleImagePromise = fileToDataURL(formData.titleImage);
+                              const cardImagePromise = fileToDataURL(formData.cardImage);
+                              
+                              // Convert screenshots array
+                              const screenshotsPromises = (formData.screenshots || []).map(screenshot => fileToDataURL(screenshot));
+                              
+                              // Wait for all conversions
+                              Promise.all([
+                                bannerImagePromise, 
+                                gameLogoPromise, 
+                                titleImagePromise,
+                                cardImagePromise,
+                                ...screenshotsPromises
+                              ]).then(async ([banner, logo, title, card, ...screenshots]) => {
+                                console.log('Starting game creation for:', gameId);
+                                console.log('Banner:', banner ? 'Present' : 'Missing');
+                                console.log('Logo:', logo ? 'Present' : 'Missing');
+                                console.log('Title:', title ? 'Present' : 'Missing');
+                                console.log('Card:', card ? 'Present' : 'Missing');
+                                console.log('Screenshots:', screenshots.filter(Boolean).length);
+                                
+                                // If we're in Electron, save files to disk
+                                let filePaths = {};
+                                if (window.electronAPI && window.electronAPI.saveGameFiles) {
+                                  console.log('Saving files to disk...');
+                                  try {
+                                    const filesToSave = {};
+                                    
+                                    // Prepare files to save
+                                    if (banner) filesToSave.banner = { dataURL: banner, name: formData.bannerImage?.name || 'banner' };
+                                    if (logo) filesToSave.logo = { dataURL: logo, name: formData.gameLogo?.name || 'logo' };
+                                    if (title) filesToSave.title = { dataURL: title, name: formData.titleImage?.name || 'title' };
+                                    if (card) filesToSave.card = { dataURL: card, name: formData.cardImage?.name || 'card' };
+                                    
+                                    // Save screenshots with index
+                                    screenshots.forEach((screenshot, index) => {
+                                      if (screenshot) {
+                                        filesToSave[`screenshot_${index}`] = { 
+                                          dataURL: screenshot, 
+                                          name: formData.screenshots?.[index]?.name || `screenshot_${index}` 
+                                        };
+                                      }
+                                    });
+                                    
+                                    console.log('Files to save:', Object.keys(filesToSave));
+                                    const result = await window.electronAPI.saveGameFiles(gameId, filesToSave);
+                                    console.log('Save result:', result);
+                                    if (result.success) {
+                                      filePaths = result.paths;
+                                      console.log('Files saved with paths:', filePaths);
+                                    }
+                                  } catch (error) {
+                                    console.error('Error saving game files:', error);
+                                  }
+                                  
+                                  // Save game executable if provided
+                                  if (formData.gameExecutable && window.electronAPI && window.electronAPI.saveGameExecutable) {
+                                    try {
+                                      // Check if it's a File object or a reference object
+                                      const isFileObject = formData.gameExecutable instanceof File;
+                                      
+                                      if (isFileObject) {
+                                        // Convert File to buffer for saving
+                                        const executableBuffer = await new Promise((resolve, reject) => {
+                                          const reader = new FileReader();
+                                          reader.onload = (e) => resolve(e.target.result);
+                                          reader.onerror = reject;
+                                          reader.readAsArrayBuffer(formData.gameExecutable);
+                                        });
+                                        
+                                        const executableResult = await window.electronAPI.saveGameExecutable(gameId, {
+                                          buffer: Array.from(new Uint8Array(executableBuffer)),
+                                          name: formData.gameExecutable.name
+                                        });
+                                        
+                                        if (executableResult.success) {
+                                          console.log('Executable saved:', executableResult.filename);
+                                          filePaths.gameExecutable = executableResult.path;
+                                        }
+                                      } else if (formData.gameExecutable.exists) {
+                                        // It's a reference object - the file already exists on disk
+                                        // We don't need to save it again, just update the path reference
+                                        console.log('Executable already exists on disk:', formData.gameExecutable.name);
+                                        // Try to get the full path from the game folder
+                                        const gameFolderPath = await window.electronAPI.getGameFolderPath(gameId);
+                                        if (gameFolderPath) {
+                                          // Construct the file path
+                                          const fileName = formData.gameExecutable.name || 'game.exe';
+                                          filePaths.gameExecutable = `file://${gameFolderPath.replace(/\\/g, '/')}/${fileName}`;
+                                        }
+                                      }
+                                    } catch (error) {
+                                      console.error('Error saving game executable:', error);
+                                    }
+                                  }
+                                } else {
+                                  console.error('Electron API not available');
+                                }
+                                  
+                                // Also save metadata to JSON file (ONLY use file paths, no data URLs)
+                                if (window.electronAPI && window.electronAPI.saveGameMetadata) {
+                                  try {
+                                    // Get existing metadata if editing
+                                    let existingMetadata = {};
+                                    if (editingGameId) {
+                                      try {
+                                        const existingMetaResult = await window.electronAPI.getGameMetadata(gameId);
+                                        if (existingMetaResult.success) {
+                                          existingMetadata = existingMetaResult.metadata;
+                                        }
+                                      } catch (err) {
+                                        console.warn('Could not load existing metadata:', err);
+                                      }
+                                    }
+                                    
+                                    const metadata = {
+                                      gameName: formData.gameName || existingMetadata.gameName || '',
+                                      developer: formData.developer || existingMetadata.developer || '',
+                                      version: formData.version || existingMetadata.version || '',
+                                      genre: formData.genre || existingMetadata.genre || '',
+                                      ageRating: formData.ageRating || existingMetadata.ageRating || '',
+                                      description: formData.description || existingMetadata.description || '',
+                                      price: formData.price || existingMetadata.price || '0.00',
+                                      releaseDate: formData.releaseDate || existingMetadata.releaseDate || '',
+                                      tags: formData.tags || existingMetadata.tags || '',
+                                      requirements: formData.requirements || existingMetadata.requirements || '',
+                                      titleImageSize: formData.titleImageSize || existingMetadata.titleImageSize || 100,
+                                      logoSize: formData.logoSize || existingMetadata.logoSize || 120,
+                                      logoPosition: formData.logoPosition || existingMetadata.logoPosition || 'left',
+                                      bannerHeight: formData.bannerHeight || existingMetadata.bannerHeight || 60,
+                                      bannerImage: filePaths.banner || existingMetadata.bannerImage || null,
+                                      gameLogo: filePaths.logo || existingMetadata.gameLogo || null,
+                                      titleImage: filePaths.title || existingMetadata.titleImage || null,
+                                      cardImage: filePaths.card || existingMetadata.cardImage || null,
+                                      screenshots: screenshots.map((screenshot, index) => filePaths[`screenshot_${index}`] || existingMetadata.screenshots?.[index] || null).filter(Boolean),
+                                      gameExecutable: filePaths.gameExecutable || (formData.gameExecutable ? formData.gameExecutable.name : null) || existingMetadata.gameExecutable || null,
+                                      gameFileSize: formData.gameFileSize || existingMetadata.gameFileSize || 0,
+                                      bannerZoom: formData.bannerZoom || bannerStateRef.current.scale || 1,
+                                      cardZoom: formData.cardZoom || cardStateRef.current.scale || 1,
+                                      bannerOffset: formData.bannerOffset || { x: bannerStateRef.current.x || 0, y: bannerStateRef.current.y || 0 },
+                                      cardOffset: formData.cardOffset || { x: cardStateRef.current.x || 0, y: cardStateRef.current.y || 0 },
+                                      bannerPosition: formData.bannerPosition || existingMetadata.bannerPosition || { x: 50, y: 50 },
+                                      logoPositionCustom: formData.logoPositionCustom || existingMetadata.logoPositionCustom || { x: 50, y: 50 },
+                                      titlePosition: formData.titlePosition || existingMetadata.titlePosition || { x: 50, y: 50 },
+                                      cardPosition: formData.cardPosition || existingMetadata.cardPosition || { x: 50, y: 50 },
+                                      createdAt: existingMetadata.createdAt || new Date().toISOString(),
+                                      updatedAt: new Date().toISOString()
+                                    };
+                                    console.log('Saving metadata for game:', gameId, metadata);
+                                    const result = await window.electronAPI.saveGameMetadata(gameId, metadata);
+                                    console.log('Metadata save result:', result);
+                                  } catch (error) {
+                                    console.error('Error saving metadata:', error);
+                                  }
+                                }
+                                
+                                const newGame = {
+                                  id: `custom-${Date.now()}`,
+                                  gameId: gameId,
+                                  name: formData.gameName || 'Untitled Game',
+                                  icon: formData.gameName ? formData.gameName.charAt(0).toUpperCase() : 'U',
+                                  // Use data URLs for display (work in both dev and production)
+                                  banner: banner || filePaths.banner,
+                                  logo: logo || filePaths.logo,
+                                  title: title || filePaths.title,
+                                  card: card || filePaths.card,
+                                  screenshots: screenshots.map((screenshot, index) => screenshot || filePaths[`screenshot_${index}`]).filter(Boolean),
+                                  rating: 0,
+                                  playerCount: '0',
+                                  currentPlaying: '0',
+                                  trending: '0%',
+                                  description: formData.description || 'No description available.',
+                                  tags: formData.tags ? formData.tags.split(',').map(t => t.trim()) : [],
+                                  playtime: '0h',
+                                  lastPlayed: 'Never',
+                                  size: formData.gameExecutable ? `${(formData.gameFileSize / (1024 * 1024 * 1024)).toFixed(1)} GB` : '0 GB',
+                                  developer: formData.developer || 'You',
+                                  releaseDate: formData.releaseDate || new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+                                  version: formData.version || '1.0.0',
+                                  genre: formData.genre || 'Unknown',
+                                  status: 'public',
+                                  downloads: 0,
+                                  bannerHeight: formData.bannerHeight || 60,
+                                  // Save all form data for editing later (use file paths only, not data URLs)
+                                  fullFormData: {
+                                    gameName: formData.gameName || '',
+                                    developer: formData.developer || '',
+                                    version: formData.version || '',
+                                    genre: formData.genre || '',
+                                    ageRating: formData.ageRating || '',
+                                    description: formData.description || '',
+                                    price: formData.price || '0.00',
+                                    releaseDate: formData.releaseDate || '',
+                                    tags: formData.tags || '',
+                                    requirements: formData.requirements || '',
+                                    bannerImage: filePaths.banner || null,
+                                    gameLogo: filePaths.logo || null,
+                                    titleImage: filePaths.title || null,
+                                    cardImage: filePaths.card || null,
+                                    screenshots: screenshots.map((screenshot, index) => filePaths[`screenshot_${index}`] || null).filter(Boolean),
+                                    gameExecutable: filePaths.gameExecutable || (formData.gameExecutable ? formData.gameExecutable.name : null),
+                                    gameFileSize: formData.gameFileSize || 0,
+                                    titleImageSize: formData.titleImageSize || 100,
+                                    logoSize: formData.logoSize || 120,
+                                    logoPosition: formData.logoPosition || 'left',
+                                    bannerHeight: formData.bannerHeight || 60,
+                                    marketEnabled: formData.marketEnabled !== false,
+                                    bannerZoom: formData.bannerZoom || bannerStateRef.current.scale || 1,
+                                    cardZoom: formData.cardZoom || cardStateRef.current.scale || 1,
+                                    bannerOffset: formData.bannerOffset || { x: bannerStateRef.current.x || 0, y: bannerStateRef.current.y || 0 },
+                                    cardOffset: formData.cardOffset || { x: cardStateRef.current.x || 0, y: cardStateRef.current.y || 0 },
+                                    // Save preview positioning so other menus can apply them
+                                    bannerPosition: formData.bannerPosition || { x: 50, y: 50 },
+                                    logoPositionCustom: formData.logoPositionCustom || { x: 50, y: 50 },
+                                    titlePosition: formData.titlePosition || { x: 50, y: 50 },
+                                    cardPosition: formData.cardPosition || { x: 50, y: 50 }
+                                  }
+                                };
+                                
+                                if (editingGameId) {
+                                  // Update existing game (match by stable gameId, not studio list id)
+                                  const updatedGames = customGames.map(game => 
+                                    game.gameId === gameId 
+                                      ? { ...game, ...newGame }
+                                      : game
+                                  );
+                                  localStorage.setItem('customGames', JSON.stringify(updatedGames));
+                                  
+                                  // Dispatch custom event to update other components
+                                  window.dispatchEvent(new Event('customGameUpdate'));
+                                  
+                                  setGames(games.map(game => 
+                                    game.id === editingGameId 
+                                      ? { ...game, name: formData.gameName, version: formData.version }
+                                      : game
+                                  ));
+                                  alert('Game updated successfully!');
+                                  setEditingGameId(null);
+                                } else {
+                                  // Add new game
+                                  customGames.push(newGame);
+                                  
+                                  // Save to localStorage (this might fail if data URLs are too large)
+                                  try {
+                                    localStorage.setItem('customGames', JSON.stringify(customGames));
+                                  } catch (error) {
+                                    console.error('Failed to save to localStorage (likely too large):', error);
+                                    // Fallback: save without the full data URLs
+                                    const gameWithoutDataUrls = {
+                                      ...newGame,
+                                      banner: filePaths.banner || 'default',
+                                      logo: filePaths.logo || 'default',
+                                      title: filePaths.title || 'default',
+                                      card: filePaths.card || 'default',
+                                      screenshots: newGame.screenshots.map(() => 'saved'),
+                                      fullFormData: {
+                                        ...newGame.fullFormData,
+                                        bannerImage: filePaths.banner || 'default',
+                                        gameLogo: filePaths.logo || 'default',
+                                        titleImage: filePaths.title || 'default',
+                                        cardImage: filePaths.card || 'default',
+                                        screenshots: newGame.screenshots.map(() => 'saved'),
+                                        bannerZoom: formData.bannerZoom || bannerStateRef.current.scale || 1,
+                                        cardZoom: formData.cardZoom || cardStateRef.current.scale || 1,
+                                        bannerOffset: formData.bannerOffset || { x: bannerStateRef.current.x || 0, y: bannerStateRef.current.y || 0 },
+                                        cardOffset: formData.cardOffset || { x: cardStateRef.current.x || 0, y: cardStateRef.current.y || 0 },
+                                        bannerPosition: formData.bannerPosition || { x: 50, y: 50 },
+                                        logoPositionCustom: formData.logoPositionCustom || { x: 50, y: 50 },
+                                        titlePosition: formData.titlePosition || { x: 50, y: 50 },
+                                        cardPosition: formData.cardPosition || { x: 50, y: 50 }
+                                      }
+                                    };
+                                    customGames[customGames.length - 1] = gameWithoutDataUrls;
+                                    localStorage.setItem('customGames', JSON.stringify(customGames));
+                                    console.log('Saved to localStorage with file paths only');
+                                  }
+                                  
+                                  // Dispatch custom event to update other components
+                                  window.dispatchEvent(new Event('customGameUpdate'));
+                                  
+                                  // Add to games list for studio (append, don't replace)
+                                  const newGameCard = {
+                                    id: games.length + 1,
+                                    name: formData.gameName,
+                                    version: formData.version || '1.0.0',
+                                    status: 'public',
+                                    downloads: 0,
+                                    revenue: '$0.00',
+                                    banner: filePaths.banner || banner,
+                                    lastUpdated: 'just now',
+                                    gameId: gameId
+                                  };
+                                  
+                                  // Check if this game is already in the list
+                                  const alreadyExists = games.some(g => g.gameId === gameId);
+                                  if (!alreadyExists) {
+                                    setGames(prevGames => [...prevGames, newGameCard]);
+                                  }
+                                  
+                                  alert('Game published successfully! You can now find it in your library.');
+                                  
+                                  // Navigate to the new game
+                                  setTimeout(() => {
+                                    navigate(`/game/${gameId}`);
+                                  }, 500);
+                                }
+                                
+                                // Reset form
+                                setFormData({
+                                  gameName: '',
+                                  developer: '',
+                                  version: '',
+                                  genre: '',
+                                  ageRating: '',
+                                  description: '',
+                                  price: '',
+                                  releaseDate: '',
+                                  tags: '',
+                                  requirements: '',
+                                  bannerImage: null,
+                                  cardImage: null,
+                                  gameLogo: null,
+                                  titleImage: null,
+                                  titleImageSize: 100,
+                                  screenshots: [],
+                                  gameExecutable: null,
+                                  gameFileSize: 0,
+                                  logoSize: 120,
+                                  logoPosition: 'left',
+                                  bannerHeight: 60,
+                                  marketEnabled: true,
+                                  bannerPosition: { x: 50, y: 50 },
+                                  logoPositionCustom: { x: 50, y: 50 },
+                                  titlePosition: { x: 50, y: 50 },
+                                  cardPosition: { x: 50, y: 50 },
+                                  bannerZoom: 1,
+                                  cardZoom: 1,
+                                  bannerOffset: { x: 0, y: 0 },
+                                  cardOffset: { x: 0, y: 0 },
+                                });
+                                
+                                // Reset step errors
+                                setStepErrors({
+                                  1: false,
+                                  2: false,
+                                  3: false,
+                                  4: false,
+                                  5: false,
+                                  6: false,
+                                  7: false,
+                                  8: false
+                                });
+                                
+                                setCurrentStep(1);
+                                // Close modal and reset editing state
                                 setEditingGameId(null);
-                              } else {
-                                alert('Game uploaded successfully!');
-                              }
-                              setUploadModalOpen(false);
+                                // Use setTimeout to ensure state is fully cleared before closing
+                                setTimeout(() => {
+                                  setUploadModalOpen(false);
+                                }, 100);
+                              });
                             }
                           }}
                           style={{ 
@@ -2210,7 +2739,74 @@ const GameStudio = ({ navigate }) => {
                 </div>
                 
                 {/* Right Side: Preview */}
-                <div className="upload-modal-right">
+                <div className="upload-modal-right" style={{ position: 'relative' }}>
+                  {/* Step help icon + hover card */}
+                  <div 
+                    onMouseEnter={() => setHelpHovered(true)}
+                    onMouseLeave={() => setHelpHovered(false)}
+                    style={{ position: 'absolute', top: '14px', right: '14px', zIndex: 6 }}
+                    aria-label="Help"
+                  >
+                    <div
+                      style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '12px',
+                        background: 'rgba(0,0,0,0.55)',
+                        border: '1px solid rgba(255,255,255,0.12)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'var(--text-primary)',
+                        fontWeight: 700,
+                        lineHeight: '24px',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        backdropFilter: 'blur(6px)',
+                        boxShadow: 'inset 0 0 0 1px rgba(0, 212, 255, 0.25), 0 6px 18px rgba(0,0,0,0.35)'
+                      }}
+                    >i</div>
+                    {helpHovered && (
+                      <div 
+                        onWheel={(e) => e.stopPropagation()}
+                        style={{
+                          position: 'fixed',
+                          top: '20px',
+                          right: '20px',
+                          maxWidth: '360px',
+                          background: 'rgba(0,0,0,0.55)',
+                          border: '1px solid rgba(255,255,255,0.12)',
+                          borderRadius: '10px',
+                          color: 'var(--text-primary)',
+                          padding: '10px 12px',
+                          fontSize: '12px',
+                          lineHeight: 1.5,
+                          backdropFilter: 'blur(6px)',
+                          pointerEvents: 'auto',
+                          overscrollBehavior: 'contain'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{
+                            display: 'inline-flex',
+                            width: '18px',
+                            height: '18px',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: '50%',
+                            background: 'var(--accent-primary)',
+                            color: '#000',
+                            fontWeight: 800,
+                            fontSize: '11px'
+                          }}>i</span>
+                          <strong style={{ fontWeight: 600, fontSize: '12px' }}>{stepTitles[currentStep - 1]}</strong>
+                        </div>
+                        <div style={{ marginTop: '6px', color: 'var(--text-secondary)' }}>
+                          {stepHelp[currentStep - 1]}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                   {(currentStep === 1 || currentStep === 2) && (
                     <div style={{ padding: '0', height: '100%', overflow: 'auto', background: 'var(--bg-primary)' }}>
                       {/* Unified Profile Preview */}
@@ -2221,42 +2817,79 @@ const GameStudio = ({ navigate }) => {
                       }}>
                         {/* Game Header with Banner */}
                         {formData.bannerImage && (
-                          <div style={{ 
-                            position: 'relative',
-                            height: '320px',
-                            borderRadius: '12px',
-                            overflow: 'hidden',
-                            marginBottom: '32px',
-                            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                            backgroundImage: `url(${getImageUrl(formData.bannerImage)})`,
-                            backgroundSize: 'cover',
-                            backgroundPosition: 'center'
-                          }}>
+                          <div 
+                            data-drag-container
+                            style={{ 
+                              position: 'relative',
+                              height: '320px',
+                              borderRadius: '12px',
+                              overflow: 'hidden',
+                              marginBottom: '32px',
+                              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                              cursor: 'move'
+                            }}
+                            onMouseDown={(e) => handleBoundedDrag('banner', e.currentTarget)(e)}
+                            onWheel={(e) => handleWheelZoom('banner', e.currentTarget)(e)}
+                            onDoubleClick={(e) => handleDoubleCenter('banner', e.currentTarget)(e)}
+                          >
+                            <img 
+                              src={getImageUrl(formData.bannerImage)}
+                              alt="Banner"
+                              onLoad={(ev) => {
+                                bannerNaturalSize.current = { w: ev.currentTarget.naturalWidth, h: ev.currentTarget.naturalHeight };
+                                if (!bannerStateRef.current.initialized) {
+                                  initCentered(ev.currentTarget.parentElement, bannerNaturalSize.current, bannerStateRef);
+                                  setFormData((prev) => ({ ...prev }));
+                                }
+                              }}
+                              style={{
+                                position: 'absolute',
+                                height: '100%',
+                                width: 'auto',
+                                transform: `translate(${bannerStateRef.current.x}px, ${bannerStateRef.current.y}px) scale(${bannerStateRef.current.scale})`,
+                                transformOrigin: 'top left',
+                                userSelect: 'none',
+                                pointerEvents: 'none'
+                              }}
+                            />
                             <div style={{
                               position: 'absolute',
                               bottom: 0,
                               left: 0,
                               right: 0,
                               padding: '32px',
-                              background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%)'
+                              background: 'linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%)',
+                              zIndex: 1,
+                              pointerEvents: 'none'
                             }}>
                               <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-end' }}>
                                 {formData.gameLogo && (
-                                  <div style={{
-                                    width: '100px',
-                                    height: '100px',
-                                    borderRadius: '16px',
-                                    overflow: 'hidden',
-                                    border: '3px solid rgba(255, 255, 255, 0.3)',
-                                    flexShrink: 0,
-                                    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)'
-                                  }}>
+                                  <div 
+                                    data-drag-container
+                                    style={{
+                                      position: 'relative',
+                                      width: '100px',
+                                      height: '100px',
+                                      borderRadius: '16px',
+                                      overflow: 'hidden',
+                                      border: '3px solid rgba(255, 255, 255, 0.3)',
+                                      flexShrink: 0,
+                                      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+                                      cursor: 'move'
+                                    }}
+                                    onMouseDown={handleImageDrag('logoPositionCustom')}
+                                  >
                                     <img 
                                       src={getImageUrl(formData.gameLogo)} 
                                       alt="Logo" 
-                                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                  style={{ 
+                                    width: '100%',
+                                    height: '100%',
+                                    objectFit: 'contain',
+                                    position: 'relative'
+                                  }} 
                                     />
-                        </div>
+                                  </div>
                                 )}
                                 <div style={{ flex: 1 }}>
                                   {formData.gameName && (
@@ -2264,11 +2897,28 @@ const GameStudio = ({ navigate }) => {
                                       marginBottom: '12px' 
                                     }}>
                                       {formData.titleImage ? (
-                                        <img 
-                                          src={getImageUrl(formData.titleImage)} 
-                                          alt="Title" 
-                                          style={{ maxHeight: '50px', width: 'auto' }} 
-                                        />
+                                        <div
+                                          data-drag-container
+                                          style={{
+                                            position: 'relative',
+                                            display: 'inline-block',
+                                            cursor: 'move',
+                                            maxHeight: '50px',
+                                            overflow: 'hidden'
+                                          }}
+                                          onMouseDown={handleImageDrag('title')}
+                                        >
+                                          <img 
+                                            src={getImageUrl(formData.titleImage)} 
+                                            alt="Title" 
+                                            style={{ 
+                                              maxHeight: '50px',
+                                              width: 'auto',
+                                              display: 'block',
+                                              transform: `translate(${(formData.titlePosition?.x || 50) - 50}%, ${(formData.titlePosition?.y || 50) - 50}%)`
+                                            }} 
+                                          />
+                                        </div>
                                       ) : (
                                         <h1 style={{ 
                                           fontSize: '40px', 
@@ -2317,17 +2967,41 @@ const GameStudio = ({ navigate }) => {
                           {/* Left - Game Cover */}
                           {formData.cardImage && (
                         <div>
-                              <div style={{ 
-                                width: '100%',
-                                aspectRatio: '2/3',
-                                borderRadius: '12px',
-                                overflow: 'hidden',
-                                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
-                              }}>
+                              <div 
+                                data-drag-container
+                                style={{ 
+                                  position: 'relative',
+                                  width: '100%',
+                                  aspectRatio: '2/3',
+                                  borderRadius: '12px',
+                                  overflow: 'hidden',
+                                  boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+                                  cursor: 'move'
+                                }}
+                                onMouseDown={(e) => handleBoundedDrag('card', e.currentTarget)(e)}
+                                onWheel={(e) => handleWheelZoom('card', e.currentTarget)(e)}
+                                onDoubleClick={(e) => handleDoubleCenter('card', e.currentTarget)(e)}
+                              >
                                 <img 
                                   src={getImageUrl(formData.cardImage)} 
                                   alt="Game Cover" 
-                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                                  style={{ 
+                                    width: 'auto',
+                                    height: '100%',
+                                    objectFit: 'contain',
+                                    position: 'absolute',
+                                    transform: `translate(${cardStateRef.current.x}px, ${cardStateRef.current.y}px) scale(${cardStateRef.current.scale})`,
+                                    transformOrigin: 'top left',
+                                    userSelect: 'none',
+                                    pointerEvents: 'none'
+                                  }} 
+                                  onLoad={(ev) => {
+                                    cardNaturalSize.current = { w: ev.currentTarget.naturalWidth, h: ev.currentTarget.naturalHeight };
+                                    if (!cardStateRef.current.initialized) {
+                                      initCentered(ev.currentTarget.parentElement, cardNaturalSize.current, cardStateRef);
+                                      setFormData((prev) => ({ ...prev }));
+                                    }
+                                  }}
                                 />
                         </div>
                             </div>
@@ -2522,48 +3196,94 @@ const GameStudio = ({ navigate }) => {
                     <div className="game-page">
                     <div className="game-content">
                       {/* Game Banner */}
-                      <div className="game-banner" style={{
-                        backgroundImage: formData.bannerImage ? `url(${getImageUrl(formData.bannerImage)})` : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                        backgroundSize: 'cover',
-                        backgroundPosition: 'center',
-                        height: `${formData.bannerHeight || 60}vh`
-                      }}>
+                      <div 
+                        className="game-banner" 
+                        data-drag-container
+                        style={{
+                          background: formData.bannerImage ? 'transparent' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                          height: `${formData.bannerHeight || 60}vh`,
+                          position: 'relative',
+                          cursor: formData.bannerImage ? 'move' : 'default',
+                          overflow: 'hidden'
+                        }}
+                        onMouseDown={formData.bannerImage ? (e) => handleBoundedDrag('banner', e.currentTarget)(e) : undefined}
+                        onWheel={formData.bannerImage ? (e) => handleWheelZoom('banner', e.currentTarget)(e) : undefined}
+                        onDoubleClick={formData.bannerImage ? (e) => handleDoubleCenter('banner', e.currentTarget)(e) : undefined}
+                      >
+                        {formData.bannerImage && (
+                          <img
+                            src={getImageUrl(formData.bannerImage)}
+                            alt="Banner"
+                            onLoad={(ev) => {
+                              bannerNaturalSize.current = { w: ev.currentTarget.naturalWidth, h: ev.currentTarget.naturalHeight };
+                              if (!bannerStateRef.current.initialized) {
+                                initCentered(ev.currentTarget.parentElement, bannerNaturalSize.current, bannerStateRef);
+                                setFormData((prev) => ({ ...prev }));
+                              }
+                            }}
+                            style={{
+                              position: 'absolute',
+                              height: '100%',
+                              width: 'auto',
+                              transform: `translate(${bannerStateRef.current.x}px, ${bannerStateRef.current.y}px) scale(${bannerStateRef.current.scale})`,
+                              transformOrigin: 'top left',
+                              userSelect: 'none',
+                              pointerEvents: 'none'
+                            }}
+                          />
+                        )}
                         <div className="game-banner-overlay">
                           <div className="game-banner-content" style={{
                             alignItems: formData.logoPosition === 'center' ? 'center' : formData.logoPosition === 'right' ? 'flex-end' : 'flex-start'
                           }}>
                             {formData.gameLogo && (
-                              <div style={{
-                                width: `${formData.logoSize || 120}px`,
-                                height: `${formData.logoSize || 120}px`,
-                                borderRadius: '16px',
-                                overflow: 'hidden',
-                                marginBottom: '24px',
-                                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)'
-                              }}>
+                              <div 
+                                data-drag-container
+                                style={{
+                                  position: 'relative',
+                                  width: `${formData.logoSize || 120}px`,
+                                  height: `${formData.logoSize || 120}px`,
+                                  borderRadius: '16px',
+                                  overflow: 'hidden',
+                                  marginBottom: '24px',
+                                  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+                                  cursor: 'move'
+                                }}
+                                onMouseDown={handleImageDrag('logoPositionCustom')}
+                              >
                                 <img 
                                   src={getImageUrl(formData.gameLogo)} 
                                   alt="Game logo" 
                                   style={{
                                     width: '100%',
                                     height: '100%',
-                                    objectFit: 'cover'
-                                  }}
+                                    objectFit: 'contain',
+                                    position: 'relative'
+                                  }} 
                                 />
                               </div>
                             )}
                             {formData.titleImage ? (
-                              <div style={{
-                                maxWidth: '100%',
-                                marginBottom: '8px'
-                              }}>
+                              <div
+                                data-drag-container
+                                style={{
+                                  position: 'relative',
+                                  maxWidth: '100%',
+                                  marginBottom: '8px',
+                                  display: 'inline-block',
+                                  cursor: 'move',
+                                  overflow: 'hidden'
+                                }}
+                                onMouseDown={handleImageDrag('title')}
+                              >
                                 <img
                                   src={getImageUrl(formData.titleImage)}
                                   alt="Game title"
                                   style={{
                                     width: `${formData.titleImageSize}%`,
                                     height: 'auto',
-                                    display: 'block'
+                                    display: 'block',
+                                    transform: `translate(${(formData.titlePosition?.x || 50) - 50}%, ${(formData.titlePosition?.y || 50) - 50}%)`
                                   }}
                                 />
                               </div>

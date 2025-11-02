@@ -110,6 +110,9 @@
     flex: 1;
     overflow-y: auto;
     padding: 12px 20px;
+    position: relative;
+    min-height: 200px; /* Ensure minimum clickable area */
+    cursor: context-menu; /* Show context menu cursor */
 }
 
 .sidebar-content::-webkit-scrollbar {
@@ -142,7 +145,7 @@
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s ease;
-    margin-top: 8px;
+    margin-top: 0px;
 }
 
 .section-header:hover {
@@ -185,42 +188,35 @@
 }
 
 .game-item.updating {
-    background: rgba(34, 197, 94, 0.08);
-    border: 1px solid rgba(34, 197, 94, 0.2);
+    background: rgba(255, 167, 38, 0.08);
+    border: 1px solid rgba(255, 167, 38, 0.4);
     animation: update-pulse 2s ease-in-out infinite;
 }
 
 .game-item.downloading {
-    background: rgba(147, 197, 253, 0.08);
-    border: 1px solid rgba(147, 197, 253, 0.4);
+    background: rgba(var(--download-blue-rgb), 0.08);
+    border: 1px solid rgba(var(--download-blue-rgb), 0.4);
     animation: download-pulse 2s ease-in-out infinite;
+}
+
+.game-item.playing {
+    background: rgba(34, 197, 94, 0.08);
+    border: 1px solid rgba(34, 197, 94, 0.4);
 }
 
 @keyframes download-pulse {
     0%, 100% {
-        border-color: rgba(147, 197, 253, 0.3);
-        box-shadow: 0 0 0 0 rgba(147, 197, 253, 0);
+        border-color: rgba(var(--download-blue-rgb), 0.3);
+        box-shadow: 0 0 0 0 rgba(var(--download-blue-rgb), 0);
     }
     50% {
-        border-color: rgba(147, 197, 253, 0.6);
-        box-shadow: 0 0 12px rgba(147, 197, 253, 0.3);
+        border-color: rgba(var(--download-blue-rgb), 0.6);
+        box-shadow: 0 0 12px rgba(var(--download-blue-rgb), 0.3);
     }
 }
 
-.game-item.updating::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 100%;
-    width: 100%;
-    background: rgba(34, 197, 94, 0.2);
-    border-radius: 8px;
-    animation: update-fill 3s ease-in-out forwards;
-    z-index: 0;
-    transform-origin: left;
-    clip-path: inset(0 100% 0 0);
-}
+/* Remove old pseudo fill; progress is driven by .game-progress-bar width */
+.game-item.updating::before { content: none; }
 
 .game-item.updating .game-row,
 .game-item.updating .update-icon-btn,
@@ -231,12 +227,12 @@
 
 @keyframes update-pulse {
     0%, 100% {
-        border-color: rgba(34, 197, 94, 0.2);
-        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+        border-color: rgba(255, 167, 38, 0.3);
+        box-shadow: 0 0 0 0 rgba(255, 167, 38, 0);
     }
     50% {
-        border-color: rgba(34, 197, 94, 0.4);
-        box-shadow: 0 0 12px rgba(34, 197, 94, 0.2);
+        border-color: rgba(255, 167, 38, 0.6);
+        box-shadow: 0 0 12px rgba(255, 167, 38, 0.3);
     }
 }
 
@@ -260,13 +256,27 @@
 }
 
 .game-item.active .game-row {
-    color: var(--accent-primary);
+    color: #ffffff;
     font-weight: 500;
+}
+
+/* Override active blue when item is updating - keep update (orange) theme */
+.game-item.updating.active {
+    background: rgba(255, 167, 38, 0.08);
+    border: 1px solid rgba(255, 167, 38, 0.4);
+}
+
+.game-item.updating.active .game-row {
+    color: var(--text-primary);
 }
 
 .game-item.completed-download .game-name {
     color: var(--accent-primary);
     animation: completion-pulse 1s ease-out;
+}
+
+.game-item.playing .game-name {
+    color: #22c55e;
 }
 
 .game-item.completed-update .game-name {
@@ -308,9 +318,10 @@
     align-items: center;
     justify-content: space-between;
     padding: 8px 12px;
-    color: var(--text-secondary);
+    color: rgba(255, 255, 255, 0.9);
     transition: all 0.2s ease;
     border-radius: 8px;
+    min-height: 40px; /* lock row height */
 }
 
 /* Clickable */
@@ -328,15 +339,30 @@
 }
 
 .game-icon {
-    width: 18px;
-    height: 18px;
+    width: 22px;
+    height: 22px;
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--accent-primary);
-    border-radius: 4px;
+    border-radius: 3px;
     background: rgba(59, 130, 246, 0.08);
     flex-shrink: 0;
+    overflow: hidden; /* guarantee rounded logos */
+}
+
+.game-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    border-radius: inherit; /* keep the rounding */
+    opacity: 1; /* always fully visible */
+}
+
+/* Ensure vector icons/logos are never dimmed */
+.game-icon svg {
+    opacity: 1;
 }
 
 /* --- 🔄 Update Icon --- */
@@ -357,11 +383,40 @@
     transition: none;
 }
 
-/* 🟢 Active Update (green, spinning) */
+/* 🟠 Active Update (orange, spinning) */
 .update-icon-btn.spinning {
-    color: var(--accent-success);
-    background: rgba(34, 197, 94, 0.1);
+    color: var(--accent-warning);
+    background: transparent;
 }
+
+/* Inline compact controls for updating items */
+.update-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 20px; /* do not grow row */
+}
+.update-speed {
+    font-size: 11px;
+    color: var(--accent-warning);
+    font-weight: 600;
+    line-height: 1; /* compact */
+}
+.icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    cursor: pointer;
+    line-height: 0;
+    flex-shrink: 0;
+}
+.icon-btn:hover { opacity: 0.75; }
 
 .update-icon-btn.spinning svg {
     animation: spin 1s linear infinite;
@@ -392,16 +447,16 @@ svg[data-pause="true"] {
     animation: none !important;
 }
 
-/* 🟢 Fortschrittsbalken unter der App */
+/* 🟠 Fortschrittsbalken unter der App */
 .update-progress-bar {
     position: relative;
     width: 100%;
     height: 3px;
-    background: rgba(34, 197, 94, 0.3);
+    background: rgba(255, 167, 38, 0.3);
     border-radius: 0 0 8px 8px;
     overflow: hidden;
     animation: progress 3s ease-in-out forwards;
-    box-shadow: 0 0 10px rgba(34, 197, 94, 0.3);
+    box-shadow: 0 0 10px rgba(255, 167, 38, 0.3);
 }
 
 @keyframes spin {
@@ -461,6 +516,7 @@ svg[data-pause="true"] {
     flex: 1;
     gap: 12px;
     min-height: 24px;
+    min-width: 0; /* Allow flex items to shrink */
 }
 
 .footer-download-name {
@@ -470,17 +526,21 @@ svg[data-pause="true"] {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 180px;
+    max-width: 120px; /* Reduced from 180px */
+    min-width: 0; /* Allow text truncation */
+    flex-shrink: 1; /* Allow shrinking */
 }
 
 .footer-download-speed {
     font-size: 11px;
     color: #60a5fa;
     font-weight: 600;
+    flex-shrink: 0; /* Prevent speed from shrinking */
+    white-space: nowrap; /* Prevent speed text from wrapping */
 }
 
 .footer-update-item .footer-download-speed {
-    color: var(--accent-success);
+    color: var(--accent-warning);
 }
 
 /* Footer Download Buttons */
@@ -488,32 +548,43 @@ svg[data-pause="true"] {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 6px;
+    width: auto;
+    height: auto;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0;
+    outline: none;
+    box-shadow: none;
     cursor: pointer;
     color: var(--text-secondary);
-    transition: all 0.2s ease;
+    transition: color 0.2s ease;
     padding: 0;
     flex-shrink: 0;
 }
 
 .footer-download-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.15);
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none;
     color: var(--text-primary);
 }
 
 .footer-cancel-btn:hover {
-    background: rgba(255, 59, 48, 0.1);
-    border-color: rgba(255, 59, 48, 0.3);
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none;
     color: #ff3b30;
 }
 
 .footer-download-btn svg {
     fill: currentColor;
+    width: 14px;
+    height: 14px;
+    min-width: 14px;
+    min-height: 14px;
+    max-width: 14px;
+    max-height: 14px;
+    flex-shrink: 0;
 }
 
 /* Footer Progress Bar */
@@ -529,16 +600,16 @@ svg[data-pause="true"] {
 .footer-progress-fill {
     height: 100%;
     background: var(--accent-primary);
-    transition: width 0.3s ease;
+    transition: width 0.1s linear;
 }
 
 /* Footer progress bar colors */
 .footer-download-item .footer-progress-fill {
-    background: #93c5fd;
+    background: var(--download-blue);
 }
 
 .footer-update-item .footer-progress-fill {
-    background: #86efac;
+    background: rgba(255, 167, 38, 0.8);
 }
 
 /* Game Progress Bar - Fills the entire background */
@@ -549,19 +620,19 @@ svg[data-pause="true"] {
     height: 100%;
     background: var(--accent-primary);
     border-radius: 8px;
-    transition: width 0.3s ease;
+    transition: width 0.1s linear;
     z-index: 0;
     opacity: 0.2;
 }
 
 /* Blue progress bar for downloads */
 .game-item.downloading .game-progress-bar {
-    background: #93c5fd;;
+    background: var(--download-blue);
 }
 
-/* Green progress bar for updates */
+/* Orange progress bar for updates */
 .game-item.updating .game-progress-bar {
-    background: rgba(134, 239, 172, 0.25);
+    background: rgba(255, 167, 38, 0.35);
 }
 
 .game-item.downloading .game-row {
@@ -700,6 +771,170 @@ svg[data-pause="true"] {
 
 .side-menu-btn svg {
     flex-shrink: 0;
+}
+
+/* Context Menu */
+.sidebar-context-menu {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: 0;
+    padding: 4px;
+    min-width: 200px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.context-menu-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: transparent;
+    border: none;
+    color: var(--text-primary);
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    border-radius: 0;
+}
+
+.context-menu-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.context-menu-item-danger {
+    color: #ff4444;
+}
+
+.context-menu-item-danger:hover {
+    background: rgba(255, 68, 68, 0.1);
+    color: #ff6666;
+}
+
+.context-menu-item svg {
+    flex-shrink: 0;
+    opacity: 0.8;
+}
+
+.context-menu-divider {
+    height: 1px;
+    background: var(--border-primary);
+    margin: 4px 0;
+}
+
+/* Add Category Input */
+.sidebar-add-category {
+    margin-top: 12px;
+    padding: 0 12px;
+    animation: slideDown 0.2s ease-out;
+}
+
+.sidebar-rename-category {
+    padding: 0 12px;
+    margin-bottom: 8px;
+    animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.add-category-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    padding: 10px 12px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(4px);
+}
+
+.add-category-input-wrapper:focus-within {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: var(--accent-primary, #00c9ff);
+    box-shadow: 0 0 0 3px rgba(0, 201, 255, 0.1);
+}
+
+.add-category-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.95);
+    font-size: 13px;
+    padding: 0;
+    outline: none;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+}
+
+.add-category-input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 400;
+}
+
+.add-category-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 4px;
+}
+
+.add-category-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 4px;
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    width: 24px;
+    height: 24px;
+    position: relative;
+}
+
+.add-category-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
+    transform: scale(1.05);
+}
+
+.add-category-btn:active {
+    transform: scale(0.95);
+}
+
+.add-category-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.add-category-btn:disabled:hover {
+    background: transparent;
+    transform: none;
+}
+
+.add-category-confirm:hover:not(:disabled) {
+    color: var(--accent-primary, #00c9ff);
+    background: rgba(0, 201, 255, 0.15);
+}
+
+.add-category-cancel:hover {
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 68, 68, 0.15);
 }
 
 /* Responsive */

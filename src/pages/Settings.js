@@ -513,6 +513,36 @@ const Settings = () => {
             );
           })}
           
+          {/* Developer onboarding shortcut */}
+          <div style={{ marginTop: '16px' }}>
+            <button 
+              onClick={() => navigate('/developer-onboarding')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                width: '100%',
+                padding: '10px 14px',
+                background: 'rgba(0, 212, 255, 0.08)',
+                border: '1px solid rgba(0, 212, 255, 0.35)',
+                borderRadius: '8px',
+                color: 'var(--accent-primary)',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 600,
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(0, 212, 255, 0.12)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(0, 212, 255, 0.08)';
+              }}
+            >
+              Continue Developer Setup
+            </button>
+          </div>
+          
           {/* Game Studio toggle at bottom of sidebar */}
           <div style={{ marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
             <button 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { setSpeed as setGlobalDownloadSpeed, clearSpeed as clearGlobalDownloadSpeed, subscribe as subscribeDownloadSpeed, setPaused as setGlobalPaused, getPaused as getGlobalPaused } from '../utils/DownloadSpeedStore';
+import { setSpeed as setGlobalDownloadSpeed, clearSpeed as clearGlobalDownloadSpeed, subscribe as subscribeDownloadSpeed, setPaused as setGlobalPaused, getPaused as getGlobalPaused, startDownload as startGlobalDownload, stopDownload as stopGlobalDownload } from '../utils/DownloadSpeedStore';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Star, Users, TrendingUp, TrendingDown, Clock, Download, Play, MessageSquare, ShoppingCart, Image as ImageIcon, X, Settings, Info, FolderOpen, Trash2, EyeOff, RefreshCw, HardDrive, Activity, Save, Download as DownloadIcon, Package, Calendar, Check, ChevronUp, ChevronDown, ArrowDownUp, Pause } from 'lucide-react';
 import CustomVideoPlayer from '../components/CustomVideoPlayer';
@@ -31,6 +31,7 @@ const Game = () => {
   const [gameState, setGameState] = useState(getGameState());
   const [isDownloaded, setIsDownloaded] = useState(gameState.isDownloaded);
   const [isDownloading, setIsDownloading] = useState(gameState.isDownloading);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadSpeed, setDownloadSpeed] = useState(0);
@@ -42,6 +43,8 @@ const Game = () => {
   const settingsButtonRef = useRef(null);
   const settingsMenuRef = useRef(null);
   const [showPropertiesModal, setShowPropertiesModal] = useState(false);
+  const [showSwitchGameModal, setShowSwitchGameModal] = useState(false);
+  const [currentlyPlayingGameId, setCurrentlyPlayingGameId] = useState(null);
   const [propertiesSection, setPropertiesSection] = useState('general');
   const [newComment, setNewComment] = useState('');
   const [bannerHeight, setBannerHeight] = useState(130);
@@ -346,8 +349,96 @@ const Game = () => {
     }
   }, [gameId]);
 
-  const gamesData = {
-    "the-finals": {
+  // Load custom games from localStorage
+  const [customGames, setCustomGames] = useState(() => {
+    try {
+      const stored = localStorage.getItem('customGames');
+      return stored ? JSON.parse(stored) : [];
+    } catch (e) {
+      console.error('Error loading custom games:', e);
+      return [];
+    }
+  });
+
+  // Listen for custom game updates and reload on mount
+  useEffect(() => {
+    const loadCustomGames = () => {
+      try {
+        const stored = localStorage.getItem('customGames');
+        if (stored) {
+          setCustomGames(JSON.parse(stored));
+        }
+      } catch (e) {
+        console.error('Error loading custom games:', e);
+      }
+    };
+    
+    const handleCustomGameUpdate = () => {
+      loadCustomGames();
+    };
+    
+    const handleStorageChange = (e) => {
+      if (e.key === 'customGames') {
+        loadCustomGames();
+      }
+    };
+    
+    // Load on mount
+    loadCustomGames();
+    
+    window.addEventListener('customGameUpdate', handleCustomGameUpdate);
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('customGameUpdate', handleCustomGameUpdate);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [gameId]);
+
+  // Build custom games data - recalculate when customGames changes
+  const customGamesDataMemo = useMemo(() => {
+    const data = {};
+    customGames.forEach(game => {
+      console.log('Processing custom game:', game);
+      const ff = game.fullFormData || {};
+      data[game.gameId] = {
+        name: game.name || 'Untitled Game',
+        icon: game.icon || game.name?.charAt(0).toUpperCase() || '?',
+        banner: game.banner || "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&h=600&fit=crop",
+        logo: game.logo,
+        title: game.title,
+        card: game.card,
+        screenshots: game.screenshots || [],
+        rating: game.rating || 0,
+        playerCount: game.playerCount || '0',
+        currentPlaying: game.currentPlaying || '0',
+        trending: game.trending || '0%',
+        description: game.description || 'No description available.',
+        tags: game.tags || [],
+        playtime: game.playtime || '0h',
+        lastPlayed: game.lastPlayed || 'Never',
+        size: game.size || '0 GB',
+        developer: game.developer || 'Unknown',
+        releaseDate: game.releaseDate || 'Unknown',
+        bannerHeight: game.bannerHeight || ff.bannerHeight || 60,
+        // positioning + zoom coming from studio
+        bannerPosition: ff.bannerPosition || { x: 50, y: 50 },
+        bannerZoom: ff.bannerZoom || 1,
+        cardPosition: ff.cardPosition || { x: 50, y: 50 },
+        cardZoom: ff.cardZoom || 1,
+        logoPositionCustom: ff.logoPositionCustom || { x: 50, y: 50 },
+        titlePosition: ff.titlePosition || { x: 50, y: 50 }
+      };
+    });
+    return data;
+  }, [customGames]);
+
+  const gamesData = useMemo(() => {
+    console.log('Building gamesData with customGames:', customGames);
+    console.log('customGamesData:', customGamesDataMemo);
+    return {
+      ...customGamesDataMemo,
+      "the-finals": {
       name: 'THE FINALS',
       icon: 'T',
       banner: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&h=600&fit=crop",
@@ -443,6 +534,30 @@ const Game = () => {
       developer: 'Riot Games',
       releaseDate: 'Jun 2020'
     }
+    };
+  }, [customGamesDataMemo]);
+  
+  useEffect(() => {
+    console.log('Current game from gamesData:', gamesData[gameId]);
+    console.log('gameId:', gameId);
+    console.log('gamesData:', gamesData);
+  }, [gameId, gamesData]);
+
+  // Helper function to get image URL
+  const getImageUrl = (url) => {
+    if (!url) return '';
+    // If it's already a valid URL (http/https/data), return as is
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+      return url;
+    }
+    // Handle file:// URLs - browsers block these, so return empty or placeholder
+    if (url.startsWith('file://')) {
+      // Return empty to let the browser show no image, or a placeholder
+      console.warn('file:// URL blocked by browser:', url);
+      return '';
+    }
+    // Otherwise, treat as a relative path
+    return url.startsWith('/') ? url : `/${url}`;
   };
 
   const game = gamesData[gameId] || {
@@ -468,6 +583,24 @@ const Game = () => {
     setIsDownloaded(savedState.isDownloaded);
     setIsDownloading(savedState.isDownloading);
     setDownloadProgress(savedState.downloadProgress || 0);
+    
+    // Check if game is playing from localStorage
+    const playingGames = JSON.parse(localStorage.getItem('playingGames') || '{}');
+    setIsPlaying(playingGames[gameId] || false);
+
+    // Detect ongoing operation started elsewhere before opening this page
+    try {
+      const status = localStorage.getItem(`game_${gameId}_status`);
+      if (status === 'update') {
+        setIsUpdating(true);
+        setIsDownloading(false);
+      } else if (status === 'download') {
+        setIsDownloading(true);
+        setIsUpdating(false);
+      } else {
+        setIsUpdating(false);
+      }
+    } catch (_) {}
   }, [gameId]);
 
   // Save game state to localStorage whenever it changes
@@ -475,6 +608,28 @@ const Game = () => {
     const gameStateToSave = { isDownloaded, isDownloading, downloadProgress };
     localStorage.setItem(`game_${gameId}_state`, JSON.stringify(gameStateToSave));
   }, [isDownloaded, isDownloading, gameId, downloadProgress]);
+
+  // Listen for game status changes (update events from sidebar)
+  useEffect(() => {
+    const handleGameStatusChange = (e) => {
+      const { gameId: eventGameId, status } = e.detail;
+      if (eventGameId === gameId) {
+        if (status === 'update') {
+          setIsUpdating(true);
+          setIsDownloading(false);
+        } else if (status === null) {
+          setIsUpdating(false);
+          setIsDownloading(false);
+          setDownloadProgress(0);
+          setCurrentSpeed(0);
+          setSpeedHistory([]);
+        }
+      }
+    };
+
+    window.addEventListener('gameStatusChanged', handleGameStatusChange);
+    return () => window.removeEventListener('gameStatusChanged', handleGameStatusChange);
+  }, [gameId]);
 
   // Subscribe to global download speed updates
   useEffect(() => {
@@ -484,70 +639,58 @@ const Game = () => {
         setIsPaused(paused);
       }
       
-      // If download is cleared externally (e.g., from footer cancel button)
-      // and we're still downloading, stop the download
-      if (speed === 0 && progress === 0 && isDownloading && downloadIntervalRef.current) {
-        clearInterval(downloadIntervalRef.current);
-        downloadIntervalRef.current = null;
-        setIsDownloading(false);
-        setIsPaused(false);
-        setDownloadProgress(0);
-        setCurrentSpeed(0);
-        setSpeedHistory([]);
+      // If download/update is cleared externally (e.g., from footer cancel button)
+      if (speed === 0 && progress === 0) {
+        if (isDownloading && downloadIntervalRef.current) {
+          clearInterval(downloadIntervalRef.current);
+          downloadIntervalRef.current = null;
+          setIsDownloading(false);
+          setIsPaused(false);
+          setDownloadProgress(0);
+          setCurrentSpeed(0);
+          setSpeedHistory([]);
+        }
+        if (isUpdating) {
+          setIsUpdating(false);
+          setDownloadProgress(0);
+          setCurrentSpeed(0);
+          setSpeedHistory([]);
+        }
       }
       
-      // Update progress from global store
-      setDownloadProgress(progress);
+      // Update progress from global store (for both downloads and updates)
+      if (speed > 0 || progress > 0) {
+        setDownloadProgress(progress);
+        setCurrentSpeed(speed);
+        // When paused, don't push new points so the graph freezes
+        if (!paused) {
+          setSpeedHistory(prev => {
+            const newHistory = [...prev, speed];
+            // Keep last 50 values for smooth scrolling graph
+            return newHistory.slice(-50);
+          });
+        }
+      }
     });
     return unsubscribe;
-  }, [gameId, isPaused, isDownloading]);
+  }, [gameId, isPaused, isDownloading, isUpdating]);
 
-  // Handle pause/resume based on global paused state
+  // Update isDownloading state when download completes
   useEffect(() => {
-    if (isPaused && downloadIntervalRef.current) {
-      // Pause: clear interval but keep progress
-      clearInterval(downloadIntervalRef.current);
-      downloadIntervalRef.current = null;
-      setCurrentSpeed(0);
-    } else if (!isPaused && isDownloading && !downloadIntervalRef.current) {
-      // Resume: restart interval if we're supposed to be downloading
-      setGraphScale({ min: 0.5, max: 3.0 });
-      
-      downloadIntervalRef.current = setInterval(() => {
-        if (getGlobalPaused(gameId) || isPaused) {
-          return;
-        }
-        
-        setDownloadProgress(prev => {
-          if (prev >= 100) {
-            clearInterval(downloadIntervalRef.current);
-            downloadIntervalRef.current = null;
-            setIsDownloaded(true);
-            setIsDownloading(false);
-            clearGlobalDownloadSpeed(gameId);
-            return 100;
-          }
-          
-          // Simulate varying download speed (random between 0.3 - 0.8 MB/s)
-          const speed = (Math.random() * 0.5 + 0.3).toFixed(2);
-          setCurrentSpeed(parseFloat(speed));
-          setSpeedHistory(prev => [...prev, parseFloat(speed)]);
-          
-          const newProgress = prev + 0.5;
-          setGlobalDownloadSpeed(gameId, parseFloat(speed), newProgress);
-          
-          return newProgress;
-        });
-      }, 100);
+    if (downloadProgress >= 100 && isDownloading) {
+      setIsDownloaded(true);
+      setIsDownloading(false);
     }
-  }, [isPaused, isDownloading, gameId]);
+  }, [downloadProgress, isDownloading]);
 
-  // Cleanup interval on unmount or gameId change
+  // Cleanup interval only on gameId change or unmount
   useEffect(() => {
     return () => {
+      // Don't clear interval when unmounting - let download continue in background
+      // Only clean up when we're done with this game
       if (downloadIntervalRef.current) {
-        clearInterval(downloadIntervalRef.current);
-        downloadIntervalRef.current = null;
+        // Keep the download running by not clearing the interval
+        // The interval will be managed by the pause/resume logic
       }
     };
   }, [gameId]);
@@ -568,44 +711,14 @@ const Game = () => {
     // Clear any existing global speed state
     clearGlobalDownloadSpeed(gameId);
     
+    // Start download in global store (will run independently), reset progress for fresh download
+    startGlobalDownload(gameId, true);
+    
+    // Set downloading state
     setIsDownloading(true);
     setSpeedHistory([]);
     setCurrentSpeed(0);
     setGraphScale({ min: 0.5, max: 3.0 }); // Set fixed scale
-    
-    // Simulate download progress with varying speeds
-    downloadIntervalRef.current = setInterval(() => {
-      // Check if we're paused before proceeding
-      if (getGlobalPaused(gameId)) {
-        return;
-      }
-      
-      setDownloadProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(downloadIntervalRef.current);
-          downloadIntervalRef.current = null;
-          setIsDownloaded(true);
-          setIsDownloading(false);
-          clearGlobalDownloadSpeed(gameId);
-          return 100;
-        }
-        
-        // Simulate varying download speed (random between 0.3 - 0.8 MB/s)
-        const speed = (Math.random() * 0.5 + 0.3).toFixed(2);
-        setCurrentSpeed(parseFloat(speed));
-        setSpeedHistory(prev => {
-          // Keep all data points to show entire download duration
-          return [...prev, parseFloat(speed)];
-        });
-        
-        const newProgress = prev + 0.5;
-        
-        // publish to sidebar/global subscribers with progress
-        setGlobalDownloadSpeed(gameId, parseFloat(speed), newProgress);
-        
-        return newProgress;
-      });
-    }, 100);
   };
 
   const handlePauseDownload = () => {
@@ -621,6 +734,9 @@ const Game = () => {
   };
 
   const handleCancelDownload = () => {
+    // Stop the global download
+    stopGlobalDownload(gameId);
+    
     if (downloadIntervalRef.current) {
       clearInterval(downloadIntervalRef.current);
       downloadIntervalRef.current = null;
@@ -642,16 +758,64 @@ const Game = () => {
     if (isPlaying) {
       // Terminate the game
       setIsPlaying(false);
+      // Clear playing status from localStorage
+      const playingGames = JSON.parse(localStorage.getItem('playingGames') || '{}');
+      delete playingGames[gameId];
+      localStorage.setItem('playingGames', JSON.stringify(playingGames));
+      // Dispatch custom event to notify sidebar
+      window.dispatchEvent(new CustomEvent('gameStatusChanged', { detail: { gameId, status: null } }));
       console.log('Game terminated:', gameId);
       // Add any cleanup or game termination logic here
     } else {
-      // Start the game
-      setIsPlaying(true);
-      console.log('Starting game:', gameId);
-      // Close settings menu when starting game
-      setShowSettingsMenu(false);
-      // Add any game startup logic here
+      // Check if another game is currently playing
+      const playingGames = JSON.parse(localStorage.getItem('playingGames') || '{}');
+      const otherPlayingGameId = Object.keys(playingGames).find(id => id !== gameId && playingGames[id]);
+      
+      if (otherPlayingGameId) {
+        // Another game is playing, show confirmation modal
+        setCurrentlyPlayingGameId(otherPlayingGameId);
+        setShowSwitchGameModal(true);
+      } else {
+        // No other game playing, start this game
+        startGame();
+      }
     }
+  };
+
+  const startGame = () => {
+    setIsPlaying(true);
+    // Save playing status to localStorage
+    const playingGames = JSON.parse(localStorage.getItem('playingGames') || '{}');
+    playingGames[gameId] = true;
+    localStorage.setItem('playingGames', JSON.stringify(playingGames));
+    // Dispatch custom event to notify sidebar
+    window.dispatchEvent(new CustomEvent('gameStatusChanged', { detail: { gameId, status: 'playing' } }));
+    console.log('Starting game:', gameId);
+    // Close settings menu when starting game
+    setShowSettingsMenu(false);
+    // Add any game startup logic here
+  };
+
+  const handleConfirmSwitchGame = () => {
+    // Terminate the currently playing game
+    if (currentlyPlayingGameId) {
+      const playingGames = JSON.parse(localStorage.getItem('playingGames') || '{}');
+      delete playingGames[currentlyPlayingGameId];
+      localStorage.setItem('playingGames', JSON.stringify(playingGames));
+      // Dispatch custom event to notify sidebar
+      window.dispatchEvent(new CustomEvent('gameStatusChanged', { detail: { gameId: currentlyPlayingGameId, status: null } }));
+      console.log('Terminated game:', currentlyPlayingGameId);
+    }
+    
+    // Start the new game
+    setShowSwitchGameModal(false);
+    setCurrentlyPlayingGameId(null);
+    startGame();
+  };
+
+  const handleCancelSwitchGame = () => {
+    setShowSwitchGameModal(false);
+    setCurrentlyPlayingGameId(null);
   };
 
   const handleSettingsMenuAction = (action) => {
@@ -1039,115 +1203,123 @@ const Game = () => {
     return `${speed.toFixed(1)} MB/s`;
   };
 
-  // Generate graph path from speed history
-  const generateGraphPath = () => {
-    if (speedHistory.length === 0) return 'M 0,40 L 300,40';
+  // New graph generation with proper scrolling
+  const generateGraph = () => {
+    const GRAPH_WIDTH = 300;
+    const GRAPH_HEIGHT = 44;
+    const MARGIN = 4;
+    const MAX_POINTS = 50; // Max points to keep in history
+    const VISIBLE_POINTS = 50; // Points visible on screen
     
-    const maxSpeed = Math.max(...speedHistory);
-    const minSpeed = Math.min(...speedHistory);
+    if (speedHistory.length < 2) {
+      return null;
+    }
+    
+    // Use recent data for scaling (last VISIBLE_POINTS for better responsiveness)
+    const recentData = speedHistory.slice(-VISIBLE_POINTS);
+    const maxSpeed = Math.max(...recentData, 0.1);
+    const minSpeed = 0;
     const range = maxSpeed - minSpeed || 1;
-    const height = 40;
-    const width = 300;
     
-    // Calculate how many data points to show based on progress
-    const progressRatio = downloadProgress / 100;
-    const pointsToShow = Math.ceil(speedHistory.length * progressRatio);
-    const visibleData = speedHistory.slice(0, pointsToShow);
+    // Calculate spacing between points
+    const spacing = GRAPH_WIDTH / (VISIBLE_POINTS - 1);
     
-    if (visibleData.length === 0) return 'M 0,40';
+    // Get data to display
+    let displayData;
+    if (speedHistory.length <= VISIBLE_POINTS) {
+      displayData = speedHistory;
+    } else {
+      // Scrolling: show last VISIBLE_POINTS
+      displayData = speedHistory.slice(-VISIBLE_POINTS);
+    }
     
+    // Build path for graph line
     let path = '';
-    visibleData.forEach((speed, i) => {
-      const x = (i / (visibleData.length - 1 || 1)) * width * progressRatio;
-      const y = height - ((speed - minSpeed) / range) * (height - 10) - 5;
-      path += `${i === 0 ? 'M' : 'L'} ${x},${y} `;
+    const points = [];
+    displayData.forEach((speed, index) => {
+      const x = index * spacing;
+      const normalizedSpeed = (speed - minSpeed) / range;
+      const y = GRAPH_HEIGHT - MARGIN - (normalizedSpeed * (GRAPH_HEIGHT - MARGIN * 2));
+      points.push({ x, y });
+      
+      if (index === 0) {
+        path += `M ${x},${y}`;
+      } else {
+        path += ` L ${x},${y}`;
+      }
     });
     
-    return path;
-  };
-
-  // Calculate graph width based on furthest visible point
-  const getGraphBackgroundWidth = () => {
-    if (speedHistory.length === 0) return '0px';
-    
-    const graphWidth = 300;
-    const estimatedTotalPoints = 50;
-    const spacingPerPoint = graphWidth / estimatedTotalPoints;
-    const progressRatio = downloadProgress / 100;
-    
-    // Calculate where the last visible segment ends
-    if (speedHistory.length === 1) return '0px';
-    
-    // Find the last segment that's fully or partially visible
-    let furthestX = 0;
-    for (let i = 1; i < speedHistory.length; i++) {
-      const x1 = (i - 1) * spacingPerPoint;
-      const x2 = i * spacingPerPoint;
-      const maxX = graphWidth * progressRatio;
-      
-      if (x1 >= maxX) break;
-      
-      const clippedX2 = Math.min(x2, maxX);
-      furthestX = Math.max(furthestX, clippedX2);
+    // Build area path for gradient fill (under the graph line)
+    const bottomY = GRAPH_HEIGHT - MARGIN;
+    let areaPath = '';
+    if (points.length > 0) {
+      // Start from first point
+      areaPath += `M ${points[0].x},${points[0].y} `;
+      // Add all line segments
+      for (let i = 1; i < points.length; i++) {
+        areaPath += `L ${points[i].x},${points[i].y} `;
+      }
+      // Close the path by going to bottom right, bottom left, then back to start
+      areaPath += `L ${points[points.length - 1].x},${bottomY} L ${points[0].x},${bottomY} Z`;
     }
     
-    return `${furthestX}px`;
-  };
-
-  // Generate graph as multiple line segments
-  const generateGraphSegments = () => {
-    if (speedHistory.length < 2) return null; // Need at least 2 points to draw a line
+    const strokeColor = isUpdating ? 'var(--update-yellow)' : 'rgba(255, 255, 255, 0.9)';
+    const fillColor = isUpdating ? 'var(--update-yellow)' : '#93c5fd'; // Download blue
+    const axisColor = 'rgba(255, 255, 255, 0.2)';
+    const gradientId = `graph-gradient-${isUpdating ? 'update' : 'download'}`;
     
-    const { min: minSpeed, max: maxSpeed } = graphScale;
-    const range = maxSpeed - minSpeed || 1;
-    const height = 40;
-    const graphWidth = 300;
-    const margin = 5;
-    
-    // Estimate total number of data points at 100% (~50 points, one every 2%)
-    const estimatedTotalPoints = 50;
-    const spacingPerPoint = graphWidth / estimatedTotalPoints;
-    
-    // Calculate progress limit
-    const progressRatio = downloadProgress / 100;
-    const maxX = graphWidth * progressRatio;
-    
-    const segments = [];
-    
-    // Map data points with fixed spacing
-    for (let i = 1; i < speedHistory.length; i++) {
-      const x1 = (i - 1) * spacingPerPoint;
-      const x2 = i * spacingPerPoint;
-      
-      // Skip if beyond progress
-      if (x1 >= maxX) break;
-      
-      // Clip to progress
-      const clippedX2 = Math.min(x2, maxX);
-      
-      // Calculate y positions using fixed scale
-      // Higher speed = higher up (lower y value in SVG)
-      const speedRatio1 = (speedHistory[i - 1] - minSpeed) / range;
-      const speedRatio2 = (speedHistory[i] - minSpeed) / range;
-      
-      const y1 = height - margin - (speedRatio1 * (height - 2 * margin));
-      const y2 = height - margin - (speedRatio2 * (height - 2 * margin));
-      
-      segments.push(
+    return (
+      <svg 
+        className="progress-graph-svg" 
+        viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
+        preserveAspectRatio="none"
+      >
+        <defs>
+          <linearGradient id={gradientId} x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor={fillColor} stopOpacity="0.6" />
+            <stop offset="20%" stopColor={fillColor} stopOpacity="0.25" />
+            <stop offset="40%" stopColor={fillColor} stopOpacity="0.1" />
+            <stop offset="70%" stopColor={fillColor} stopOpacity="0.02" />
+            <stop offset="100%" stopColor={fillColor} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {/* X-axis */}
         <line
-          key={`segment-${i}`}
-          x1={x1}
-          y1={y1}
-          x2={clippedX2}
-          y2={y2}
-          stroke="rgba(255,255,255,0.9)"
-          strokeWidth="1.5"
-          strokeLinecap="round"
+          x1="0"
+          y1={GRAPH_HEIGHT - MARGIN}
+          x2={GRAPH_WIDTH}
+          y2={GRAPH_HEIGHT - MARGIN}
+          stroke={axisColor}
+          strokeWidth="1"
         />
-      );
-    }
-    
-    return segments;
+        {/* Y-axis */}
+        <line
+          x1="0"
+          y1={MARGIN}
+          x2="0"
+          y2={GRAPH_HEIGHT - MARGIN}
+          stroke={axisColor}
+          strokeWidth="1"
+        />
+        {/* Gradient fill area under graph */}
+        {areaPath && (
+          <path
+            d={areaPath}
+            fill={`url(#${gradientId})`}
+            opacity="1"
+          />
+        )}
+        {/* Graph line */}
+        <path
+          d={path}
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
   };
 
   // Calculate average rating from all reviews
@@ -1166,13 +1338,23 @@ const Game = () => {
   return (
     <div className="game-page">
       <div className="game-content" ref={contentRef}>
-        <div className="game-banner" style={{
-          height: `${bannerHeight}vh`,
-          backgroundImage: `url(${game.banner})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat'
-        }}>
+        <div className="game-banner" style={{ height: `${game.bannerHeight || bannerHeight || 60}vh`, position: 'relative', overflow: 'hidden' }}>
+          {/* Use an img with transform like studio for precise match */}
+          <img
+            src={getImageUrl(game.banner)}
+            alt="Banner"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              transform: `translate(${game.bannerOffset?.x || 0}px, ${game.bannerOffset?.y || 0}px) scale(${game.bannerZoom || 1})`,
+              transformOrigin: 'top left',
+              width: 'auto',
+              height: '100%',
+              userSelect: 'none',
+              pointerEvents: 'none'
+            }}
+          />
           <div className="game-banner-overlay">
             <div className="game-banner-content">
               <h1 className="game-title">{game.name}</h1>
@@ -1198,8 +1380,8 @@ const Game = () => {
           {/* Action Bar */}
           <div className="game-action-bar">
           <div className="game-action-left">
-            <div className="action-morpher" data-state={isDownloaded ? 'play' : isDownloading ? 'progress' : 'download'}>
-            {isDownloaded ? (
+            <div className="action-morpher" data-state={isDownloaded && !isUpdating ? 'play' : (isDownloading || isUpdating) ? 'progress' : 'download'}>
+            {isDownloaded && !isUpdating ? (
               <>
                   <div className="play-settings-container" ref={settingsButtonRef}>
                     <button className="game-play-btn" onClick={handlePlay} data-exit={isPlaying}>
@@ -1246,37 +1428,52 @@ const Game = () => {
                   <div className="game-info-value">{game.lastPlayed}</div>
                 </div>
               </>
-              ) : isDownloading ? (
-                  <div className="game-download-progress">
-                    <div className="progress-info">
-                      <div className="progress-header">
-                      <span className="progress-text">{downloadProgress}%</span>
-                        <span className="progress-speed">{currentSpeed > 0 ? formatCurrentSpeed(currentSpeed) : formatDownloadSpeed()}</span>
+              ) : (isDownloading || isUpdating) ? (
+                  <div className={`game-progress-container ${isUpdating ? 'updating' : ''}`}>
+                    {/* Progress Header */}
+                    <div className="progress-header-container">
+                      <div className="progress-header-left">
+                        <span className="progress-percentage">{Math.round(downloadProgress)}%</span>
                       </div>
-                      <div style={{ position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ flex: 1, position: 'relative' }}>
-                          <div className="progress-graph-background" style={{ width: getGraphBackgroundWidth() }}></div>
-                          <svg className="progress-graph-line" viewBox="0 0 300 40" preserveAspectRatio="none" style={{ width: '100%' }}>
-                            {generateGraphSegments()}
-                          </svg>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <button 
-                            className="game-download-control-btn"
-                            onClick={handlePauseDownload}
-                            title={isPaused ? "Resume" : "Pause"}
-                          >
-                            {isPaused ? <Play size={18} fill="currentColor" /> : <Pause size={18} fill="currentColor" />}
-                          </button>
-                          <button 
-                            className="game-download-control-btn game-cancel-btn"
-                            onClick={handleCancelDownload}
-                            title="Cancel"
-                          >
-                            <X size={18} fill="currentColor" />
-                          </button>
-                        </div>
+                      <div className="progress-controls">
+                        <button 
+                          className="progress-control-btn"
+                          onClick={handlePauseDownload}
+                          title={isPaused ? "Resume" : "Pause"}
+                        >
+                          {isPaused ? <Play size={18} fill="currentColor" /> : <Pause size={18} fill="currentColor" />}
+                        </button>
+                        <button 
+                          className="progress-control-btn progress-cancel-btn"
+                          onClick={handleCancelDownload}
+                          title="Cancel"
+                        >
+                          <X size={18} fill="currentColor" />
+                        </button>
                       </div>
+                    </div>
+                    
+                    {/* Progress Bar */}
+                    <div className="progress-bar-wrapper">
+                      <div 
+                        className={`progress-bar-fill ${isUpdating ? 'update' : 'download'}`}
+                        style={{ width: `${downloadProgress}%` }}
+                      />
+                    </div>
+                    
+                    {/* Speed Graph with Speed Text */}
+                    <div className="progress-graph-wrapper">
+                      {speedHistory.length >= 2 && (
+                        <div className="progress-graph-container">
+                          {generateGraph()}
+                        </div>
+                      )}
+                      <span className="progress-speed-text-inline">
+                        {isUpdating 
+                          ? 'Updating...' 
+                          : (currentSpeed > 0 ? formatCurrentSpeed(currentSpeed) : formatDownloadSpeed())
+                        }
+                      </span>
                     </div>
                   </div>
                 ) : (
@@ -1340,6 +1537,18 @@ const Game = () => {
               <div className="info-card-value">{game.size}</div>
             </div>
           </div>
+
+              {/* Media from Studio (only screenshots/videos/gifs) */}
+              {game.screenshots && game.screenshots.length > 0 && (
+                <div style={{ marginTop: '24px' }}>
+                  <h3 className="section-subtitle">Media</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px', marginTop: '16px' }}>
+                    {game.screenshots.map((shot, idx) => (
+                      <img key={idx} src={getImageUrl(shot)} alt={`Screenshot ${idx + 1}`} style={{ width: '100%', height: '140px', objectFit: 'cover', borderRadius: '6px' }} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           ) : (
             <div className="patch-notes-section">
@@ -1635,6 +1844,43 @@ const Game = () => {
                     </div>
                   )}
       
+      {/* Switch Game Confirmation Modal */}
+      {showSwitchGameModal && (
+        <div className="properties-modal-overlay" onClick={handleCancelSwitchGame}>
+          <div className="switch-game-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="switch-game-modal-header">
+              <h2>Switch Game?</h2>
+              <button className="switch-game-modal-close" onClick={handleCancelSwitchGame}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="switch-game-modal-content">
+              <p>
+                {currentlyPlayingGameId && gamesData[currentlyPlayingGameId] ? (
+                  <>Another game (<strong>{gamesData[currentlyPlayingGameId].name}</strong>) is currently running.<br /><br />Do you want to close it and start <strong>{game.name}</strong> instead?</>
+                ) : (
+                  <>Another game is currently running.<br /><br />Do you want to close it and start this game instead?</>
+                )}
+              </p>
+            </div>
+            <div className="switch-game-modal-actions">
+              <button 
+                className="switch-game-modal-btn switch-game-modal-btn-cancel" 
+                onClick={handleCancelSwitchGame}
+              >
+                Cancel
+              </button>
+              <button 
+                className="switch-game-modal-btn switch-game-modal-btn-confirm" 
+                onClick={handleConfirmSwitchGame}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Properties Modal */}
       {showPropertiesModal && (
         <div className="properties-modal-overlay" onClick={() => setShowPropertiesModal(false)}>

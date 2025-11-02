@@ -8,6 +8,148 @@
   padding: 0;
 }
 
+/* Search Section */
+.store-search-section {
+  padding: 32px 40px 0;
+}
+
+.store-search-wrapper {
+  position: relative;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.store-search-icon {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.store-search-input {
+  width: 100%;
+  padding: 16px 50px 16px 50px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  color: white;
+  font-size: 16px;
+  outline: none;
+  transition: all 0.3s;
+}
+
+.store-search-input:focus {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 4px rgba(0, 204, 255, 0.15);
+}
+
+.store-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.store-search-clear {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.store-search-clear:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+/* Search Results */
+.store-search-results {
+  margin-top: 32px;
+}
+
+.store-search-results-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: white;
+  margin: 0 0 20px 0;
+}
+
+.store-search-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 20px;
+}
+
+.store-search-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.store-search-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  border-color: var(--accent-color);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.store-search-banner {
+  width: 100%;
+  height: 140px;
+  position: relative;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.store-search-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+  font-weight: bold;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.store-search-info {
+  padding: 16px;
+}
+
+.store-search-info h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+  margin: 0 0 6px 0;
+}
+
+.store-search-info p {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0 0 12px 0;
+}
+
+.store-search-stats {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
 /* Patch Notes Section */
 .patch-notes-section {
   padding: 60px 40px;
@@ -148,6 +290,21 @@
   border-radius: 0;
 }
 
+/* Inline bookmark (in actions) */
+.featured-actions .banner-bookmark.inline {
+  position: static;
+  width: 48px;
+  height: 48px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.featured-actions .banner-bookmark.inline.bookmarked { color: #ffffff; }
+
 .featured-background {
   position: absolute;
   top: 0;
@@ -178,11 +335,15 @@
   left: 0;
   right: 0;
   bottom: 0;
+  /* Stronger left-to-right gradient for text contrast (no boxes) */
   background: linear-gradient(
-    135deg,
-    rgba(0, 0, 0, 0.4) 0%,
-    rgba(0, 0, 0, 0.2) 50%,
-    rgba(0, 0, 0, 0.6) 100%
+    90deg,
+    rgba(0, 0, 0, 0.60) 0%,
+    rgba(0, 0, 0, 0.48) 14%,
+    rgba(0, 0, 0, 0.32) 28%,
+    rgba(0, 0, 0, 0.16) 42%,
+    rgba(0, 0, 0, 0.06) 52%,
+    rgba(0, 0, 0, 0.00) 58%
   );
 }
 
@@ -226,7 +387,7 @@
   font-weight: 800;
   margin: 0;
   color: var(--text-primary);
-  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 3px 10px rgba(0, 0, 0, 0.6), 0 1px 2px rgba(0, 0, 0, 0.6);
   white-space: nowrap;
 }
 
@@ -247,6 +408,7 @@
   padding: 6px 12px;
   border-radius: var(--border-radius-sm);
   backdrop-filter: blur(10px);
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
 }
 
 .stat.trending {
@@ -263,6 +425,7 @@
   margin: 0 0 20px 0;
   line-height: 1.6;
   max-width: 600px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6), 0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
 .featured-tags {
@@ -280,6 +443,7 @@
   font-size: 12px;
   font-weight: 500;
   backdrop-filter: blur(10px);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 .featured-actions {
@@ -302,6 +466,26 @@
   cursor: pointer;
   transition: var(--transition);
   box-shadow: var(--shadow-lg);
+}
+
+/* Buy (money green) vs Install (blue default) */
+.play-btn.buy {
+  /* Match install's luminosity with a green hue */
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: #ffffff;
+  box-shadow: none;
+}
+.play-btn.buy:hover {
+  transform: translateY(-2px);
+  box-shadow: none;
+}
+
+/* Remove glow for install as well */
+.play-btn.install {
+  box-shadow: none;
+}
+.play-btn.install:hover {
+  box-shadow: none;
 }
 
 .play-btn:hover {
@@ -869,11 +1053,172 @@
 }
 
 .taskbar-content {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  width: 100%;
+  padding: 0 40px;
+  gap: 40px;
+}
+
+.taskbar-left {
+  display: flex;
+  align-items: center;
+}
+
+.taskbar-filter-wrapper {
+  position: relative;
+}
+
+.taskbar-filter-btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: all 0.3s;
+  border-radius: 8px;
+}
+
+.taskbar-filter-btn-icon:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--accent-color);
+}
+
+.filter-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  background: rgba(20, 22, 27, 0.98);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 6px;
+  min-width: 200px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  animation: slideDown 0.2s ease-out;
+  overflow: hidden;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.filter-option {
+  padding: 12px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+  margin-bottom: 2px;
+}
+
+.filter-option:last-child {
+  margin-bottom: 0;
+}
+
+.filter-option:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+.filter-option.active {
+  background: linear-gradient(135deg, rgba(0, 204, 255, 0.15) 0%, rgba(0, 150, 200, 0.1) 100%);
+  color: var(--accent-color);
+  border-color: rgba(0, 204, 255, 0.3);
+  font-weight: 600;
+}
+
+.taskbar-center {
   display: flex;
   gap: 24px;
   align-items: center;
   justify-content: center;
+}
+
+.taskbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  justify-content: flex-end;
+}
+
+.taskbar-search-wrapper {
+  position: relative;
+  width: 280px;
+}
+
+.taskbar-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.taskbar-search-input {
   width: 100%;
+  padding: 8px 36px 8px 36px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.3s;
+}
+
+.taskbar-search-input:focus {
+  border-bottom-color: var(--accent-color);
+}
+
+.taskbar-search-input:focus + .taskbar-search-icon,
+.taskbar-search-wrapper:focus-within .taskbar-search-icon {
+  color: var(--accent-color);
+}
+
+.taskbar-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.taskbar-search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.taskbar-search-clear:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
 }
 
 .taskbar-btn {
@@ -982,4 +1327,465 @@
 
 .taskbar-btn:active {
   transform: translateY(0);
+}
+
+/* Generic section container aligned with main content width */
+.store-section {
+  width: 100%;
+  margin: 16px 0 0 0;
+  padding: 16px 40px;
+}
+
+/* Discover (banner-style cards like Library) */
+.discover-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 24px;
+}
+
+.discover-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0;
+  overflow: hidden;
+  position: relative;
+  aspect-ratio: 2 / 3;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.discover-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  transform: translateY(-2px);
+}
+
+.discover-banner {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.discover-banner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.discover-banner-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.discover-footer {
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.discover-title {
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.discover-subtitle {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* Featured-below: uploaded games as card banners (left-aligned under taskbar) */
+.featured-below {
+  width: 100%;
+  padding: 12px 40px 20px 40px;
+}
+
+.new-games-row {
+  display: flex;
+  gap: 24px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  margin-bottom: 20px;
+}
+
+.featured-below-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 24px;
+  justify-content: start;
+}
+
+.featured-older-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 24px;
+}
+
+/* Alternate visual density by spanning some cards */
+.featured-older-grid .featured-below-card:nth-child(7n+1) { grid-column: span 2; }
+.featured-older-grid .featured-below-card:nth-child(7n+2) { grid-column: span 2; }
+.featured-older-grid .featured-below-card:nth-child(7n+3) { grid-column: span 2; }
+.featured-older-grid .featured-below-card:nth-child(7n+4) { grid-column: span 3; }
+.featured-older-grid .featured-below-card:nth-child(7n+5) { grid-column: span 3; }
+.featured-older-grid .featured-below-card:nth-child(7n+6) { grid-column: span 2; }
+.featured-older-grid .featured-below-card:nth-child(7n+7) { grid-column: span 1; }
+
+.featured-below-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0;
+  overflow: hidden;
+  position: relative;
+  height: 300px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, width 120ms ease-out, max-width 120ms ease-out;
+  width: 200px; /* collapsed width equals banner width */
+  max-width: 200px;
+}
+
+.featured-below-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  border-color: rgba(255, 255, 255, 0.12);
+  width: 360px; /* 200 banner + 160 panel */
+  max-width: 360px;
+}
+
+.featured-below-banner {
+  position: relative;
+  width: 200px;
+  min-width: 200px;
+  height: 100%;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.02);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* CTA overlay on the banner when collapsed */
+.banner-cta {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 1;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.featured-below-card:hover .banner-cta {
+  opacity: 0;
+  transform: translateX(-8px);
+  pointer-events: none;
+}
+
+.banner-cta { flex-direction: column; align-items: flex-start; }
+.banner-free-text {
+  color: #ffffff; 
+  font-weight: 700;
+  font-size: 16px;
+  margin-left: 2px;
+}
+
+/* Buy button removed from banner intentionally */
+
+.banner-bookmark {
+  position: absolute;
+  top: 0;
+  right: 0;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  width: 32px;
+  height: 48px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  opacity: 0.9;
+  transition: opacity 120ms ease, transform 120ms ease, color 120ms ease;
+  z-index: 2;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  line-height: 0;
+}
+
+.banner-bookmark:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
+.banner-bookmark.bookmarked {
+  color: #ffffff;
+}
+
+/* only change to accent on hover when not bookmarked */
+.banner-bookmark:not(.bookmarked):hover { color: var(--accent-primary); }
+
+.card-info-price.is-free {
+  color: #ffffff;
+}
+
+.featured-below-banner img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.featured-below-placeholder {
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  display: flex;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 42px;
+}
+
+.featured-card-info {
+  position: relative;
+  flex: 0 0 0;
+  width: 0;
+  height: 100%;
+  overflow: hidden;
+  background: rgba(20, 22, 27, 0.88);
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0;
+  z-index: 1;
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  transition: width 120ms ease-out, padding 100ms ease-out, opacity 100ms ease-out;
+}
+
+.featured-below-card:hover .featured-card-info {
+  flex: 0 0 160px;
+  width: 160px;
+  padding: 12px;
+  opacity: 1;
+}
+
+.card-info-header h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.card-info-version {
+  margin: 4px 0 6px 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.card-info-desc {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  flex: 1;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.card-info-price {
+  margin-top: 12px;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.card-info-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card-info-metric {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.metric-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-primary);
+}
+
+.metric-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.metric-value {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.metric-label {
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-transform: lowercase;
+  opacity: 0.8;
+}
+
+.card-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.card-info-row:last-child {
+  border-bottom: none;
+}
+
+.card-info-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.card-info-value {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.card-info-price {
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.card-info-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.card-info-primary {
+  flex: 1;
+  padding: 10px 12px;
+  background: var(--gradient-primary);
+  border: none;
+  border-radius: 0;
+  color: var(--text-primary);
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: var(--shadow-lg);
+}
+
+.card-info-primary.buy {
+  /* Match install's luminosity with a green hue */
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  color: #ffffff;
+  box-shadow: none;
+}
+.card-info-primary.buy:hover {
+  transform: translateY(-1px);
+  box-shadow: none;
+}
+
+.card-info-primary.install {
+  box-shadow: none;
+}
+.card-info-primary.install:hover {
+  box-shadow: none;
+}
+
+.card-info-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-xl);
+}
+
+.card-info-fav {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--text-primary);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.card-info-updated {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+.featured-below-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+}
+
+.featured-below-rating {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 500;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
+  color: #ffd700;
+}
+
+.featured-below-comments {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: default;
+  font-size: 12px;
+  font-weight: 500;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
 }

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Filter, MessageSquare, Star } from 'lucide-react';
 import './Library.css';
@@ -18,68 +18,26 @@ const Library = () => {
     return 'rgba(255,255,255,0.3)';
   };
 
-  const games = [
-    {
-      id: 'the-finals',
-      name: 'THE FINALS',
-      banner: '/public/images/games/pathline-banner.jpg',
-      playTime: '24h 32m',
-      lastPlayed: '2 hours ago',
-      isInstalled: true,
-      rating: 4.5,
-      commentCount: 1284
-    },
-    {
-      id: 'counter-strike-2',
-      name: 'Counter-Strike 2',
-      banner: '/public/images/games/pathline-banner.jpg',
-      playTime: '156h 12m',
-      lastPlayed: 'Yesterday',
-      isInstalled: true,
-      rating: 4.8,
-      commentCount: 5678
-    },
-    {
-      id: 'skate',
-      name: 'skate.',
-      banner: '/public/images/games/pathline-banner.jpg',
-      playTime: '8h 45m',
-      lastPlayed: '3 days ago',
-      isInstalled: true,
-      rating: 4.2,
-      commentCount: 892
-    },
-    {
-      id: 'hellblade',
-      name: 'Hellblade: Senua\'s Sacrifice',
-      banner: '/public/images/games/pathline-banner.jpg',
-      playTime: '12h 30m',
-      lastPlayed: '1 week ago',
-      isInstalled: true,
-      rating: 4.7,
-      commentCount: 2134
-    },
-    {
-      id: 'cyberpunk-2077',
-      name: 'Cyberpunk 2077',
-      banner: '/public/images/games/pathline-banner.jpg',
-      playTime: '89h 15m',
-      lastPlayed: '2 days ago',
-      isInstalled: true,
-      rating: 4.6,
-      commentCount: 3421
-    },
-    {
-      id: 'valorant',
-      name: 'VALORANT',
-      banner: '/public/images/games/pathline-banner.jpg',
-      playTime: '342h 44m',
-      lastPlayed: 'Today',
-      isInstalled: true,
-      rating: 4.9,
-      commentCount: 8943
-    }
-  ];
+  const [customGames, setCustomGames] = useState([]);
+
+  useEffect(() => {
+    const load = () => {
+      try {
+        const stored = localStorage.getItem('customGames');
+        setCustomGames(stored ? JSON.parse(stored) : []);
+      } catch (_) {
+        setCustomGames([]);
+      }
+    };
+    load();
+    const handler = () => load();
+    window.addEventListener('customGameUpdate', handler);
+    window.addEventListener('storage', (e) => { if (e.key === 'customGames') load(); });
+    return () => window.removeEventListener('customGameUpdate', handler);
+  }, []);
+
+  // Base games will be loaded from localStorage or API
+  const baseGames = [];
 
   const handleGameClick = (gameId) => {
     navigate(`/game/${gameId}`);
@@ -166,12 +124,27 @@ const Library = () => {
     );
   };
 
+  // Merge base games with custom games for display
+  const mergedGames = [
+    ...baseGames,
+    ...customGames.map(g => ({
+      id: g.gameId,
+      name: g.name || 'Untitled Game',
+      banner: g.banner || g.bannerImage || g.fullFormData?.bannerImage || g.card || g.cardImage || '/public/images/games/pathline-banner.jpg',
+      playTime: g.playtime || '0h',
+      lastPlayed: g.lastPlayed || 'Never',
+      isInstalled: true,
+      rating: g.rating || 0,
+      commentCount: g.commentCount || 0,
+    }))
+  ];
+
   return (
     <div className="library-page">
       <div className="library-header">
         <div>
           <h1>My Games</h1>
-          <p>{games.length} games in your library</p>
+          <p>{mergedGames.length} games in your library</p>
         </div>
         <div className="library-controls">
           <div className="library-size-control">
@@ -218,7 +191,7 @@ const Library = () => {
       </div>
 
       <div className="library-grid" style={{ gridTemplateColumns: `repeat(auto-fill, ${iconSize}px)` }}>
-        {games.map((game) => (
+        {mergedGames.map((game) => (
           <LibraryGameCard key={game.id} game={game} iconSize={iconSize} />
         ))}
       </div>

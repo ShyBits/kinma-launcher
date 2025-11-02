@@ -425,6 +425,10 @@
   width: 20px;
   height: 20px;
   flex-shrink: 0;
+  min-width: 20px;
+  min-height: 20px;
+  max-width: 20px;
+  max-height: 20px;
 }
 
 .download-size {
@@ -536,36 +540,106 @@
   z-index: 1;
 }
 
+/* Progress UI (restored visual layout) */
+.game-progress-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 320px;
+  max-width: 320px;
+}
+
+.progress-header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.progress-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.progress-percentage { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+
+.progress-controls { display: flex; align-items: center; gap: 8px; }
+
+.progress-control-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent !important;
+  border: none !important;
+  outline: none;
+  box-shadow: none;
+  padding: 0;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.progress-control-btn:hover { opacity: 0.75; }
+.progress-cancel-btn { color: var(--text-secondary); }
+
+.progress-bar-wrapper { width: 100%; height: 3px; background: rgba(255,255,255,0.1); position: relative; overflow: hidden; }
+.progress-bar-fill { position: absolute; left: 0; top: 0; height: 100%; transition: width 0.1s linear; }
+.progress-bar-fill.download { background: var(--download-blue); }
+.progress-bar-fill.update { background: var(--update-yellow); }
+
+.progress-graph-wrapper { display: flex; align-items: center; gap: 12px; }
+.progress-graph-container { flex: 1; height: 24px; position: relative; overflow: hidden; background: transparent; }
+.progress-speed-text-inline { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+
 /* Game Download Control Buttons */
 .game-download-control-btn {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0;
-  width: 32px;
-  height: 32px;
+  width: auto;
+  height: auto;
   padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: 50%;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0;
+  outline: none;
+  box-shadow: none;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease;
+}
+
+.game-download-control-btn svg {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  max-width: 18px;
+  max-height: 18px;
+  flex-shrink: 0;
 }
 
 .game-download-control-btn:hover {
   color: var(--accent-primary);
-  transform: translateY(-1px);
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none;
+  transform: none;
 }
 
 .game-download-control-btn:active {
   color: var(--accent-primary);
-  transform: translateY(0);
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none;
+  transform: none;
 }
 
 .game-cancel-btn:hover {
   color: #ff3b30;
-  transform: translateY(-1px);
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none;
+  transform: none;
 }
 
 .game-action-right {
@@ -3105,4 +3179,76 @@
 
 .property-value.link:hover {
   color: #4A9EFF;
+}
+
+/* Switch Game Modal */
+.switch-game-modal {
+  width: 520px;
+  max-width: calc(100vw - 40px);
+  background: rgba(20, 20, 20, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  padding: 20px 20px 16px 20px;
+  color: var(--text-primary);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.switch-game-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.switch-game-modal-header h2 {
+  font-size: 22px;
+  margin: 0;
+}
+
+.switch-game-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  padding: 0;
+}
+
+.switch-game-modal-content p {
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.switch-game-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+.switch-game-modal-btn {
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.switch-game-modal-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.switch-game-modal-btn-cancel {
+  color: var(--text-secondary);
+}
+
+.switch-game-modal-btn-confirm {
+  border-color: rgba(255, 167, 38, 0.5);
+  background: rgba(255, 167, 38, 0.08);
+}
+
+.switch-game-modal-btn-confirm:hover {
+  background: rgba(255, 167, 38, 0.14);
 }

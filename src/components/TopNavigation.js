@@ -4,6 +4,7 @@ import {
   BarChart3, Package, FileText, Upload, TrendingUp, DollarSign, Download
 } from 'lucide-react';
 import KinmaLogo from './KinmaLogo';
+import AuthModal from './AuthModal';
 import './TopNavigation.css';
 
 const CustomTooltip = ({ text, children }) => {
@@ -82,7 +83,14 @@ const TopNavigation = ({
   
   // User balance - you can manage this with state/context
   const userBalance = 1234.50;
-  const userName = 'Player';
+  const [authUser, setAuthUser] = useState(() => {
+    try { const u = localStorage.getItem('authUser'); return u ? JSON.parse(u) : null; } catch (_) { return null; }
+  });
+  const userName = authUser?.name || 'Guest';
+  const [showAuth, setShowAuth] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileMenuRef = useRef(null);
+  const profileButtonRef = useRef(null);
   
   // Check if we're in Game Studio
   const isGameStudio = location?.pathname === '/game-studio' || location?.pathname === '/game-studio-settings';
@@ -211,7 +219,70 @@ const TopNavigation = ({
     navigate(newPath);
   };
 
+  const handleAuthenticated = ({ user, developerChosen }) => {
+    setAuthUser(user);
+    try { localStorage.setItem('authUser', JSON.stringify(user)); } catch (_) {}
+    if (developerChosen) {
+      try { localStorage.setItem('developerIntent', 'pending'); } catch (_) {}
+      navigate('/developer-onboarding');
+    }
+  };
+
+  useEffect(() => {
+    if (!showProfileMenu) return;
+    const onKey = (e) => { if (e.key === 'Escape') setShowProfileMenu(false); };
+    const onClick = (e) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target) &&
+          profileButtonRef.current && !profileButtonRef.current.contains(e.target)) {
+        setShowProfileMenu(false);
+      }
+    };
+    
+    // Adjust menu position if it would overflow - wait for render
+    const adjustPosition = () => {
+      if (profileMenuRef.current && profileButtonRef.current) {
+        const menu = profileMenuRef.current;
+        const button = profileButtonRef.current;
+        const rect = button.getBoundingClientRect();
+        const menuRect = menu.getBoundingClientRect();
+        const windowWidth = window.innerWidth;
+        const menuWidth = menuRect.width || 250; // fallback width
+        
+        if (rect.right + menuWidth > windowWidth) {
+          menu.style.right = 'auto';
+          menu.style.left = '0';
+          menu.style.transform = 'translateX(-100%)';
+        } else {
+          menu.style.right = '0';
+          menu.style.left = 'auto';
+          menu.style.transform = 'translateX(0)';
+        }
+      }
+    };
+    
+    // Use requestAnimationFrame to ensure menu is rendered
+    requestAnimationFrame(() => {
+      setTimeout(adjustPosition, 0);
+    });
+    
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onClick);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onClick);
+    };
+  }, [showProfileMenu]);
+
+  const handleLogout = async () => {
+    try { localStorage.removeItem('authUser'); } catch (_) {}
+    try { localStorage.removeItem('developerIntent'); } catch (_) {}
+    setAuthUser(null);
+    setShowProfileMenu(false);
+    try { await (window.electronAPI?.logout?.()); } catch (_) {}
+  };
+
   return (
+    <>
     <div className="top-navigation">
       {/* Left Section - Home Button */}
       <div className="nav-left">
@@ -222,11 +293,16 @@ const TopNavigation = ({
           <div className="home-logo">
             <KinmaLogo />
           </div>
-          <span>Kinma</span>
+          {isGameStudio ? (
+            <span>
+              <span className="kinma-main">KINMA</span>
+              <span className="kinma-subtitle"> studio view</span>
+            </span>
+          ) : (
+            <span>KINMA</span>
+          )}
         </button>
       </div>
-
-
 
       {/* Right Section - Smart Navigation Order */}
       <div className="nav-right">
@@ -678,17 +754,6 @@ const TopNavigation = ({
               </button>
             </CustomTooltip>
             
-            <div className="nav-separator" />
-            
-            <CustomTooltip text="Notifications">
-              <button 
-                className={`nav-item ${currentPage === 'notifications' ? 'active' : ''}`}
-                onClick={() => handleNavigation('notifications')}
-              >
-                <Bell size={20} />
-              </button>
-            </CustomTooltip>
-            
             <CustomTooltip text="Community">
               <button 
                 className={`nav-item ${currentPage === 'community' ? 'active' : ''}`}
@@ -700,14 +765,63 @@ const TopNavigation = ({
             
             <div className="nav-separator" />
             
-            <CustomTooltip text={`Profile - ${userName}`}>
+            <CustomTooltip text="Notifications">
               <button 
-                className={`nav-item ${currentPage === 'profile' ? 'active' : ''}`}
-                onClick={() => handleNavigation('profile')}
+                className={`nav-item ${currentPage === 'notifications' ? 'active' : ''}`}
+                onClick={() => handleNavigation('notifications')}
               >
-                <User size={20} />
+                <Bell size={20} />
               </button>
             </CustomTooltip>
+            
+            {authUser ? (
+              <div style={{ position: 'relative' }}>
+                <CustomTooltip text={`Profile - ${userName}`}>
+                  <button 
+                    ref={profileButtonRef}
+                    className={`nav-item ${showProfileMenu ? 'active' : ''}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowProfileMenu((v) => !v);
+                    }}
+                  >
+                    <User size={20} />
+                  </button>
+                </CustomTooltip>
+                {showProfileMenu && (
+                  <div 
+                    ref={profileMenuRef} 
+                    className="balance-menu" 
+                    style={{ 
+                      position: 'absolute',
+                      top: '100%',
+                      right: 0,
+                      marginTop: '8px',
+                      minWidth: '200px',
+                      zIndex: 1000
+                    }}
+                  >
+                    <div className="balance-menu-header">
+                      <h2 style={{ marginBottom: 0 }}>Account</h2>
+                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>{userName}</p>
+                    </div>
+                    <div className="balance-actions" style={{ justifyContent: 'space-between' }}>
+                      <button className="cancel-btn" onClick={() => { handleNavigation('profile'); setShowProfileMenu(false); }}>Open Profile</button>
+                      <button className="confirm-btn" onClick={handleLogout}>Log out</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <CustomTooltip text="Sign in / Register">
+                <button 
+                  className={`nav-item ${showAuth ? 'active' : ''}`}
+                  onClick={() => setShowAuth(true)}
+                >
+                  <User size={20} />
+                </button>
+              </CustomTooltip>
+            )}
             
             <CustomTooltip text="Settings">
               <button 
@@ -775,6 +889,14 @@ const TopNavigation = ({
       )}
 
     </div>
+
+    <AuthModal 
+      isOpen={showAuth}
+      onClose={() => setShowAuth(false)}
+      onAuthenticated={handleAuthenticated}
+      fullscreen
+    />
+    </>
   );
 };
 

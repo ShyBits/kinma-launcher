@@ -1,101 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ShoppingCart, Plus, ShoppingBag, Eye, EyeOff, Grid, List, ArrowLeft } from 'lucide-react';
+import { ShoppingCart, Plus, ShoppingBag, Eye, EyeOff, Grid, List, ArrowLeft, Crown } from 'lucide-react';
 import './Market.css';
 
 
-// Generate game-specific user inventory
+// User inventory will be loaded from API or localStorage
 const getUserInventory = (gameId) => {
-  const gameInventories = {
-    "the-finals": [
-      { id: 101, name: 'Building Material Pack', rarity: 'Common', category: 'Consumable', image: '🏗️', game: 'THE FINALS', marketPrice: 5.00 },
-      { id: 102, name: 'Explosive Barrel', rarity: 'Rare', category: 'Gadget', image: '💣', game: 'THE FINALS', marketPrice: 15.00 },
-      { id: 103, name: 'Shield Generator', rarity: 'Epic', category: 'Gadget', image: '🛡️', game: 'THE FINALS', marketPrice: 35.00 },
-    ],
-    "cs2": [
-      { id: 201, name: 'AK-47 Skin', rarity: 'Epic', category: 'Cosmetic', image: '🔫', game: 'Counter-Strike 2', marketPrice: 25.00 },
-      { id: 202, name: 'Flash Grenade', rarity: 'Common', category: 'Consumable', image: '💥', game: 'Counter-Strike 2', marketPrice: 2.50 },
-      { id: 203, name: 'AWP Dragon Lore', rarity: 'Legendary', category: 'Cosmetic', image: '🔫', game: 'Counter-Strike 2', marketPrice: 800.00 },
-    ],
-    "skate": [
-      { id: 301, name: 'Custom Skateboard', rarity: 'Rare', category: 'Equipment', image: '🛼', game: 'skate.', marketPrice: 45.00 },
-      { id: 302, name: 'Protective Gear Set', rarity: 'Common', category: 'Armor', image: '🦺', game: 'skate.', marketPrice: 20.00 },
-    ],
-    "hellblade": [
-      { id: 401, name: 'Viking Sword Replica', rarity: 'Epic', category: 'Collectible', image: '⚔️', game: 'Hellblade', marketPrice: 75.00 },
-      { id: 402, name: 'Norse Rune Stone', rarity: 'Legendary', category: 'Collectible', image: '🪨', game: 'Hellblade', marketPrice: 150.00 },
-    ],
-    "cyberpunk": [
-      { id: 501, name: 'Cybernetic Eye', rarity: 'Epic', category: 'Cyberware', image: '👁️', game: 'Cyberpunk 2077', marketPrice: 200.00 },
-      { id: 502, name: 'Neural Link', rarity: 'Legendary', category: 'Cyberware', image: '🧠', game: 'Cyberpunk 2077', marketPrice: 500.00 },
-    ],
-    "valorant": [
-      { id: 601, name: 'Reyna Spray', rarity: 'Common', category: 'Cosmetic', image: '🎨', game: 'VALORANT', marketPrice: 5.00 },
-      { id: 602, name: 'Operator Skin Bundle', rarity: 'Legendary', category: 'Cosmetic', image: '🔫', game: 'VALORANT', marketPrice: 50.00 },
-    ]
-  };
-
-  return gameInventories[gameId] || [
-    { id: 101, name: 'Magic Sword', rarity: 'Epic', category: 'Weapon', image: '⚔️', game: 'Unknown Game', marketPrice: 25.00 },
-    { id: 102, name: 'Health Potion', rarity: 'Common', category: 'Consumable', image: '🧪', game: 'Unknown Game', marketPrice: 3.50 },
-  ];
-};
-
-// Game data mapping - same as in Game.js
-const GAMES_DATA = {
-  "the-finals": {
-    id: "the-finals",
-    name: 'THE FINALS',
-    icon: 'T',
-    image: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&h=600&fit=crop",
-    logo: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&h=600&fit=crop",
-    installed: true,
-    rarities: ['all', 'legendary', 'epic', 'rare', 'common']
-  },
-  "cs2": {
-    id: "cs2",
-    name: 'Counter-Strike 2',
-    icon: 'C',
-    image: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&h=600&fit=crop",
-    logo: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&h=600&fit=crop",
-    installed: true,
-    rarities: ['all', 'legendary', 'epic', 'rare', 'common']
-  },
-  "skate": {
-    id: "skate",
-    name: 'skate.',
-    icon: 'S',
-    image: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&h=600&fit=crop",
-    logo: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&h=600&fit=crop",
-    installed: true,
-    rarities: ['all', 'legendary', 'epic', 'rare', 'common']
-  },
-  "hellblade": {
-    id: "hellblade",
-    name: 'Hellblade: Senua\'s Sacrifice',
-    icon: 'H',
-    image: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&h=600&fit=crop",
-    logo: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&h=600&fit=crop",
-    installed: true,
-    rarities: ['all', 'legendary', 'epic', 'rare', 'common']
-  },
-  "cyberpunk": {
-    id: "cyberpunk",
-    name: 'Cyberpunk 2077',
-    icon: 'C',
-    image: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&h=600&fit=crop",
-    logo: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&h=600&fit=crop",
-    installed: true,
-    rarities: ['all', 'legendary', 'epic', 'rare', 'common']
-  },
-  "valorant": {
-    id: "valorant",
-    name: 'VALORANT',
-    icon: 'V',
-    image: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&h=600&fit=crop",
-    logo: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&h=600&fit=crop",
-    installed: true,
-    rarities: ['all', 'legendary', 'epic', 'rare', 'common']
+  try {
+    const stored = localStorage.getItem(`inventory_${gameId}`);
+    return stored ? JSON.parse(stored) : [];
+  } catch (_) {
+    return [];
   }
 };
 
@@ -115,216 +30,172 @@ const Market = () => {
   const [inventorySearch, setInventorySearch] = useState('');
   const [inventoryFilter, setInventoryFilter] = useState('all');
   const [itemPrices, setItemPrices] = useState({});
+  const [marketView, setMarketView] = useState('browse'); // browse, petitions, featured, trending, favorites
+  const [customGames, setCustomGames] = useState([]);
+  const [watchedGames, setWatchedGames] = useState(new Set());
+  const [expandedCards, setExpandedCards] = useState(new Set());
+  const [petitions, setPetitions] = useState(() => {
+    try {
+      const stored = localStorage.getItem('marketPetitions');
+      return stored ? JSON.parse(stored) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+  
+  // Investments data loaded from localStorage
+  const [investments] = useState(() => {
+    try {
+      const stored = localStorage.getItem('marketInvestments');
+      return stored ? JSON.parse(stored) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  // Load custom games and watched games from localStorage
+  useEffect(() => {
+    const loadCustomGames = () => {
+      try {
+        const stored = localStorage.getItem('customGames');
+        if (stored) {
+          const games = JSON.parse(stored);
+          setCustomGames(games);
+        }
+      } catch (e) {
+        console.error('Error loading custom games:', e);
+      }
+    };
+
+    const loadWatchedGames = () => {
+      try {
+        const stored = localStorage.getItem('watchedGames');
+        if (stored) {
+          const gameIds = JSON.parse(stored);
+          setWatchedGames(new Set(gameIds));
+        }
+      } catch (e) {
+        console.error('Error loading watched games:', e);
+      }
+    };
+
+    loadCustomGames();
+    loadWatchedGames();
+    const handleUpdate = () => loadCustomGames();
+    window.addEventListener('customGameUpdate', handleUpdate);
+    
+    return () => window.removeEventListener('customGameUpdate', handleUpdate);
+  }, []);
+
+  // Get all games with market settings
+  const allGamesData = React.useMemo(() => {
+    // Custom games from localStorage
+    const customGamesData = customGames.map((game) => {
+      const hasMarket = game.fullFormData?.marketEnabled !== false; // Default to true
+      // Load market data from localStorage or API
+      let marketData = {};
+      try {
+        const stored = localStorage.getItem(`market_${game.gameId || game.id}`);
+        if (stored) {
+          marketData = JSON.parse(stored);
+        }
+      } catch (_) {}
+      
+      return {
+        id: game.gameId || `custom-${game.id}`,
+        name: game.name,
+        icon: game.name?.charAt(0)?.toUpperCase() || 'G',
+        image: game.banner || game.bannerImage,
+        logo: game.logo || game.gameLogo,
+        installed: true,
+        hasMarket,
+        signatures: marketData.signatures || 0,
+        myToken: marketData.myToken || null,
+        isCustom: true,
+        cardImage: game.card || game.cardImage,
+        marketRank: marketData.marketRank || null,
+        totalVolume: marketData.totalVolume || '$0',
+        marketTrend: marketData.marketTrend || '+0%'
+      };
+    });
+
+    return [...customGamesData];
+  }, [customGames]);
+
+  // Get games with markets and games without markets
+  const gamesWithMarkets = allGamesData.filter(g => g.hasMarket !== false);
+  const gamesWithoutMarkets = allGamesData.filter(g => g.hasMarket === false);
 
   // Auto-select game based on URL parameter
   useEffect(() => {
-    if (gameId && GAMES_DATA[gameId]) {
-      setSelectedGame(GAMES_DATA[gameId]);
+    if (!gameId) {
+      setSelectedGame(null);
+      return;
     }
-  }, [gameId]);
 
-  // Generate game-specific market items - moved before early return to avoid hooks order issues
+    // Find game in computed list (custom games only)
+    const match = allGamesData.find(g => String(g.id) === String(gameId));
+    if (match) {
+      setSelectedGame(match);
+    }
+  }, [gameId, allGamesData]);
+
+  // Load market items from localStorage or API
   const marketItems = React.useMemo(() => {
     if (!selectedGame) return [];
+    
+    try {
+      const stored = localStorage.getItem(`marketItems_${selectedGame.id}`);
+      return stored ? JSON.parse(stored) : [];
+    } catch (_) {
+      return [];
+    }
+  }, [selectedGame]);
 
-    const gameSpecificItems = {
-      "the-finals": [
-        {
-          id: 1,
-          name: 'Destruction Hammer',
-          type: 'Weapon',
-          rarity: 'Legendary',
-          price: 45.99,
-          image: '🔨',
-          imageUrl: '/images/items/destruction-hammer.jpg',
-          seller: 'BuildBreaker99',
-          timeLeft: '2h 15m',
-          listedAt: '2 days ago'
-        },
-        {
-          id: 2,
-          name: 'Shield Generator',
-          type: 'Gadget',
-          rarity: 'Epic',
-          price: 32.50,
-          image: '🛡️',
-          imageUrl: '/images/items/shield-generator.jpg',
-          seller: 'TechMaster',
-          timeLeft: '5h 30m',
-          listedAt: '1 day ago'
-        },
-        {
-          id: 3,
-          name: 'Explosive Charge',
-          type: 'Consumable',
-          rarity: 'Rare',
-          price: 8.50,
-          image: '💣',
-          imageUrl: '/images/items/explosive-charge.jpg',
-          seller: 'DemoExpert',
-          timeLeft: '12h 45m',
-          listedAt: '5 hours ago'
-        }
-      ],
-      "cs2": [
-        {
-          id: 1,
-          name: 'AWP Dragon Lore',
-          type: 'Weapon',
-          rarity: 'Legendary',
-          price: 1200.99,
-          image: '🔫',
-          imageUrl: '/images/items/awp-dragon-lore.jpg',
-          seller: 'SkinCollector',
-          timeLeft: '1h 30m',
-          listedAt: '3 days ago'
-        },
-        {
-          id: 2,
-          name: 'Smoke Grenade Pack',
-          type: 'Consumable',
-          rarity: 'Common',
-          price: 5.25,
-          image: '💨',
-          imageUrl: '/images/items/smoke-grenade.jpg',
-          seller: 'TacticalPlayer',
-          timeLeft: '8h 20m',
-          listedAt: '3 hours ago'
-        },
-        {
-          id: 3,
-          name: 'Flashbang Bundle',
-          type: 'Consumable',
-          rarity: 'Common',
-          price: 4.50,
-          image: '💥',
-          imageUrl: '/images/items/flashbang.jpg',
-          seller: 'RushPlayer',
-          timeLeft: '6h 15m',
-          listedAt: '1 day ago'
-        }
-      ],
-      "skate": [
-        {
-          id: 1,
-          name: 'Pro Skateboard Deck',
-          type: 'Equipment',
-          rarity: 'Epic',
-          price: 89.99,
-          image: '🛼',
-          imageUrl: '/images/items/pro-deck.jpg',
-          seller: 'SkateLegend',
-          timeLeft: '3h 45m',
-          listedAt: '4 hours ago'
-        },
-        {
-          id: 2,
-          name: 'Custom Wheels Set',
-          type: 'Parts',
-          rarity: 'Rare',
-          price: 45.00,
-          image: '⚙️',
-          imageUrl: '/images/items/custom-wheels.jpg',
-          seller: 'WheelMaster',
-          timeLeft: '1d 2h',
-          listedAt: '2 days ago'
-        }
-      ],
-      "hellblade": [
-        {
-          id: 1,
-          name: 'Senua\'s Sword Replica',
-          type: 'Collectible',
-          rarity: 'Legendary',
-          price: 199.99,
-          image: '⚔️',
-          imageUrl: '/images/items/senua-sword.jpg',
-          seller: 'MythCollector',
-          timeLeft: '5h 20m',
-          listedAt: '1 week ago'
-        },
-        {
-          id: 2,
-          name: 'Viking Shield',
-          type: 'Armor',
-          rarity: 'Epic',
-          price: 75.50,
-          image: '🛡️',
-          imageUrl: '/images/items/viking-shield.jpg',
-          seller: 'HistoryBuff',
-          timeLeft: '2d 8h',
-          listedAt: '3 days ago'
-        }
-      ],
-      "cyberpunk": [
-        {
-          id: 1,
-          name: 'Neural Implant',
-          type: 'Cyberware',
-          rarity: 'Legendary',
-          price: 299.99,
-          image: '🧠',
-          imageUrl: '/images/items/neural-implant.jpg',
-          seller: 'CyberDoc',
-          timeLeft: '4h 15m',
-          listedAt: '1 day ago'
-        },
-        {
-          id: 2,
-          name: 'Chrome Arm',
-          type: 'Cyberware',
-          rarity: 'Epic',
-          price: 149.99,
-          image: '🦾',
-          imageUrl: '/images/items/chrome-arm.jpg',
-          seller: 'BodyModder',
-          timeLeft: '1d 12h',
-          listedAt: '2 days ago'
-        }
-      ],
-      "valorant": [
-        {
-          id: 1,
-          name: 'Operator Skin',
-          type: 'Cosmetic',
-          rarity: 'Legendary',
-          price: 89.99,
-          image: '🔫',
-          imageUrl: '/images/items/operator-skin.jpg',
-          seller: 'SkinTrader',
-          timeLeft: '2h 30m',
-          listedAt: '5 hours ago'
-        },
-        {
-          id: 2,
-          name: 'Agent Spray Set',
-          type: 'Cosmetic',
-          rarity: 'Rare',
-          price: 25.00,
-          image: '🎨',
-          imageUrl: '/images/items/agent-spray.jpg',
-          seller: 'SprayMaster',
-          timeLeft: '8h 45m',
-          listedAt: '1 day ago'
-        }
-      ]
-    };
-
-    return gameSpecificItems[gameId] || [
-      {
-        id: 1,
-        name: 'Legendary Sword',
-        type: 'Weapon',
-        rarity: 'Legendary',
-        price: 45.99,
-        image: '⚔️',
-        imageUrl: '/images/items/legendary-sword.jpg',
-        seller: 'DragonSlayer99',
-        timeLeft: '2h 15m',
-        listedAt: '2 days ago'
-      }
-    ];
-  }, [selectedGame, gameId]);
+  // Calculate market statistics from localStorage data
+  const marketStats = React.useMemo(() => {
+    try {
+      const transactions = JSON.parse(localStorage.getItem('marketTransactions') || '[]');
+      const investmentKeys = Object.keys(investments);
+      const totalTraded = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+      const totalProfit = transactions.reduce((sum, t) => sum + (t.profit || 0), 0);
+      const totalInvested = investmentKeys.reduce((sum, key) => sum + (investments[key]?.invested || 0), 0);
+      const investmentReturns = investmentKeys.reduce((sum, key) => sum + (investments[key]?.returns || 0), 0);
+      const avgReturn = totalInvested > 0 ? (investmentReturns / totalInvested * 100) : 0;
+      const netWorth = totalTraded + investmentReturns;
+      const bestTrade = Math.max(...transactions.map(t => t.profitPercent || 0), 0);
+      
+      return {
+        totalProfit,
+        totalTraded,
+        transactions: transactions.length,
+        avgPrice: transactions.length > 0 ? (totalTraded / transactions.length) : 0,
+        activeInvestments: investmentKeys.length,
+        investmentReturns,
+        totalInvested,
+        avgReturn,
+        successRate: transactions.length > 0 ? (transactions.filter(t => t.profit > 0).length / transactions.length * 100) : 0,
+        roi: totalInvested > 0 ? ((investmentReturns / totalInvested) * 100) : 0,
+        netWorth,
+        bestTrade
+      };
+    } catch (_) {
+      return {
+        totalProfit: 0,
+        totalTraded: 0,
+        transactions: 0,
+        avgPrice: 0,
+        activeInvestments: 0,
+        investmentReturns: 0,
+        totalInvested: 0,
+        avgReturn: 0,
+        successRate: 0,
+        roi: 0,
+        netWorth: 0,
+        bestTrade: 0
+      };
+    }
+  }, [investments]);
 
   // Handler functions
   const handleTabChange = (tab) => {
@@ -437,36 +308,400 @@ const Market = () => {
     }
   };
 
+  const handlePetitionSign = (gameId) => {
+    setPetitions(prev => {
+      const game = prev[gameId];
+      if (!game) return prev;
+      
+      if (game.myToken) {
+        // User already signed, show message
+        alert('You have already signed this petition!');
+        return prev;
+      }
+      
+      // Add signature
+      const updated = {
+        ...prev,
+        [gameId]: {
+          ...game,
+          signatures: (game.signatures || 0) + 1,
+          myToken: true
+        }
+      };
+      
+      // Save to localStorage
+      try {
+        localStorage.setItem('marketPetitions', JSON.stringify(updated));
+      } catch (e) {
+        console.error('Error saving petitions:', e);
+      }
+      
+      return updated;
+    });
+  };
+
+  const handleWatchGame = (gameId, e) => {
+    e.stopPropagation();
+    const newWatched = new Set(watchedGames);
+    if (newWatched.has(gameId)) {
+      newWatched.delete(gameId);
+    } else {
+      newWatched.add(gameId);
+    }
+    setWatchedGames(newWatched);
+    localStorage.setItem('watchedGames', JSON.stringify(Array.from(newWatched)));
+  };
+
   // If no game is selected, show game selection
   if (!selectedGame) {
     return (
       <div className="market">
-        <div className="game-selection-header">
-          <h2>Select a game to browse its marketplace</h2>
+        {/* Market Statistics Bar - Always Visible at Top */}
+        <div className="watch-stats-overview">
+          <div className="watch-stat-group">
+            <div className="watch-stat-item">
+              <span className="watch-stat-item-label">Total Profit</span>
+              <span className={`watch-stat-item-value ${marketStats.totalProfit >= 0 ? 'positive' : ''}`}>
+                {marketStats.totalProfit >= 0 ? '+' : ''}${marketStats.totalProfit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+            <div className="watch-stat-item">
+              <span className="watch-stat-item-label">Total Traded</span>
+              <span className="watch-stat-item-value">${marketStats.totalTraded.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+            <div className="watch-stat-item">
+              <span className="watch-stat-item-label">Transactions</span>
+              <span className="watch-stat-item-value">{marketStats.transactions}</span>
+            </div>
+            <div className="watch-stat-item">
+              <span className="watch-stat-item-label">Avg. Price</span>
+              <span className="watch-stat-item-value">${marketStats.avgPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+          </div>
+          <div className="watch-stat-group">
+            <div className="watch-stat-item">
+              <span className="watch-stat-item-label">Active Investments</span>
+              <span className="watch-stat-item-value">{marketStats.activeInvestments}</span>
+            </div>
+            <div className="watch-stat-item">
+              <span className="watch-stat-item-label">Investment Returns</span>
+              <span className={`watch-stat-item-value ${marketStats.investmentReturns >= 0 ? 'positive' : ''}`}>
+                {marketStats.investmentReturns >= 0 ? '+' : ''}${marketStats.investmentReturns.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+            <div className="watch-stat-item">
+              <span className="watch-stat-item-label">Total Invested</span>
+              <span className="watch-stat-item-value">${marketStats.totalInvested.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+            <div className="watch-stat-item">
+              <span className="watch-stat-item-label">Avg. Return</span>
+              <span className={`watch-stat-item-value ${marketStats.avgReturn >= 0 ? 'positive' : ''}`}>
+                {marketStats.avgReturn >= 0 ? '+' : ''}{marketStats.avgReturn.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+          <div className="watch-stat-group">
+            <div className="watch-stat-item">
+              <span className="watch-stat-item-label">Success Rate</span>
+              <span className={`watch-stat-item-value ${marketStats.successRate >= 50 ? 'positive' : ''}`}>
+                {marketStats.successRate.toFixed(0)}%
+              </span>
+            </div>
+            <div className="watch-stat-item">
+              <span className="watch-stat-item-label">Net Worth</span>
+              <span className="watch-stat-item-value">${marketStats.netWorth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+            <div className="watch-stat-item">
+              <span className="watch-stat-item-label">ROI</span>
+              <span className={`watch-stat-item-value ${marketStats.roi >= 0 ? 'positive' : ''}`}>
+                {marketStats.roi >= 0 ? '+' : ''}{marketStats.roi.toFixed(1)}%
+              </span>
+            </div>
+            <div className="watch-stat-item">
+              <span className="watch-stat-item-label">Best Trade</span>
+              <span className={`watch-stat-item-value ${marketStats.bestTrade >= 0 ? 'positive' : ''}`}>
+                {marketStats.bestTrade >= 0 ? '+' : ''}{marketStats.bestTrade.toFixed(0)}%
+              </span>
+            </div>
+          </div>
         </div>
-        <div className="games-selection-grid">
-          {Object.values(GAMES_DATA).map(game => (
+
+        {/* Market Navigation */}
+        <div className="market-navigation">
+          <div className="market-nav-tabs">
+            <button 
+              className={`market-nav-tab ${marketView === 'browse' ? 'active' : ''}`}
+              onClick={() => setMarketView('browse')}
+            >
+              Market
+            </button>
+            <button 
+              className={`market-nav-tab ${marketView === 'petitions' ? 'active' : ''}`}
+              onClick={() => setMarketView('petitions')}
+            >
+              Petitions
+            </button>
+            <button 
+              className={`market-nav-tab ${marketView === 'featured' ? 'active' : ''}`}
+              onClick={() => setMarketView('featured')}
+            >
+              Featured
+            </button>
+            <button 
+              className={`market-nav-tab ${marketView === 'trending' ? 'active' : ''}`}
+              onClick={() => setMarketView('trending')}
+            >
+              Trending
+            </button>
+            <button 
+              className={`market-nav-tab ${marketView === 'favorites' ? 'active' : ''}`}
+              onClick={() => setMarketView('favorites')}
+            >
+              Watch
+            </button>
+          </div>
+        </div>
+
+        {/* Watch Analytics Dashboard */}
+        {marketView === 'favorites' && watchedGames.size > 0 ? (
+          <div className="watch-dashboard">
+            <h2 className="watch-dashboard-title">Watch Analytics</h2>
+            <div className="watch-analytics-grid">
+              {[...watchedGames].map(gameId => {
+                const game = gamesWithMarkets.find(g => g.id === gameId);
+                if (!game) return null;
+                const isExpanded = expandedCards.has(game.id);
+                return (
+                  <div 
+                    key={game.id} 
+                    className={`watch-analytics-card ${isExpanded ? 'expanded' : ''}`}
+                    onClick={() => {
+                      const newExpanded = new Set(expandedCards);
+                      if (newExpanded.has(game.id)) {
+                        newExpanded.delete(game.id);
+                      } else {
+                        newExpanded.add(game.id);
+                      }
+                      setExpandedCards(newExpanded);
+                    }}
+                  >
+                    <div className="watch-card-left">
+                      <img 
+                        src={game.image || game.cardImage || game.banner} 
+                        alt={game.name}
+                        className="watch-game-banner"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.nextSibling.style.display = 'flex';
+                        }}
+                      />
+                      <div className="watch-game-banner-placeholder" style={{ display: 'none' }}>
+                        <div className="watch-game-icon">{game.icon}</div>
+                      </div>
+                    </div>
+                    <div className="watch-card-right">
+                      <div className="watch-card-header">
+                        <div className="watch-card-header-left">
+                          <h3>{game.name}</h3>
+                          {investments[game.id] && (
+                            <span className="watch-investment-badge" title={`Invested: $${investments[game.id].amount}`}>
+                              💰 Invested
+                            </span>
+                          )}
+                        </div>
+                        <div className="watch-card-actions">
+                          <button 
+                            className="watch-remove-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleWatchGame(game.id, e);
+                            }}
+                            title="Remove from watchlist"
+                          >
+                            <Eye size={16} strokeWidth={2} />
+                          </button>
+                          <span className="watch-expand-arrow">{isExpanded ? '▼' : '▶'}</span>
+                        </div>
+                      </div>
+                      <div className="watch-charts-section">
+                        <div className="watch-chart-container">
+                          <div className="watch-chart-header">
+                            <span className="watch-chart-title">Price Trend (7D)</span>
+                            <span className="watch-chart-subtitle">Average $45.23</span>
+                          </div>
+                          <svg className="watch-line-chart" viewBox="0 0 400 180">
+                            <defs>
+                              <linearGradient id={`gradient-${game.id}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                                <stop offset="0%" style={{ stopColor: '#4a9eff', stopOpacity: 0.4 }} />
+                                <stop offset="100%" style={{ stopColor: '#4a9eff', stopOpacity: 0 }} />
+                              </linearGradient>
+                            </defs>
+                            <path
+                              d="M 0 160 Q 50 100, 100 60 T 200 70 T 300 65 T 400 50"
+                              fill={`url(#gradient-${game.id})`}
+                            />
+                            <polyline
+                              points="0,160 50,100 100,60 150,70 200,80 250,65 300,70 350,55 400,50"
+                              fill="none"
+                              stroke="#4a9eff"
+                              strokeWidth="2.5"
+                            />
+                          </svg>
+                        </div>
+                        <div className="watch-mini-charts">
+                          <div className="watch-mini-chart">
+                            <span className="watch-mini-label">Volume</span>
+                            <div className="watch-bar-chart">
+                              <div className="watch-bar" style={{ width: '72%' }}></div>
+                            </div>
+                            <span className="watch-mini-value">$2.1M</span>
+                          </div>
+                          <div className="watch-mini-chart">
+                            <span className="watch-mini-label">Listings</span>
+                            <div className="watch-bar-chart">
+                              <div className="watch-bar" style={{ width: '45%' }}></div>
+                            </div>
+                            <span className="watch-mini-value">1,234</span>
+                          </div>
+                        </div>
+                      </div>
+                      {isExpanded && (
+                        <div className="watch-stats-grid">
+                          <div className="watch-stat">
+                            <span className="watch-stat-label">Market Rank</span>
+                            <span className="watch-stat-value">#{game.marketRank || 1}</span>
+                          </div>
+                          <div className="watch-stat">
+                            <span className="watch-stat-label">Total Volume</span>
+                            <span className="watch-stat-value">{game.totalVolume || '$0'}</span>
+                          </div>
+                          <div className="watch-stat">
+                            <span className="watch-stat-label">24H Trend</span>
+                            <span className="watch-stat-value">{game.marketTrend || '+0%'}</span>
+                          </div>
+                          <div className="watch-stat">
+                            <span className="watch-stat-label">Active Listings</span>
+                            <span className="watch-stat-value">1,234</span>
+                          </div>
+                          <div className="watch-stat">
+                            <span className="watch-stat-label">Price Range</span>
+                            <span className="watch-stat-value">$3.25 - $89.99</span>
+                          </div>
+                          <div className="watch-stat">
+                            <span className="watch-stat-label">Avg. Price</span>
+                            <span className="watch-stat-value">$45.23</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : marketView === 'favorites' && watchedGames.size === 0 ? (
+          <div className="watch-empty-state">
+            <Eye size={48} style={{ opacity: 0.3, marginBottom: '16px' }} />
+            <h3>No watched games</h3>
+            <p>Add games to your watchlist to see analytics and trends</p>
+          </div>
+        ) : (
+          <div className="games-selection-grid">
+            {(() => {
+              let gamesToShow = marketView === 'petitions' ? gamesWithoutMarkets : gamesWithMarkets;
+            
+              return gamesToShow.map(game => {
+            const rankClass = game.marketRank <= 3 ? `rank-${game.marketRank}` : '';
+            const isWatched = watchedGames.has(game.id);
+            return (
             <div
               key={game.id}
-              className="game-select-card"
+              className={`game-select-card ${rankClass}`}
               onClick={() => {
-                if (gameId) {
-                  // If we're already in a game context, navigate back to game page first
-                  navigate(`/game/${game.id}/market`);
+                if (marketView === 'petitions') {
+                  // Handle petition signing
+                  handlePetitionSign(game.id);
                 } else {
-                  // If we're in general market, navigate to specific game market
-                  navigate(`/game/${game.id}/market`);
+                  if (gameId) {
+                    navigate(`/game/${game.id}/market`);
+                  } else {
+                    navigate(`/game/${game.id}/market`);
+                  }
                 }
               }}
             >
-              <div className="game-select-icon">{game.icon}</div>
-              <div className="game-select-name">{game.name}</div>
-              <div className="game-select-action">
-                {game.installed ? 'Open Marketplace' : 'Install & Browse'}
+              {/* Banner Section */}
+              <div className="game-select-banner">
+                <button 
+                  className={`game-select-watch-btn ${isWatched ? 'watched' : ''}`}
+                  onClick={(e) => handleWatchGame(game.id, e)}
+                  title={isWatched ? 'Remove from watchlist' : 'Add to watchlist'}
+                >
+                  {isWatched ? <Eye size={20} strokeWidth={3} /> : <EyeOff size={20} strokeWidth={3} />}
+                </button>
+                {game.image || game.cardImage ? (
+                  <img 
+                    src={game.image || game.cardImage} 
+                    alt={game.name}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'flex';
+                    }}
+                  />
+                ) : null}
+                <div className="game-select-banner-placeholder" style={{ display: game.image || game.cardImage ? 'none' : 'flex' }}>
+                  <div className="game-select-icon">{game.icon}</div>
+                </div>
+                <div style={{ position: 'absolute', bottom: '12px', left: '12px', right: '12px', zIndex: 2 }}>
+                  <div className="game-select-name">{game.name}</div>
+                  <div className="game-select-action">
+                    {marketView === 'petitions' ? (game.myToken ? 'Signed ✓' : 'Sign Petition') : (game.installed ? 'Open Marketplace' : 'Install & Browse')}
+                  </div>
+                </div>
               </div>
+
+              {/* Market Info Bar */}
+              {marketView === 'petitions' ? (
+                <div className="game-select-market-bar">
+                  <div className="game-select-market-stat">
+                    <div className="game-select-market-stat-value">{game.signatures?.toLocaleString() || '0'}</div>
+                    <div className="game-select-market-stat-label">SIGNATURES</div>
+                  </div>
+                  <div className="game-select-market-stat">
+                    <div className="game-select-market-stat-value">{game.myToken ? '1' : '0'}</div>
+                    <div className="game-select-market-stat-label">YOUR TOKEN</div>
+                  </div>
+                  <div className="game-select-market-stat">
+                    <div className="game-select-market-stat-value">{game.myToken ? '✓' : '○'}</div>
+                    <div className="game-select-market-stat-label">STATUS</div>
+                  </div>
+                </div>
+              ) : (
+                <div className="game-select-market-bar">
+                  <div className="game-select-market-stat">
+                    <div className="game-select-market-stat-value">
+                      #{game.marketRank || 1}
+                      {game.marketRank === 1 && <Crown size={16} style={{ marginLeft: '4px', color: '#FFD700' }} />}
+                    </div>
+                    <div className="game-select-market-stat-label">RANK</div>
+                  </div>
+                  <div className="game-select-market-stat">
+                    <div className="game-select-market-stat-value">{game.totalVolume || '$0'}</div>
+                    <div className="game-select-market-stat-label">volume</div>
+                  </div>
+                  <div className="game-select-market-stat">
+                    <div className="game-select-market-stat-value">{game.marketTrend || '+0%'}</div>
+                    <div className="game-select-market-stat-label">24H TREND</div>
+                  </div>
+                </div>
+              )}
             </div>
-          ))}
-        </div>
+          );
+            })
+            })()}
+          </div>
+        )
+      }
       </div>
     );
   }
@@ -496,6 +731,76 @@ const Market = () => {
 
   return (
     <div className="market">
+      {/* Market Statistics Bar - Always Visible at Top */}
+      <div className="watch-stats-overview">
+        <div className="watch-stat-group">
+          <div className="watch-stat-item">
+            <span className="watch-stat-item-label">Total Profit</span>
+            <span className={`watch-stat-item-value ${marketStats.totalProfit >= 0 ? 'positive' : ''}`}>
+              {marketStats.totalProfit >= 0 ? '+' : ''}${marketStats.totalProfit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div className="watch-stat-item">
+            <span className="watch-stat-item-label">Total Traded</span>
+            <span className="watch-stat-item-value">${marketStats.totalTraded.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+          <div className="watch-stat-item">
+            <span className="watch-stat-item-label">Transactions</span>
+            <span className="watch-stat-item-value">{marketStats.transactions}</span>
+          </div>
+          <div className="watch-stat-item">
+            <span className="watch-stat-item-label">Avg. Price</span>
+            <span className="watch-stat-item-value">${marketStats.avgPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+        </div>
+        <div className="watch-stat-group">
+          <div className="watch-stat-item">
+            <span className="watch-stat-item-label">Active Investments</span>
+            <span className="watch-stat-item-value">{marketStats.activeInvestments}</span>
+          </div>
+          <div className="watch-stat-item">
+            <span className="watch-stat-item-label">Investment Returns</span>
+            <span className={`watch-stat-item-value ${marketStats.investmentReturns >= 0 ? 'positive' : ''}`}>
+              {marketStats.investmentReturns >= 0 ? '+' : ''}${marketStats.investmentReturns.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+          <div className="watch-stat-item">
+            <span className="watch-stat-item-label">Total Invested</span>
+            <span className="watch-stat-item-value">${marketStats.totalInvested.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+          <div className="watch-stat-item">
+            <span className="watch-stat-item-label">Avg. Return</span>
+            <span className={`watch-stat-item-value ${marketStats.avgReturn >= 0 ? 'positive' : ''}`}>
+              {marketStats.avgReturn >= 0 ? '+' : ''}{marketStats.avgReturn.toFixed(1)}%
+            </span>
+          </div>
+        </div>
+        <div className="watch-stat-group">
+          <div className="watch-stat-item">
+            <span className="watch-stat-item-label">Success Rate</span>
+            <span className={`watch-stat-item-value ${marketStats.successRate >= 50 ? 'positive' : ''}`}>
+              {marketStats.successRate.toFixed(0)}%
+            </span>
+          </div>
+          <div className="watch-stat-item">
+            <span className="watch-stat-item-label">Net Worth</span>
+            <span className="watch-stat-item-value">${marketStats.netWorth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          </div>
+          <div className="watch-stat-item">
+            <span className="watch-stat-item-label">ROI</span>
+            <span className={`watch-stat-item-value ${marketStats.roi >= 0 ? 'positive' : ''}`}>
+              {marketStats.roi >= 0 ? '+' : ''}{marketStats.roi.toFixed(1)}%
+            </span>
+          </div>
+          <div className="watch-stat-item">
+            <span className="watch-stat-item-label">Best Trade</span>
+            <span className={`watch-stat-item-value ${marketStats.bestTrade >= 0 ? 'positive' : ''}`}>
+              {marketStats.bestTrade >= 0 ? '+' : ''}{marketStats.bestTrade.toFixed(0)}%
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Game Banner */}
       <div className="market-banner" style={{backgroundImage: `url(${selectedGame.image})`}}>
         <div className="banner-overlay"></div>

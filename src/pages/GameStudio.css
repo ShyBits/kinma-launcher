@@ -1593,6 +1593,11 @@ select.upload-input:disabled {
   font-weight: 400;
   outline: none;
   transition: all 0.2s ease;
+  pointer-events: auto !important;
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
 }
 
 .upload-input::placeholder,

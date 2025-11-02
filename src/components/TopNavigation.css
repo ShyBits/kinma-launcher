@@ -80,6 +80,7 @@
   position: relative;
   z-index: 50;
   min-width: 0;
+  gap: 0;
 }
 
 /* Left Section - Home Button */
@@ -87,7 +88,9 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  flex-shrink: 0;
 }
+
 
 
 .menu-toggle-btn {
@@ -136,6 +139,26 @@
   font-size: 15px;
   font-weight: 700;
   position: relative;
+}
+
+.home-btn > span {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.kinma-main {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.kinma-subtitle {
+  font-size: 18px;
+  font-weight: 400;
+  letter-spacing: -0.5px;
+  color: var(--text-secondary);
+  opacity: 0.8;
 }
 
 .home-btn:hover {

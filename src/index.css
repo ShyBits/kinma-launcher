@@ -12,6 +12,12 @@
   --accent-tertiary: #ffa726;
   --accent-success: #4caf50;
   --accent-error: #f44336;
+  /* Unified light blue for all download UI */
+  --download-blue: #93c5fd; /* light blue */
+  --download-blue-rgb: 147, 197, 253;
+  /* Yellow for update progress bars */
+  --update-yellow: #FFD700; /* gold/yellow */
+  --update-yellow-rgb: 255, 215, 0;
   
   --text-primary: #e5e5e5;
   --text-secondary: #b3b3b3;

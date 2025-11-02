@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation, Navig
 import TitleBar from './components/TitleBar';
 import TopNavigation from './components/TopNavigation';
 import SideBar from './components/SideBar';
-import SupportChat from './components/SupportChat';
 import Home from './pages/Home';
 import Library from './pages/Library';
 import GameStudio from './pages/GameStudio';
@@ -15,6 +14,9 @@ import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import GameStudioSettings from './pages/GameStudioSettings';
 import Game from './pages/Game';
+import DeveloperOnboarding from './pages/DeveloperOnboarding';
+import Auth from './pages/Auth';
+import oauthExample from './config/oauth.config.example.js';
 
 const AppContent = () => {
   const [currentPage, setCurrentPage] = useState('home');
@@ -28,6 +30,27 @@ const AppContent = () => {
 
   useEffect(() => {
     checkGameStatus();
+  }, []);
+
+  // Load OAuth config into electron store once (so main can read it)
+  useEffect(() => {
+    try {
+      const cfg = oauthExample; // if user created oauth.config.js, they can override at build-time
+      if (window.electronAPI) {
+        const store = (settings) => window.electronAPI.saveSettings && window.electronAPI.saveSettings({ ...settings, oauthConfig: cfg });
+        store({});
+      }
+    } catch (_) {}
+  }, []);
+
+  // Redirect to developer onboarding if intent was set during auth
+  useEffect(() => {
+    try {
+      const intent = localStorage.getItem('developerIntent');
+      if (intent === 'pending') {
+        navigate('/developer-onboarding');
+      }
+    } catch (_) {}
   }, []);
 
   const checkGameStatus = () => {
@@ -78,6 +101,8 @@ const AppContent = () => {
 
   const currentPageId = getCurrentPage();
 
+  // In main app window we assume auth completed (main window is opened after auth).
+
   const handleGameSelect = (gameId) => {
     setSelectedGame(gameId);
   };
@@ -90,21 +115,23 @@ const AppContent = () => {
   return (
     <div className="app">
       <TitleBar onToggleSidebar={toggleSidebar} />
-      <TopNavigation 
-        currentPage={currentPageId}
-        setCurrentPage={setCurrentPage}
-        navigate={navigate}
-        selectedGame={selectedGame}
-        isGameInstalled={isGameInstalled}
-        isUpdating={isUpdating}
-        updateProgress={updateProgress}
-        onPlayGame={handlePlayGame}
-        onUpdateGame={handleUpdateGame}
-        onToggleSidebar={toggleSidebar}
-        location={location}
-      />
+      {location.pathname !== '/auth' && (
+        <TopNavigation 
+          currentPage={currentPageId}
+          setCurrentPage={setCurrentPage}
+          navigate={navigate}
+          selectedGame={selectedGame}
+          isGameInstalled={isGameInstalled}
+          isUpdating={isUpdating}
+          updateProgress={updateProgress}
+          onPlayGame={handlePlayGame}
+          onUpdateGame={handleUpdateGame}
+          onToggleSidebar={toggleSidebar}
+          location={location}
+        />
+      )}
       <div className="app-layout">
-        {location.pathname !== '/game-studio' && location.pathname !== '/game-studio-settings' && (
+        {location.pathname !== '/auth' && location.pathname !== '/game-studio' && location.pathname !== '/game-studio-settings' && (
           <SideBar 
             currentGame={selectedGame}
             onGameSelect={handleGameSelect}
@@ -112,13 +139,14 @@ const AppContent = () => {
             isCollapsed={sidebarCollapsed}
           />
         )}
-        <div className="app-content-wrapper" style={{ width: (location.pathname === '/game-studio' || location.pathname === '/game-studio-settings') ? '100%' : 'auto' }}>
+        <div className="app-content-wrapper" style={{ width: (location.pathname === '/game-studio' || location.pathname === '/game-studio-settings' || location.pathname === '/auth') ? '100%' : 'auto' }}>
           <div className="main-content">
             <Routes>
               <Route path="/" element={<Navigate to="/library" replace />} />
+              <Route path="/auth" element={<Auth navigate={navigate} />} />
               <Route path="/library" element={<Library />} />
               <Route path="/game-studio" element={<GameStudio navigate={navigate} />} />
-              <Route path="/store" element={<Store />} />
+              <Route path="/store" element={<Store navigate={navigate} gamesData={{}} />} />
               <Route path="/friends" element={<Friends />} />
               <Route path="/market" element={<Market />} />
               <Route path="/game/:gameId/market" element={<Market />} />
@@ -126,13 +154,14 @@ const AppContent = () => {
               <Route path="/game/:gameId/community" element={<Community />} />
               <Route path="/profile" element={<Profile navigate={navigate} />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/developer-onboarding" element={<DeveloperOnboarding navigate={navigate} />} />
               <Route path="/game-studio-settings" element={<GameStudioSettings />} />
               <Route path="/game/:gameId" element={<Game />} />
             </Routes>
           </div>
         </div>
       </div>
-      <SupportChat />
+      
     </div>
   );
 };

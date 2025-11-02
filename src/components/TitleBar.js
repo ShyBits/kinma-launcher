@@ -84,44 +84,49 @@ const TitleBar = ({ onToggleSidebar }) => {
     }
   };
 
-  // Hide hamburger menu in Game Studio views
+  // Hide hamburger menu in Game Studio views; hide all left buttons on auth page
   const isGameStudio = location.pathname === '/game-studio' || location.pathname === '/game-studio-settings';
+  const isAuth = location.pathname === '/auth';
 
   return (
     <div className="title-bar">
       <div className="title-bar-content">
         <div className="title-bar-left">
-          {!isGameStudio && (
-            <button 
-              className="title-bar-button sidebar-menu" 
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (onToggleSidebar) {
-                  onToggleSidebar();
-                }
-              }}
-              title="Toggle Sidebar"
-            >
-              <Menu size={14} />
-            </button>
+          {!isAuth && (
+            <>
+              {!isGameStudio && (
+                <button 
+                  className="title-bar-button sidebar-menu" 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (onToggleSidebar) {
+                      onToggleSidebar();
+                    }
+                  }}
+                  title="Toggle Sidebar"
+                >
+                  <Menu size={14} />
+                </button>
+              )}
+              <button 
+                className={`title-bar-button nav-arrow ${!canGoBack ? 'disabled' : ''}`}
+                onClick={handleGoBack}
+                disabled={!canGoBack}
+                title="Back"
+              >
+                <ChevronLeft size={14} />
+              </button>
+              <button 
+                className={`title-bar-button nav-arrow ${!canGoForward ? 'disabled' : ''}`}
+                onClick={handleGoForward}
+                disabled={!canGoForward}
+                title="Forward"
+              >
+                <ChevronRight size={14} />
+              </button>
+            </>
           )}
-          <button 
-            className={`title-bar-button nav-arrow ${!canGoBack ? 'disabled' : ''}`}
-            onClick={handleGoBack}
-            disabled={!canGoBack}
-            title="Back"
-          >
-            <ChevronLeft size={14} />
-          </button>
-          <button 
-            className={`title-bar-button nav-arrow ${!canGoForward ? 'disabled' : ''}`}
-            onClick={handleGoForward}
-            disabled={!canGoForward}
-            title="Forward"
-          >
-            <ChevronRight size={14} />
-          </button>
         </div>
         <div className="title-bar-right">
           <button className="title-bar-button minimize" onClick={minimizeWindow}>
