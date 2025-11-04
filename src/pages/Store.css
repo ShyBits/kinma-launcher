@@ -35,7 +35,7 @@
   background: rgba(255, 255, 255, 0.05);
   border: 2px solid rgba(255, 255, 255, 0.1);
   border-radius: 14px;
-  color: white;
+  color: #ffffff;
   font-size: 16px;
   outline: none;
   transition: all 0.3s;
@@ -70,7 +70,7 @@
 
 .store-search-clear:hover {
   background: rgba(255, 255, 255, 0.1);
-  color: white;
+  color: #ffffff;
 }
 
 /* Search Results */
@@ -81,7 +81,7 @@
 .store-search-results-title {
   font-size: 20px;
   font-weight: 600;
-  color: white;
+  color: #ffffff;
   margin: 0 0 20px 0;
 }
 
@@ -132,7 +132,7 @@
 .store-search-info h3 {
   font-size: 16px;
   font-weight: 600;
-  color: white;
+  color: #ffffff;
   margin: 0 0 6px 0;
 }
 
@@ -172,7 +172,7 @@
 .patch-notes-header h2 {
   font-size: 28px;
   font-weight: 700;
-  color: white;
+  color: #ffffff;
   margin: 0;
 }
 
@@ -271,7 +271,7 @@
 
 .patch-change span:last-child {
   flex: 1;
-  color: white;
+  color: #ffffff;
 }
 
 /* Featured Section */
@@ -326,7 +326,7 @@
 .featured-placeholder {
   font-size: 120px;
   opacity: 0.3;
-  color: white;
+  color: #ffffff;
 }
 
 .featured-overlay {
@@ -516,7 +516,7 @@
 .favorite-btn.favorited {
   background: #ef4444;
   border-color: #ef4444;
-  color: white;
+  color: #ffffff;
   box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
 }
 
@@ -530,7 +530,7 @@
   background: rgba(0, 0, 0, 0.6);
   border: 2px solid rgba(255, 255, 255, 0.2);
   border-radius: 50%;
-  color: white;
+  color: #ffffff;
   font-size: 20px;
   font-weight: bold;
   cursor: pointer;
@@ -593,7 +593,7 @@
 }
 
 .indicator.active {
-  background: white;
+  background: #ffffff;
   transform: scale(1.2);
 }
 
@@ -658,7 +658,7 @@
 
 .view-mode-btn.active {
   background: var(--gradient-primary);
-  color: white;
+  color: #ffffff;
   border-color: var(--accent-primary);
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
 }
@@ -683,7 +683,7 @@
 }
 
 .category-btn.active {
-  color: white;
+  color: #ffffff;
   border-color: var(--accent-primary);
   background: var(--gradient-primary);
   box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
@@ -811,7 +811,7 @@
 .game-placeholder {
   font-size: 48px;
   opacity: 0.8;
-  color: white;
+  color: #ffffff;
 }
 
 .games-grid.grid-view .game-placeholder {
@@ -921,7 +921,7 @@
 
 .game-tag:hover {
   background: var(--accent-primary);
-  color: white;
+  color: #ffffff;
   border-color: var(--accent-primary);
 }
 
@@ -941,7 +941,7 @@
 .game-action-btn {
   padding: 12px 24px;
   background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-  color: white;
+  color: #ffffff;
   border: none;
   border-radius: 25px;
   font-size: 15px;
@@ -1134,7 +1134,7 @@
 
 .filter-option:hover {
   background: rgba(255, 255, 255, 0.05);
-  color: white;
+  color: #ffffff;
   border-color: rgba(255, 255, 255, 0.05);
 }
 
@@ -1180,7 +1180,7 @@
   background: transparent;
   border: none;
   border-bottom: 2px solid rgba(255, 255, 255, 0.2);
-  color: white;
+  color: #ffffff;
   font-size: 14px;
   outline: none;
   transition: all 0.3s;
@@ -1218,7 +1218,7 @@
 
 .taskbar-search-clear:hover {
   background: rgba(255, 255, 255, 0.1);
-  color: white;
+  color: #ffffff;
 }
 
 .taskbar-btn {
@@ -1262,7 +1262,7 @@
 
 .taskbar-btn-grid:hover {
   background: rgba(255, 255, 255, 0.15);
-  color: white;
+  color: #ffffff;
   border-color: rgba(255, 255, 255, 0.5);
 }
 
@@ -1398,7 +1398,7 @@
 }
 
 .discover-title {
-  color: white;
+  color: #ffffff;
   font-size: 14px;
   font-weight: 600;
   white-space: nowrap;

@@ -277,7 +277,8 @@ body.account-switcher-loading-active .title-bar {
     border: 4px solid rgba(255, 255, 255, 0.3);
     border-radius: 50%;
     position: relative;
-    animation: accountSwitcherSpin 2.5s linear infinite;
+    /* Keep the circle static; only the arc (::before) rotates */
+    animation: none;
 }
 
 .account-switcher-loading-circle::before {
@@ -309,7 +310,8 @@ body.account-switcher-loading-active .title-bar {
     display: flex;
     align-items: center;
     justify-content: center;
-    animation: accountSwitcherCounterRotate 1s linear infinite;
+    /* Do not rotate name/avatar */
+    animation: none;
     pointer-events: none;
 }
 

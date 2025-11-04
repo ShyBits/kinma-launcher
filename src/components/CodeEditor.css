@@ -1,0 +1,238 @@
+/* Code Editor Component */
+.code-editor-wrapper {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: rgba(15, 17, 21, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.code-editor-wrapper:focus-within {
+  border-color: rgba(74, 158, 255, 0.4);
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.1), 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+
+.code-editor-highlight {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 20px 24px;
+  background: transparent;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+  box-sizing: border-box;
+  border-radius: 8px;
+}
+
+.code-editor-highlight pre {
+  margin: 0;
+  padding: 0;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre;
+  word-wrap: normal;
+  overflow-wrap: normal;
+  tab-size: 2;
+  -moz-tab-size: 2;
+  display: block;
+  position: relative;
+}
+
+.code-editor-highlight code {
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #e5e5e5;
+  display: block;
+}
+
+.code-editor-highlight code * {
+  color: inherit;
+}
+
+/* Ensure highlighting spans override the default text color */
+.code-editor-highlight .code-tag {
+  color: #569cd6 !important;
+}
+
+.code-editor-highlight .code-tag-error {
+  color: #f48771 !important;
+  background-color: rgba(244, 135, 113, 0.15) !important;
+  border-bottom: 1px solid rgba(244, 135, 113, 0.5) !important;
+  text-decoration: underline wavy !important;
+  text-decoration-color: #f48771 !important;
+}
+
+.code-editor-highlight .code-attr {
+  color: #92c5f7 !important;
+}
+
+.code-editor-highlight .code-string {
+  color: #ce9178 !important;
+}
+
+.code-editor-highlight .code-comment {
+  color: #6a9955 !important;
+  font-style: italic;
+}
+
+.code-editor-highlight .code-keyword {
+  color: #569cd6 !important;
+  font-weight: 600 !important;
+}
+
+.code-editor-highlight .code-number {
+  color: #b5cea8 !important;
+}
+
+.code-editor-highlight .code-function {
+  color: #dcdcaa !important;
+}
+
+.code-editor-highlight .code-selector {
+  color: #d7ba7d !important;
+}
+
+.code-editor-highlight .code-property {
+  color: #9cdcfe !important;
+}
+
+.code-editor-highlight .code-value {
+  color: #ce9178 !important;
+}
+
+.code-editor-highlight .code-brace-error {
+  color: #f48771 !important;
+  background-color: rgba(244, 135, 113, 0.15) !important;
+  border-bottom: 1px solid rgba(244, 135, 113, 0.5) !important;
+  text-decoration: underline wavy !important;
+  text-decoration-color: #f48771 !important;
+}
+
+.code-editor-textarea {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+  padding: 20px 24px;
+  margin: 0;
+  background: transparent;
+  border: none;
+  color: transparent !important;
+  caret-color: #4a9eff;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: none;
+  outline: none;
+  pointer-events: auto;
+  overflow: auto;
+  z-index: 2;
+  tab-size: 2;
+  -moz-tab-size: 2;
+  white-space: pre;
+  word-wrap: normal;
+  overflow-wrap: normal;
+  box-sizing: border-box;
+  border-radius: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.code-editor-textarea::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.code-editor-textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.code-editor-textarea::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.code-editor-textarea::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.code-editor-textarea::placeholder {
+  color: #666;
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.code-editor-textarea::selection {
+  background: rgba(74, 158, 255, 0.4);
+  color: inherit;
+  -webkit-text-fill-color: inherit;
+}
+
+.code-editor-textarea::-moz-selection {
+  background: rgba(74, 158, 255, 0.4);
+  color: inherit;
+}
+
+.code-editor-textarea:focus {
+  outline: none;
+}
+
+/* Syntax Highlighting Colors - VS Code Dark Theme Style */
+.code-tag {
+  color: #569cd6;
+}
+
+.code-attr {
+  color: #92c5f7;
+}
+
+.code-string {
+  color: #ce9178;
+}
+
+.code-comment {
+  color: #6a9955;
+  font-style: italic;
+}
+
+.code-keyword {
+  color: #569cd6;
+  font-weight: 600;
+}
+
+.code-number {
+  color: #b5cea8;
+}
+
+.code-function {
+  color: #dcdcaa;
+}
+
+.code-selector {
+  color: #d7ba7d;
+}
+
+.code-property {
+  color: #9cdcfe;
+}
+
+.code-value {
+  color: #ce9178;
+}
+

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Filter, MessageSquare, Star } from 'lucide-react';
+import { Filter, Award } from 'lucide-react';
 import { getUserData, saveUserData, getUserScopedKey } from '../utils/UserDataManager';
 import './Library.css';
 
@@ -9,17 +9,12 @@ const Library = () => {
   const [iconSize, setIconSize] = useState(180);
   const [filterMenuOpen, setFilterMenuOpen] = useState(false);
 
-  const getRatingColor = (rating) => {
-    const numRating = Math.round(rating);
-    if (numRating >= 5) return '#FFD700'; // Gold
-    if (numRating === 4) return '#FFB800'; // Yellow-orange
-    if (numRating === 3) return '#FF9500'; // Orange
-    if (numRating === 2) return '#FF6B00'; // Dark orange
-    if (numRating === 1) return '#FF4444'; // Red-orange
-    return 'rgba(255,255,255,0.3)';
-  };
+  // Rating removed in favor of user-specific stats
 
   const [customGames, setCustomGames] = useState([]);
+  const [playingMap, setPlayingMap] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('playingGames') || '{}'); } catch (_) { return {}; }
+  });
 
   useEffect(() => {
     const load = () => {
@@ -48,10 +43,17 @@ const Library = () => {
     const handleUserChange = () => load();
     window.addEventListener('user-changed', handleUserChange);
     
+    // Listen for game play/stop to reflect "Currently playing"
+    const onGameStatus = () => {
+      try { setPlayingMap(JSON.parse(localStorage.getItem('playingGames') || '{}')); } catch (_) {}
+    };
+    window.addEventListener('gameStatusChanged', onGameStatus);
+
     return () => {
       window.removeEventListener('customGameUpdate', handler);
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('user-changed', handleUserChange);
+      window.removeEventListener('gameStatusChanged', onGameStatus);
     };
   }, []);
 
@@ -76,6 +78,79 @@ const Library = () => {
       Math.abs(curr - value) < Math.abs(prev - value) ? curr : prev
     );
     setIconSize(step);
+  };
+
+  // Format last played time with relative stages
+  const formatLastPlayed = (timestamp) => {
+    if (!timestamp) return 'never';
+    
+    try {
+      // Support both old format (lastPlayed string) and new format (lastPlayedTimestamp ISO string)
+      const playedDate = typeof timestamp === 'string' && timestamp.includes('T') 
+        ? new Date(timestamp) 
+        : typeof timestamp === 'string' 
+        ? new Date(timestamp) // Try parsing old format
+        : new Date(timestamp);
+      
+      if (isNaN(playedDate.getTime())) return 'never';
+      
+      const now = new Date();
+      const diffMs = now - playedDate;
+      const diffSec = Math.floor(diffMs / 1000);
+      const diffMin = Math.floor(diffSec / 60);
+      const diffHours = Math.floor(diffMin / 60);
+      const diffDays = Math.floor(diffHours / 24);
+      
+      // Just now (< 1 minute)
+      if (diffSec < 60) return 'just now';
+      
+      // Minutes: show specific thresholds, then exact minutes
+      if (diffMin < 60) {
+        if (diffMin <= 5) return '5 min ago';
+        if (diffMin <= 10) return '10 min ago';
+        if (diffMin <= 30) return '30 min ago';
+        return `${diffMin} min ago`;
+      }
+      
+      // Hours: "1h ago", "2h ago", etc.
+      if (diffHours < 24) {
+        return `${diffHours}h ago`;
+      }
+      
+      // Yesterday (24 hours to less than 48 hours)
+      if (diffHours >= 24 && diffHours < 48) {
+        return 'yesterday';
+      }
+      
+      // After 48 hours: show date
+      const playedYear = playedDate.getFullYear();
+      const currentYear = now.getFullYear();
+      
+      // Month names
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const day = playedDate.getDate();
+      const month = monthNames[playedDate.getMonth()];
+      
+      // Same year: "DD. MM"
+      if (playedYear === currentYear) {
+        return `${day}. ${month}`;
+      }
+      
+      // Different year: "DD. MM. YYYY"
+      return `${day}. ${month}. ${playedYear}`;
+    } catch (error) {
+      return 'never';
+    }
+  };
+
+  // Format total playtime from seconds to a compact string
+  const formatPlaytime = (seconds) => {
+    const totalSec = Number(seconds || 0);
+    const hours = Math.floor(totalSec / 3600);
+    const minutes = Math.floor((totalSec % 3600) / 60);
+    if (hours <= 0) return `${minutes}m`;
+    if (minutes === 0) return `${hours}h`;
+    return `${hours}h ${minutes}m`;
   };
 
   const LibraryGameCard = ({ game, iconSize }) => {
@@ -103,13 +178,13 @@ const Library = () => {
 
     // Calculate sizes based on icon size (scale factor)
     const scaleFactor = iconSize / 180; // 180 is the base/default size
-    const fontSize = Math.round(13 * scaleFactor);
-    const iconSizeScaled = Math.round(13 * scaleFactor);
+    const fontSize = Math.round(14 * scaleFactor); // larger playtime
+    const iconSizeScaled = Math.round(14 * scaleFactor);
 
     return (
       <div 
         ref={cardRef}
-        className="library-game-card"
+        className={`library-game-card ${playingMap[game.id] ? 'currently-playing' : ''}`}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
         style={{
@@ -125,19 +200,24 @@ const Library = () => {
           <div className="library-banner-placeholder" style={{display: 'none'}}>
             <div className="placeholder-icon">🎮</div>
           </div>
-        </div>
-        <div className="library-card-footer">
-          <div className="library-rating" style={{ color: getRatingColor(game.rating) }}>
-            <Star size={iconSizeScaled} color="currentColor" fill="currentColor" />
-            <span style={{ fontSize: `${fontSize}px` }}>{game.rating}</span>
+          <div className="library-achievements-badge" title="Achievements">
+            <Award size={iconSizeScaled} />
+            <span className="achievements-count">{(game.achievementsUnlocked ?? 0)}/{(game.totalAchievements ?? 0)}</span>
           </div>
-          <button 
-            className="library-comments-btn"
-            onClick={(e) => handleCommentsClick(e, game.id)}
-          >
-            <MessageSquare size={Math.round(14 * scaleFactor)} color="#ffffff" fill="#ffffff" strokeWidth={0} />
-            <span style={{ fontSize: `${Math.round(12 * scaleFactor)}px` }}> {game.commentCount.toLocaleString()}</span>
-          </button>
+        </div>
+          <div className="library-card-footer">
+          <div className="library-play-meta">
+            <span className="playtime" style={{ fontSize: `${fontSize}px` }}>{formatPlaytime(game.playtimeSeconds) || game.playTime || '0h'}</span>
+            <span
+              className={`last-played ${playingMap[game.id] ? 'playing' : ''}`}
+              style={{ fontSize: `${Math.max(12, fontSize - 1)}px` }}
+            >
+              {playingMap[game.id]
+                ? 'Currently playing'
+                : `Last played: ${formatLastPlayed(game.lastPlayedTimestamp || game.lastPlayed)}`}
+            </span>
+          </div>
+          {/* comments button removed */}
         </div>
       </div>
     );
@@ -150,10 +230,13 @@ const Library = () => {
       id: g.gameId,
       name: g.name || 'Untitled Game',
       banner: g.banner || g.bannerImage || g.fullFormData?.bannerImage || g.card || g.cardImage || '/public/images/games/pathline-banner.jpg',
+      playtimeSeconds: g.playtimeSeconds || 0,
       playTime: g.playtime || '0h',
-      lastPlayed: g.lastPlayed || 'Never',
+      lastPlayedTimestamp: g.lastPlayedTimestamp || g.lastPlayed || null, // Support both old and new format
+      lastPlayed: g.lastPlayed || null, // Keep for backward compatibility
       isInstalled: true,
-      rating: g.rating || 0,
+      achievementsUnlocked: g.achievementsUnlocked || 0,
+      totalAchievements: g.totalAchievements || 0,
       commentCount: g.commentCount || 0,
     }))
   ];

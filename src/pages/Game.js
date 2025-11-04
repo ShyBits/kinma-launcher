@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { getUserData, getUserScopedKey } from '../utils/UserDataManager';
+import { getUserData, getUserScopedKey, saveUserData } from '../utils/UserDataManager';
 import { setSpeed as setGlobalDownloadSpeed, clearSpeed as clearGlobalDownloadSpeed, subscribe as subscribeDownloadSpeed, setPaused as setGlobalPaused, getPaused as getGlobalPaused, startDownload as startGlobalDownload, stopDownload as stopGlobalDownload } from '../utils/DownloadSpeedStore';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Star, Users, TrendingUp, TrendingDown, Clock, Download, Play, MessageSquare, ShoppingCart, Image as ImageIcon, X, Settings, Info, FolderOpen, Trash2, EyeOff, RefreshCw, HardDrive, Activity, Save, Download as DownloadIcon, Package, Calendar, Check, ChevronUp, ChevronDown, ArrowDownUp, Pause } from 'lucide-react';
@@ -37,6 +37,7 @@ const Game = () => {
   const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadSpeed, setDownloadSpeed] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const playtimeIntervalRef = useRef(null);
   const [speedHistory, setSpeedHistory] = useState([]);
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [graphScale, setGraphScale] = useState({ min: 0, max: 3 }); // Fixed scale
@@ -109,6 +110,12 @@ const Game = () => {
   });
   const [newRatingComment, setNewRatingComment] = useState('');
   const [selectedStars, setSelectedStars] = useState(0);
+  
+  // Graph and player tracking state
+  const [showLastPlayedHistory, setShowLastPlayedHistory] = useState(false);
+  const [lastPlayedHistory, setLastPlayedHistory] = useState([]);
+  const [showCurrentPlayingGraph, setShowCurrentPlayingGraph] = useState(false);
+  const [currentPlayers, setCurrentPlayers] = useState(0);
 
   const [comments, setComments] = useState(() => {
     const gameComments = {
@@ -613,6 +620,24 @@ const Game = () => {
     localStorage.setItem(`game_${gameId}_state`, JSON.stringify(gameStateToSave));
   }, [isDownloaded, isDownloading, gameId, downloadProgress]);
 
+  // Update current players every 5 minutes
+  useEffect(() => {
+    const updateCurrentPlayers = () => {
+      const now = new Date();
+      const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+      const recentPlayers = (lastPlayedHistory || []).filter(ts => new Date(ts) >= fiveMinutesAgo);
+      setCurrentPlayers(recentPlayers.length);
+    };
+    
+    // Initial update
+    updateCurrentPlayers();
+    
+    // Update every 5 minutes
+    const interval = setInterval(updateCurrentPlayers, 5 * 60 * 1000);
+    
+    return () => clearInterval(interval);
+  }, [lastPlayedHistory]);
+
   // Listen for game status changes (update events from sidebar)
   useEffect(() => {
     const handleGameStatusChange = (e) => {
@@ -758,14 +783,369 @@ const Game = () => {
     localStorage.setItem(`game_${gameId}_state`, JSON.stringify(gameStateToSave));
   };
 
+  const [playStats, setPlayStats] = useState({ playtimeSeconds: 0, lastPlayedTimestamp: null });
+  const [playerbaseTrend, setPlayerbaseTrend] = useState(0); // percent vs previous 30 days
+  const [showPlayerbaseGraph, setShowPlayerbaseGraph] = useState(false);
+  const [graphRange, setGraphRange] = useState('day'); // 'day' | 'week' | 'month' | 'year'
+  const [currentGraphTooltip, setCurrentGraphTooltip] = useState(null); // { x, y, label, value }
+  const [playerbaseGraphTooltip, setPlayerbaseGraphTooltip] = useState(null);
+  const [currentHoveredIndex, setCurrentHoveredIndex] = useState(null);
+  const [playerbaseHoveredIndex, setPlayerbaseHoveredIndex] = useState(null);
+
+  const formatPlaytime = (seconds) => {
+    const totalSec = Number(seconds || 0);
+    const hours = Math.floor(totalSec / 3600);
+    const minutes = Math.floor((totalSec % 3600) / 60);
+    if (hours <= 0) return `${minutes}m`;
+    if (minutes === 0) return `${hours}h`;
+    return `${hours}h ${minutes}m`;
+  };
+
+  const formatLastPlayed = (timestamp) => {
+    if (!timestamp) return 'never';
+    try {
+      const playedDate = new Date(timestamp);
+      if (isNaN(playedDate.getTime())) return 'never';
+      const now = new Date();
+      const diffMs = now - playedDate;
+      const diffSec = Math.floor(diffMs / 1000);
+      const diffMin = Math.floor(diffSec / 60);
+      const diffHours = Math.floor(diffMin / 60);
+      if (diffSec < 60) return 'just now';
+      if (diffMin < 60) {
+        if (diffMin <= 5) return '5 min ago';
+        if (diffMin <= 10) return '10 min ago';
+        if (diffMin <= 30) return '30 min ago';
+        return `${diffMin} min ago`;
+      }
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffHours >= 24 && diffHours < 48) return 'yesterday';
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const day = playedDate.getDate();
+      const month = monthNames[playedDate.getMonth()];
+      if (playedDate.getFullYear() === now.getFullYear()) return `${day}. ${month}`;
+      return `${day}. ${month}. ${playedDate.getFullYear()}`;
+    } catch (_) {
+      return 'never';
+    }
+  };
+
+  const formatCompactNumber = (num) => {
+    try {
+      return new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(num || 0);
+    } catch (_) {
+      const n = Number(num || 0);
+      if (n >= 1_000_000) return (n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1) + 'M';
+      if (n >= 1_000) return (n / 1_000).toFixed(n % 1_000 === 0 ? 0 : 1) + 'k';
+      return String(n);
+    }
+  };
+
+  const recordPlayerbaseSession = (list, idx, nowIso) => {
+    // Add a session timestamp (used for 30d trend)
+    const history = Array.isArray(list[idx]?.playerbaseHistory) ? list[idx].playerbaseHistory : [];
+    const newHistory = [...history, nowIso];
+    // Keep only last 90 days to limit growth
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 90);
+    const trimmed = newHistory.filter(ts => new Date(ts) >= cutoff);
+    list[idx] = { ...list[idx], playerbaseHistory: trimmed };
+  };
+
+  const computePlayerbaseTrend = (entry) => {
+    const history = Array.isArray(entry?.playerbaseHistory) ? entry.playerbaseHistory : [];
+    const now = new Date();
+    const d30 = new Date(now); d30.setDate(now.getDate() - 30);
+    const d60 = new Date(now); d60.setDate(now.getDate() - 60);
+    let current30 = 0, previous30 = 0;
+    for (const ts of history) {
+      const t = new Date(ts);
+      if (t >= d30 && t <= now) current30++;
+      else if (t >= d60 && t < d30) previous30++;
+    }
+    if (previous30 === 0) return current30 > 0 ? 100 : 0;
+    const pct = Math.round(((current30 - previous30) / previous30) * 100);
+    return pct;
+  };
+
+  const getCurrentPlayingGraphSeries = (range) => {
+    const history = lastPlayedHistory || [];
+    const now = new Date();
+    const series = [];
+    if (range === 'day') {
+      // Last 24 hours from now, split into 24 hourly buckets
+      const start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const buckets = new Array(24).fill(0);
+      history.forEach(ts => {
+        const d = new Date(ts);
+        if (d >= start && d <= now) {
+          const hoursAgo = (now - d) / (60 * 60 * 1000);
+          const bucketIdx = 23 - Math.floor(hoursAgo);
+          if (bucketIdx >= 0 && bucketIdx < 24) buckets[bucketIdx] = 1;
+        }
+      });
+      for (let i = 0; i < 24; i++) {
+        const hourTime = new Date(now.getTime() - (23 - i) * 60 * 60 * 1000);
+        series.push({ label: String(hourTime.getHours()), value: buckets[i] });
+      }
+    } else if (range === 'week') {
+      // Last 7 days from now, split into 7 daily buckets
+      const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const buckets = new Array(7).fill(0);
+      history.forEach(ts => {
+        const d = new Date(ts);
+        if (d >= start && d <= now) {
+          const daysAgo = Math.floor((now - d) / (24 * 60 * 60 * 1000));
+          const bucketIdx = 6 - daysAgo;
+          if (bucketIdx >= 0 && bucketIdx < 7) buckets[bucketIdx] = 1;
+        }
+      });
+      const weekDays = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+      for (let i = 0; i < 7; i++) {
+        const dayTime = new Date(now.getTime() - (6 - i) * 24 * 60 * 60 * 1000);
+        const dayIdx = dayTime.getDay();
+        const weekDayIdx = dayIdx === 0 ? 6 : dayIdx - 1;
+        series.push({ label: weekDays[weekDayIdx], value: buckets[i] });
+      }
+    } else if (range === 'month') {
+      // Last 30 days from now, split into 30 daily buckets
+      const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const buckets = new Array(30).fill(0);
+      history.forEach(ts => {
+        const d = new Date(ts);
+        if (d >= start && d <= now) {
+          const daysAgo = Math.floor((now - d) / (24 * 60 * 60 * 1000));
+          const bucketIdx = 29 - daysAgo;
+          if (bucketIdx >= 0 && bucketIdx < 30) buckets[bucketIdx] = 1;
+        }
+      });
+      for (let i = 0; i < 30; i++) {
+        const dayTime = new Date(now.getTime() - (29 - i) * 24 * 60 * 60 * 1000);
+        series.push({ label: String(dayTime.getDate()), value: buckets[i] });
+      }
+    } else {
+      // Last 12 months from now, split into 12 monthly buckets
+      const start = new Date(now);
+      start.setMonth(start.getMonth() - 12);
+      const buckets = new Array(12).fill(0);
+      history.forEach(ts => {
+        const d = new Date(ts);
+        if (d >= start && d <= now) {
+          const monthsAgo = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
+          const bucketIdx = 11 - monthsAgo;
+          if (bucketIdx >= 0 && bucketIdx < 12) buckets[bucketIdx] = 1;
+        }
+      });
+      const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      for (let i = 0; i < 12; i++) {
+        const monthTime = new Date(now);
+        monthTime.setMonth(monthTime.getMonth() - (11 - i));
+        series.push({ label: monthNames[monthTime.getMonth()], value: buckets[i] });
+      }
+    }
+    return series;
+  };
+
+  const getPlayerbaseGraphSeries = (range) => {
+    try {
+      const entry = Array.isArray(getUserData('customGames', [])) 
+        ? getUserData('customGames', []).find(g => String(g.gameId) === String(gameId)) 
+        : null;
+      const history = Array.isArray(entry?.playerbaseHistory) ? entry.playerbaseHistory : [];
+      const now = new Date();
+      const series = [];
+    if (range === 'day') {
+      // Last 24 hours from now, split into 24 hourly buckets
+      const start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const buckets = new Array(24).fill(0);
+      history.forEach(ts => {
+        const d = new Date(ts);
+        if (d >= start && d <= now) {
+          const hoursAgo = (now - d) / (60 * 60 * 1000);
+          const bucketIdx = 23 - Math.floor(hoursAgo);
+          if (bucketIdx >= 0 && bucketIdx < 24) buckets[bucketIdx]++;
+        }
+      });
+      for (let i = 0; i < 24; i++) {
+        const hourTime = new Date(now.getTime() - (23 - i) * 60 * 60 * 1000);
+        series.push({ label: String(hourTime.getHours()), value: buckets[i] });
+      }
+    } else if (range === 'week') {
+      // Last 7 days from now, split into 7 daily buckets
+      const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const buckets = new Array(7).fill(0);
+      history.forEach(ts => {
+        const d = new Date(ts);
+        if (d >= start && d <= now) {
+          const daysAgo = Math.floor((now - d) / (24 * 60 * 60 * 1000));
+          const bucketIdx = 6 - daysAgo;
+          if (bucketIdx >= 0 && bucketIdx < 7) buckets[bucketIdx]++;
+        }
+      });
+      const weekDays = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+      for (let i = 0; i < 7; i++) {
+        const dayTime = new Date(now.getTime() - (6 - i) * 24 * 60 * 60 * 1000);
+        const dayIdx = dayTime.getDay();
+        const weekDayIdx = dayIdx === 0 ? 6 : dayIdx - 1;
+        series.push({ label: weekDays[weekDayIdx], value: buckets[i] });
+      }
+    } else if (range === 'month') {
+      // Last 30 days from now, split into 30 daily buckets
+      const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      const buckets = new Array(30).fill(0);
+      history.forEach(ts => {
+        const d = new Date(ts);
+        if (d >= start && d <= now) {
+          const daysAgo = Math.floor((now - d) / (24 * 60 * 60 * 1000));
+          const bucketIdx = 29 - daysAgo;
+          if (bucketIdx >= 0 && bucketIdx < 30) buckets[bucketIdx]++;
+        }
+      });
+      for (let i = 0; i < 30; i++) {
+        const dayTime = new Date(now.getTime() - (29 - i) * 24 * 60 * 60 * 1000);
+        series.push({ label: String(dayTime.getDate()), value: buckets[i] });
+      }
+    } else {
+      // Last 12 months from now, split into 12 monthly buckets
+      const start = new Date(now);
+      start.setMonth(start.getMonth() - 12);
+      const buckets = new Array(12).fill(0);
+      history.forEach(ts => {
+        const d = new Date(ts);
+        if (d >= start && d <= now) {
+          const monthsAgo = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
+          const bucketIdx = 11 - monthsAgo;
+          if (bucketIdx >= 0 && bucketIdx < 12) buckets[bucketIdx]++;
+        }
+      });
+      const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      for (let i = 0; i < 12; i++) {
+        const monthTime = new Date(now);
+        monthTime.setMonth(monthTime.getMonth() - (11 - i));
+        series.push({ label: monthNames[monthTime.getMonth()], value: buckets[i] });
+      }
+    }
+    return series;
+    } catch (_) { return []; }
+  };
+
+  const appendLastPlayedEntry = (list, idx, nowIso) => {
+    const history = Array.isArray(list[idx]?.lastPlayedHistory) ? list[idx].lastPlayedHistory : [];
+    const newHistory = [nowIso, ...history];
+    const trimmed = newHistory.slice(0, 50);
+    list[idx] = { ...list[idx], lastPlayedHistory: trimmed };
+  };
+
+  const commitPlaytimeChunks = (force = false) => {
+    try {
+      const startKey = getUserScopedKey(`game_${gameId}_playStart`);
+      const startIso = localStorage.getItem(startKey);
+      if (!startIso) return;
+      const now = new Date();
+      const start = new Date(startIso);
+      const elapsedSec = Math.max(0, Math.floor((now - start) / 1000));
+      const chunk = 300; // 5 minutes
+
+      // Determine how many 5m steps the total playtime crossed since session start
+      const userGames = Array.isArray(getUserData('customGames', [])) ? getUserData('customGames', []) : [];
+      let idx = userGames.findIndex((g) => String(g.gameId) === String(gameId));
+      if (idx === -1) {
+        userGames.push({ gameId, playtimeSeconds: 0 });
+        idx = userGames.length - 1;
+      }
+      const baseSec = Number(userGames[idx].playtimeSeconds || 0);
+      const totalSec = baseSec + elapsedSec;
+      // Find the next 5-minute boundary from the current stored playtime
+      // If exactly on boundary, move to next boundary
+      const currentBoundary = Math.floor(baseSec / chunk) * chunk;
+      const nextBoundary = (baseSec % chunk === 0 && baseSec > 0) 
+        ? currentBoundary + chunk  // Already on boundary, target next one
+        : Math.ceil(baseSec / chunk) * chunk; // Find next boundary
+      // Only update if we crossed the next boundary
+      if (totalSec >= nextBoundary) {
+        // Set to the highest boundary we've reached (round down to nearest boundary)
+        const newPlaytime = Math.floor(totalSec / chunk) * chunk;
+        userGames[idx] = { ...userGames[idx], playtimeSeconds: newPlaytime };
+        saveUserData('customGames', userGames);
+        // Advance session start to account for the time that brought us to this boundary
+        const sessionElapsedAtBoundary = newPlaytime - baseSec;
+        const newStart = new Date(start.getTime() + sessionElapsedAtBoundary * 1000);
+        localStorage.setItem(startKey, newStart.toISOString());
+        window.dispatchEvent(new Event('customGameUpdate'));
+      }
+    } catch (_) {}
+  };
+
+  useEffect(() => {
+    const refreshStats = () => {
+      try {
+        const list = Array.isArray(getUserData('customGames', [])) ? getUserData('customGames', []) : [];
+        const item = list.find((g) => String(g.gameId) === String(gameId));
+        setPlayStats({
+          playtimeSeconds: Number(item?.playtimeSeconds || 0),
+          lastPlayedTimestamp: item?.lastPlayedTimestamp || null
+        });
+        setPlayerbaseTrend(computePlayerbaseTrend(item));
+        setLastPlayedHistory(Array.isArray(item?.lastPlayedHistory) ? item.lastPlayedHistory : []);
+      } catch (_) {}
+    };
+    refreshStats();
+    const onUpdate = () => refreshStats();
+    window.addEventListener('customGameUpdate', onUpdate);
+    return () => window.removeEventListener('customGameUpdate', onUpdate);
+  }, [gameId]);
+
   const handlePlay = () => {
     if (isPlaying) {
-      // Terminate the game
       setIsPlaying(false);
+      // Record last played on exit and accumulate playtime in 5-minute steps, plus final remainder
+      try {
+        // Commit any full 5-minute chunks first
+        commitPlaytimeChunks(false);
+        const userGames = Array.isArray(getUserData('customGames', [])) ? getUserData('customGames', []) : [];
+        const idx = userGames.findIndex((g) => String(g.gameId) === String(gameId));
+        const nowIso = new Date().toISOString();
+        const startKey = getUserScopedKey(`game_${gameId}_playStart`);
+        // After committing chunks, add any remaining <5m time on stop
+        const startIso = localStorage.getItem(startKey);
+        if (startIso) {
+          const remainderSec = Math.max(0, Math.floor((new Date(nowIso) - new Date(startIso)) / 1000));
+          if (remainderSec > 0) {
+            if (idx !== -1) {
+              const prevSec = Number(userGames[idx].playtimeSeconds || 0);
+              userGames[idx] = { ...userGames[idx], playtimeSeconds: prevSec + remainderSec };
+            } else {
+              userGames.push({ gameId, playtimeSeconds: remainderSec });
+            }
+          }
+          localStorage.removeItem(startKey);
+        }
+        if (idx !== -1) {
+          userGames[idx] = { ...userGames[idx], lastPlayedTimestamp: nowIso };
+          appendLastPlayedEntry(userGames, idx, nowIso);
+        } else {
+          userGames.push({ gameId, lastPlayedTimestamp: nowIso, lastPlayedHistory: [nowIso] });
+        }
+        // anti-abuse: count playerbase only for sessions >= 120s and once per hour
+        try {
+          const item = userGames.find((g) => String(g.gameId) === String(gameId));
+          const lastCountedAt = item?.playerbaseLastCountedAt ? new Date(item.playerbaseLastCountedAt) : null;
+          const mayCount = !lastCountedAt || (new Date(nowIso) - lastCountedAt) >= 60 * 60 * 1000;
+          if (mayCount && idx !== -1) {
+            const count = Number(item?.playerbaseCount || 0) + 1;
+            userGames[idx] = { ...item, playtimeSeconds: userGames[idx].playtimeSeconds, lastPlayedTimestamp: nowIso, playerbaseCount: count, playerbaseLastCountedAt: nowIso };
+            // also push to 30d history
+            recordPlayerbaseSession(userGames, idx, nowIso);
+          }
+        } catch (_) {}
+        saveUserData('customGames', userGames);
+        window.dispatchEvent(new Event('customGameUpdate'));
+      } catch (_) {}
       // Clear playing status from localStorage
       const playingGames = JSON.parse(localStorage.getItem('playingGames') || '{}');
       delete playingGames[gameId];
       localStorage.setItem('playingGames', JSON.stringify(playingGames));
+      // stop periodic ticker
+      if (playtimeIntervalRef.current) { clearInterval(playtimeIntervalRef.current); playtimeIntervalRef.current = null; }
       // Dispatch custom event to notify sidebar
       window.dispatchEvent(new CustomEvent('gameStatusChanged', { detail: { gameId, status: null } }));
       console.log('Game terminated:', gameId);
@@ -792,6 +1172,18 @@ const Game = () => {
     const playingGames = JSON.parse(localStorage.getItem('playingGames') || '{}');
     playingGames[gameId] = true;
     localStorage.setItem('playingGames', JSON.stringify(playingGames));
+    // Track session start (user-scoped key)
+    try {
+      const startKey = getUserScopedKey(`game_${gameId}_playStart`);
+      localStorage.setItem(startKey, new Date().toISOString());
+    } catch (_) {}
+    // Start periodic 5-min commits (check every minute)
+    try {
+      if (playtimeIntervalRef.current) clearInterval(playtimeIntervalRef.current);
+      playtimeIntervalRef.current = setInterval(() => {
+        commitPlaytimeChunks(false);
+      }, 60 * 1000);
+    } catch (_) {}
     // Dispatch custom event to notify sidebar
     window.dispatchEvent(new CustomEvent('gameStatusChanged', { detail: { gameId, status: 'playing' } }));
     console.log('Starting game:', gameId);
@@ -806,6 +1198,46 @@ const Game = () => {
       const playingGames = JSON.parse(localStorage.getItem('playingGames') || '{}');
       delete playingGames[currentlyPlayingGameId];
       localStorage.setItem('playingGames', JSON.stringify(playingGames));
+      // Record last played for the previously playing game
+      try {
+        // Commit only full 5-minute chunks for previous game
+        const prevStartKey = getUserScopedKey(`game_${currentlyPlayingGameId}_playStart`);
+        const prevStartIso = localStorage.getItem(prevStartKey);
+        if (prevStartIso) {
+          const now = new Date();
+          const start = new Date(prevStartIso);
+          const elapsedSec = Math.max(0, Math.floor((now - start) / 1000));
+          const chunks = Math.floor(elapsedSec / 300);
+          let addSec = 0;
+          if (chunks > 0) addSec = chunks * 300;
+          // Add remainder on switch as well
+          const remainder = elapsedSec - addSec;
+          addSec += remainder > 0 ? remainder : 0;
+          if (addSec > 0) {
+            const userGamesPrev = Array.isArray(getUserData('customGames', [])) ? getUserData('customGames', []) : [];
+            const idxPrev = userGamesPrev.findIndex((g) => String(g.gameId) === String(currentlyPlayingGameId));
+            if (idxPrev !== -1) {
+              const prevSec = Number(userGamesPrev[idxPrev].playtimeSeconds || 0);
+              userGamesPrev[idxPrev] = { ...userGamesPrev[idxPrev], playtimeSeconds: prevSec + addSec };
+            } else {
+              userGamesPrev.push({ gameId: currentlyPlayingGameId, playtimeSeconds: addSec });
+            }
+            saveUserData('customGames', userGamesPrev);
+          }
+          localStorage.removeItem(prevStartKey);
+        }
+        const list = Array.isArray(getUserData('customGames', [])) ? getUserData('customGames', []) : [];
+        const idxList = list.findIndex((g) => String(g.gameId) === String(currentlyPlayingGameId));
+        const nowIso = new Date().toISOString();
+        if (idxList !== -1) {
+          list[idxList] = { ...list[idxList], lastPlayedTimestamp: nowIso };
+          appendLastPlayedEntry(list, idxList, nowIso);
+        } else {
+          list.push({ gameId: currentlyPlayingGameId, lastPlayedTimestamp: nowIso, lastPlayedHistory: [nowIso] });
+        }
+        saveUserData('customGames', list);
+        window.dispatchEvent(new Event('customGameUpdate'));
+      } catch (_) {}
       // Dispatch custom event to notify sidebar
       window.dispatchEvent(new CustomEvent('gameStatusChanged', { detail: { gameId: currentlyPlayingGameId, status: null } }));
       console.log('Terminated game:', currentlyPlayingGameId);
@@ -1339,6 +1771,46 @@ const Game = () => {
     rating: averageRating > 0 ? averageRating : game.rating
   };
 
+  // Ensure we record last played if app closes while game is running
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (!isPlaying) return;
+      try {
+        // Commit full 5-minute chunks, then add remainder on close
+        commitPlaytimeChunks(false);
+        const list = Array.isArray(getUserData('customGames', [])) ? getUserData('customGames', []) : [];
+        const idx = list.findIndex((g) => String(g.gameId) === String(gameId));
+        const nowIso = new Date().toISOString();
+        const startKey = getUserScopedKey(`game_${gameId}_playStart`);
+        const startIso = localStorage.getItem(startKey);
+        if (startIso) {
+          const remainderSec = Math.max(0, Math.floor((new Date(nowIso) - new Date(startIso)) / 1000));
+          if (remainderSec > 0) {
+            if (idx !== -1) {
+              const prevSec = Number(list[idx].playtimeSeconds || 0);
+              list[idx] = { ...list[idx], playtimeSeconds: prevSec + remainderSec };
+            } else {
+              list.push({ gameId, playtimeSeconds: remainderSec });
+            }
+          }
+          localStorage.removeItem(startKey);
+        }
+        if (idx !== -1) {
+          list[idx] = { ...list[idx], lastPlayedTimestamp: nowIso };
+          appendLastPlayedEntry(list, idx, nowIso);
+        } else {
+          list.push({ gameId, lastPlayedTimestamp: nowIso, lastPlayedHistory: [nowIso] });
+        }
+        saveUserData('customGames', list);
+        const playingGames = JSON.parse(localStorage.getItem('playingGames') || '{}');
+        delete playingGames[gameId];
+        localStorage.setItem('playingGames', JSON.stringify(playingGames));
+      } catch (_) {}
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isPlaying, gameId]);
+
   return (
     <div className="game-page">
       <div className="game-content" ref={contentRef}>
@@ -1368,13 +1840,23 @@ const Game = () => {
                   <Star size={18} fill={getColorForRating(gameWithRating.rating)} color={getColorForRating(gameWithRating.rating)} />
                   <span>{gameWithRating.rating}</span>
                 </div>
-                <div className="stat-item">
+                <div 
+                  className="stat-item"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setShowCurrentPlayingGraph(true)}
+                  title="View current playing activity"
+                >
                   <Users size={18} />
-                  <span>{game.currentPlaying} playing now</span>
+                  <span>{formatCompactNumber(isPlaying ? 1 : 0)} playing</span>
                 </div>
-                <div className={`stat-item ${game.trending.startsWith('+') ? 'trending-positive' : game.trending.startsWith('-') ? 'trending-negative' : ''}`}>
-                  {game.trending.startsWith('-') ? <TrendingDown size={18} /> : <TrendingUp size={18} />}
-                  <span>{game.trending}</span>
+                <div 
+                  className={`stat-item ${playerbaseTrend > 0 ? 'trending-positive' : playerbaseTrend < 0 ? 'trending-negative' : ''}`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setShowPlayerbaseGraph(true)}
+                  title="View player base growth"
+                >
+                  {playerbaseTrend < 0 ? <TrendingDown size={18} /> : <TrendingUp size={18} />}
+                  <span>{Math.abs(playerbaseTrend)}%</span>
                 </div>
               </div>
             </div>
@@ -1424,12 +1906,20 @@ const Game = () => {
                   <div className="game-info-label">Playtime</div>
                   <div className="game-info-value">
                     <Clock size={16} />
-                    <span>{game.playtime}</span>
+                    <span>{formatPlaytime(playStats.playtimeSeconds)}</span>
                   </div>
                 </div>
                 <div className="game-info-item">
                   <div className="game-info-label">Last played</div>
-                  <div className="game-info-value">{game.lastPlayed}</div>
+                  <div 
+                    className="game-info-value game-info-value--stack"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setShowLastPlayedHistory(true)}
+                    title={'View play history'}
+                  >
+                    {!isPlaying && <span>{formatLastPlayed(playStats.lastPlayedTimestamp)}</span>}
+                    {isPlaying && <span className="playing-now">Currently playing</span>}
+                  </div>
                 </div>
               </>
               ) : (isDownloading || isUpdating) ? (
@@ -1733,6 +2223,919 @@ const Game = () => {
         </div>
       </div>
 
+      {showLastPlayedHistory && (
+        <div 
+          className="modal-overlay" 
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setShowLastPlayedHistory(false); }}
+          style={{ 
+            position: 'fixed', 
+            inset: 0, 
+            background: 'rgba(0,0,0,0.45)', 
+            backdropFilter: 'blur(3px)', 
+            zIndex: 2000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+        >
+          <div 
+            className="modal-content" 
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{ width: 360, maxWidth: '92vw', background: 'rgb(18,18,18)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: 12 }}
+          >
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <h3 style={{ margin: 0, color: 'white', fontSize: 16, fontWeight: 600 }}>Play History</h3>
+              <button className="modal-close" onClick={() => setShowLastPlayedHistory(false)} style={{ background: 'transparent', border: 'none', color: '#b3b3b3', fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>×</button>
+            </div>
+            <div style={{ maxHeight: '52vh', overflowY: 'auto' }}>
+              {(lastPlayedHistory && lastPlayedHistory.length > 0) ? (
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                  {lastPlayedHistory.map((ts, i) => (
+                    <li key={i} style={{ padding: '6px 4px', borderBottom: '1px solid rgba(255,255,255,0.06)', color: '#d9d9d9', fontSize: 12, display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                      <span style={{ opacity: 0.85 }}>{new Date(ts).toLocaleString()}</span>
+                      <span style={{ color: '#8ab4ff' }}>{/* relative */}
+                        {(() => { const d=new Date(ts); const diff=Math.floor((Date.now()-d.getTime())/1000); const m=Math.floor(diff/60); const h=Math.floor(m/60); const days=Math.floor(h/24); if(diff<60) return 'just now'; if(m<60) return `${m}m ago`; if(h<24) return `${h}h ago`; return `${days}d ago`; })()}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div style={{ color: 'var(--text-secondary)', padding: '8px 4px', fontSize: 12 }}>No history yet.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCurrentPlayingGraph && (
+        <div 
+          className="modal-overlay" 
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setShowCurrentPlayingGraph(false); }}
+          style={{ 
+            position: 'fixed', 
+            inset: 0, 
+            background: 'rgba(0,0,0,0.5)', 
+            backdropFilter: 'blur(4px)', 
+            zIndex: 2000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+        >
+          <div 
+            className="modal-content" 
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{ 
+              width: 640, 
+              maxWidth: '95vw', 
+              maxHeight: '90vh',
+              background: 'var(--bg-secondary)', 
+              border: '1px solid var(--border-primary)', 
+              borderRadius: 0, 
+              padding: 0,
+              boxShadow: 'var(--shadow-xl)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden'
+            }}
+          >
+            {(() => {
+              const series = getCurrentPlayingGraphSeries(graphRange);
+              // Peak concurrent players (max value in the range)
+              const peakPlayers = Math.max(...series.map(s => s.value), 0);
+              // Total active periods (number of time periods with activity)
+              const totalActivePeriods = series.reduce((sum, s) => sum + s.value, 0);
+              // Calculate total active time based on range
+              const getTotalActiveTime = () => {
+                if (graphRange === 'day') {
+                  return `${totalActivePeriods} hour${totalActivePeriods !== 1 ? 's' : ''}`;
+                } else if (graphRange === 'week') {
+                  return `${totalActivePeriods} day${totalActivePeriods !== 1 ? 's' : ''}`;
+                } else if (graphRange === 'month') {
+                  return `${totalActivePeriods} day${totalActivePeriods !== 1 ? 's' : ''}`;
+                } else {
+                  return `${totalActivePeriods} month${totalActivePeriods !== 1 ? 's' : ''}`;
+                }
+              };
+              const totalActiveTime = getTotalActiveTime();
+              // Get range label for peak
+              const rangeLabels = {
+                day: 'Daily',
+                week: 'Weekly',
+                month: 'Monthly',
+                year: 'Yearly'
+              };
+              const peakLabel = rangeLabels[graphRange] || 'Peak';
+              const max = Math.max(1, ...series.map(s => s.value));
+              // Calculate graph width based on modal width (720px) minus padding (28px * 2 = 56px)
+              const modalContentWidth = 720;
+              const graphPadding = 28 * 2; // padding on left and right of graph container
+              const graphWidth = modalContentWidth - graphPadding; // 664px
+              const graphHeight = 280;
+              const leftPad = 48;
+              const rightPad = 32;
+              const bottomPad = 48;
+              const topPad = 24;
+              const stepX = series.length > 1 ? (graphWidth - leftPad - rightPad) / (series.length - 1) : 0;
+              
+              return (
+                <>
+                  {/* Header */}
+                  <div style={{ 
+                    padding: '24px 28px', 
+                    borderBottom: '1px solid var(--border-primary)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexShrink: 0,
+                    minWidth: 0
+                  }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <h3 style={{ 
+                        margin: 0, 
+                        color: 'var(--text-primary)', 
+                        fontSize: 20, 
+                        fontWeight: 600, 
+                        letterSpacing: '-0.25px',
+                        marginBottom: 12
+                      }}>Current Playing</h3>
+                      <div style={{ 
+                        display: 'flex', 
+                        gap: 20, 
+                        marginTop: 12,
+                        fontSize: 14,
+                        color: 'var(--text-secondary)',
+                        flexWrap: 'wrap'
+                      }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span>Current:</span>
+                          <span style={{ color: 'var(--accent-primary)', fontWeight: 500 }}>{currentPlayers}</span>
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span>{peakLabel} Peak:</span>
+                          <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{peakPlayers}</span>
+                        </span>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setShowCurrentPlayingGraph(false)} 
+                      style={{ 
+                        background: 'var(--bg-primary)', 
+                        border: '1px solid var(--border-primary)', 
+                        color: 'var(--text-secondary)', 
+                        fontSize: 20, 
+                        cursor: 'pointer', 
+                        lineHeight: 1,
+                        width: 28,
+                        height: 28,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: 0,
+                        transition: 'var(--transition)'
+                      }}
+                      onMouseEnter={(e) => { 
+                        e.target.style.background = 'var(--bg-hover)'; 
+                        e.target.style.borderColor = 'var(--border-primary)';
+                        e.target.style.color = 'var(--text-primary)'; 
+                      }}
+                      onMouseLeave={(e) => { 
+                        e.target.style.background = 'var(--bg-primary)'; 
+                        e.target.style.borderColor = 'var(--border-primary)';
+                        e.target.style.color = 'var(--text-secondary)'; 
+                      }}
+                    >×</button>
+                  </div>
+
+                  {/* Graph */}
+                  <div style={{ 
+                    padding: '24px 28px', 
+                    flex: 1, 
+                    overflow: 'auto',
+                    background: 'var(--bg-primary)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 12,
+                    position: 'relative'
+                  }}>
+                    {/* Range Selector */}
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'flex-end',
+                      gap: 6,
+                      paddingBottom: 8
+                    }}>
+                      {['day','week','month','year'].map(r => (
+                        <button 
+                          key={r} 
+                          onClick={() => setGraphRange(r)}
+                          style={{ 
+                            padding: '6px 12px', 
+                            borderRadius: 0, 
+                            border: '1px solid var(--border-primary)',
+                            background: graphRange === r 
+                              ? '#4a9eff' 
+                              : 'transparent', 
+                            color: graphRange === r ? '#ffffff' : 'var(--text-secondary)', 
+                            cursor: 'pointer', 
+                            fontSize: 12, 
+                            fontWeight: 500, 
+                            textTransform: 'capitalize',
+                            transition: 'var(--transition)',
+                            whiteSpace: 'nowrap'
+                          }}
+                          onMouseEnter={(e) => {
+                            if (graphRange !== r) {
+                              e.target.style.background = 'var(--bg-hover)';
+                              e.target.style.color = 'var(--text-primary)';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (graphRange !== r) {
+                              e.target.style.background = 'transparent';
+                              e.target.style.color = 'var(--text-secondary)';
+                            }
+                          }}
+                        >{r}</button>
+                      ))}
+                    </div>
+                    <div style={{
+                      flex: 1,
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      position: 'relative'
+                    }}>
+                      <div style={{ 
+                        position: 'relative', 
+                        width: graphWidth, 
+                        height: graphHeight,
+                        maxWidth: '100%',
+                        overflow: 'hidden'
+                      }}>
+                        <svg 
+                          width={graphWidth} 
+                          height={graphHeight} 
+                          viewBox={`0 0 ${graphWidth} ${graphHeight}`}
+                          style={{ 
+                            width: '100%', 
+                            height: '100%', 
+                            overflow: 'hidden',
+                            shapeRendering: 'geometricPrecision',
+                            textRendering: 'optimizeLegibility',
+                            display: 'block'
+                          }}
+                          onMouseMove={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const mouseX = e.clientX - rect.left;
+                          const mouseY = e.clientY - rect.top;
+                          if (series.length === 0 || stepX === 0) { 
+                            setCurrentGraphTooltip(null); 
+                            setCurrentHoveredIndex(null); 
+                            return; 
+                          }
+                          // Find the closest dot by X position first (prioritize horizontal matching)
+                          let closestIdx = -1;
+                          let minXDistance = Infinity;
+                          series.forEach((s, i) => {
+                            const dotX = leftPad + i * stepX;
+                            const xDistance = Math.abs(mouseX - dotX);
+                            // Find the dot with the smallest X distance (closest horizontally)
+                            if (xDistance < minXDistance) {
+                              minXDistance = xDistance;
+                              closestIdx = i;
+                            }
+                          });
+                          // Only show tooltip if we're reasonably close horizontally (within half the stepX)
+                          if (closestIdx >= 0 && minXDistance <= stepX / 2) {
+                            const s = series[closestIdx];
+                            const dotX = leftPad + closestIdx * stepX;
+                            const dotY = graphHeight - bottomPad - (s.value / max) * (graphHeight - bottomPad - topPad);
+                            setCurrentGraphTooltip({ x: dotX, y: dotY, label: s.label, value: s.value });
+                            setCurrentHoveredIndex(closestIdx);
+                          } else {
+                            setCurrentGraphTooltip(null);
+                            setCurrentHoveredIndex(null);
+                          }
+                        }}
+                        onMouseLeave={() => { 
+                          setCurrentGraphTooltip(null); 
+                          setCurrentHoveredIndex(null); 
+                        }}
+                      >
+                        <defs>
+                          <linearGradient id="currentPlayingGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stopColor="#4a9eff" stopOpacity="0.2" />
+                            <stop offset="100%" stopColor="#4a9eff" stopOpacity="0.02" />
+                          </linearGradient>
+                        </defs>
+                        
+                        {/* Grid lines */}
+                        {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
+                          const y = graphHeight - bottomPad - (ratio * (graphHeight - bottomPad - topPad));
+                          return (
+                            <line
+                              key={i}
+                              x1={leftPad}
+                              y1={y}
+                              x2={graphWidth - rightPad}
+                              y2={y}
+                              stroke="rgba(255,255,255,0.05)"
+                              strokeWidth={1}
+                            />
+                          );
+                        })}
+                        
+                        {/* Area fill */}
+                        {(() => {
+                          const points = series.map((s, i) => {
+                            const x = leftPad + i * stepX;
+                            const y = graphHeight - bottomPad - (s.value / max) * (graphHeight - bottomPad - topPad);
+                            return `${x},${y}`;
+                          }).join(' ');
+                          const areaPath = series.length > 0 
+                            ? `M ${leftPad},${graphHeight - bottomPad} ${points} L ${leftPad + (series.length - 1) * stepX},${graphHeight - bottomPad} Z` 
+                            : '';
+                          return (
+                            <path 
+                              key={`area-${graphRange}-${series.length}`}
+                              d={areaPath} 
+                              fill="url(#currentPlayingGradient)"
+                            />
+                          );
+                        })()}
+                        
+                        {/* Line */}
+                        {(() => {
+                          const points = series.map((s, i) => {
+                            const x = leftPad + i * stepX;
+                            const y = graphHeight - bottomPad - (s.value / max) * (graphHeight - bottomPad - topPad);
+                            return `${x},${y}`;
+                          }).join(' ');
+                          return (
+                            <polyline 
+                              key={`line-${graphRange}-${series.length}`}
+                              fill="none" 
+                              stroke="#4a9eff" 
+                              strokeWidth="2" 
+                              points={points} 
+                              strokeLinecap="round" 
+                              strokeLinejoin="round"
+                              shapeRendering="geometricPrecision"
+                            />
+                          );
+                        })()}
+                        
+                        {/* Data points */}
+                        {series.map((s, i) => {
+                          const x = leftPad + i * stepX;
+                          const y = graphHeight - bottomPad - (s.value / max) * (graphHeight - bottomPad - topPad);
+                          const isHovered = currentHoveredIndex === i;
+                          
+                          return (
+                            <g key={`point-${graphRange}-${i}-${s.label}`}>
+                              <circle 
+                                cx={x} 
+                                cy={y} 
+                                r={isHovered ? 5 : 2.5} 
+                                fill="#4a9eff" 
+                                stroke={isHovered ? "#ffffff" : "#1a1a1a"} 
+                                strokeWidth={isHovered ? 2 : 1}
+                                opacity={isHovered ? 1 : 0.8}
+                                style={{ 
+                                  transition: 'r 0.15s ease, stroke-width 0.15s ease, opacity 0.15s ease',
+                                  shapeRendering: 'geometricPrecision'
+                                }}
+                              />
+                              <title>{`${s.label}: ${s.value} ${s.value === 1 ? 'player' : 'players'}`}</title>
+                            </g>
+                          );
+                        })}
+                        
+                        {/* X-axis labels */}
+                        {series.map((s, i) => {
+                          const x = leftPad + i * stepX;
+                          const labelY = graphHeight - 12;
+                          return (
+                            <text 
+                              key={`label-${graphRange}-${i}-${s.label}`} 
+                              x={x} 
+                              y={labelY}
+                              fontSize={11} 
+                              fill="var(--text-secondary)" 
+                              textAnchor="middle"
+                              fontWeight={500}
+                              style={{ 
+                                pointerEvents: 'none',
+                                WebkitFontSmoothing: 'antialiased',
+                                MozOsxFontSmoothing: 'grayscale',
+                                textRendering: 'optimizeLegibility'
+                              }}
+                            >{s.label}</text>
+                          );
+                        })}
+                        
+                        {/* Y-axis labels */}
+                        {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
+                          const y = graphHeight - bottomPad - (ratio * (graphHeight - bottomPad - topPad));
+                          const value = Math.round(max * ratio);
+                          return (
+                            <text
+                              key={`y-label-${i}`}
+                              x={leftPad - 12}
+                              y={y + 4}
+                              fontSize={11}
+                              fill="var(--text-secondary)"
+                              textAnchor="end"
+                              fontWeight={500}
+                              style={{ 
+                                pointerEvents: 'none',
+                                WebkitFontSmoothing: 'antialiased',
+                                MozOsxFontSmoothing: 'grayscale',
+                                textRendering: 'optimizeLegibility'
+                              }}
+                            >{value}</text>
+                          );
+                        })}
+                        </svg>
+                      
+                      {/* Tooltip */}
+                      {currentGraphTooltip && series[currentHoveredIndex] !== undefined && (
+                        <div style={{ 
+                          position: 'absolute', 
+                          left: currentGraphTooltip.x, 
+                          top: currentGraphTooltip.y - 50, 
+                          transform: 'translateX(-50%)',
+                          background: 'var(--bg-secondary)', 
+                          color: 'var(--text-primary)', 
+                          padding: '6px 10px', 
+                          borderRadius: 0, 
+                          fontSize: 11, 
+                          fontWeight: 500,
+                          pointerEvents: 'none', 
+                          border: '1px solid var(--border-accent)',
+                          boxShadow: 'var(--shadow-lg)',
+                          whiteSpace: 'nowrap',
+                          zIndex: 10,
+                          minWidth: 60,
+                          textAlign: 'center'
+                        }}>
+                          <div style={{ 
+                            color: 'var(--accent-primary)', 
+                            marginBottom: 2,
+                            fontWeight: 600,
+                            fontSize: 13
+                          }}>{currentGraphTooltip.value} {currentGraphTooltip.value === 1 ? 'player' : 'players'}</div>
+                          <div style={{ 
+                            color: 'var(--text-secondary)',
+                            fontSize: 11
+                          }}>
+                            {currentGraphTooltip.label}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {showPlayerbaseGraph && (
+        <div 
+          className="modal-overlay" 
+          onMouseDown={(e) => { if (e.target === e.currentTarget) setShowPlayerbaseGraph(false); }}
+          style={{ 
+            position: 'fixed', 
+            inset: 0, 
+            background: 'rgba(0,0,0,0.5)', 
+            backdropFilter: 'blur(4px)', 
+            zIndex: 2000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }}
+        >
+          <div 
+            className="modal-content" 
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{ 
+              width: 720, 
+              maxWidth: '95vw', 
+              maxHeight: '90vh',
+              background: 'var(--bg-secondary)', 
+              border: '1px solid var(--border-primary)', 
+              borderRadius: 0, 
+              padding: 0,
+              boxShadow: 'var(--shadow-xl)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden'
+            }}
+          >
+            {(() => {
+              const series = getPlayerbaseGraphSeries(graphRange);
+              // Peak concurrent players (max value in the range)
+              const peakPlayers = Math.max(...series.map(s => s.value), 0);
+              // Get range label for peak
+              const rangeLabels = {
+                day: 'Daily',
+                week: 'Weekly',
+                month: 'Monthly',
+                year: 'Yearly'
+              };
+              const peakLabel = rangeLabels[graphRange] || 'Peak';
+              const max = Math.max(1, ...series.map(s => s.value));
+              // Calculate graph width based on modal width (720px) minus padding (28px * 2 = 56px)
+              const modalContentWidth = 720;
+              const graphPadding = 28 * 2; // padding on left and right of graph container
+              const graphWidth = modalContentWidth - graphPadding; // 664px
+              const graphHeight = 280;
+              const leftPad = 48;
+              const rightPad = 32;
+              const bottomPad = 48;
+              const topPad = 24;
+              const stepX = series.length > 1 ? (graphWidth - leftPad - rightPad) / (series.length - 1) : 0;
+              const dotColor = playerbaseTrend >= 0 ? '#4a9eff' : '#f44336';
+              
+              return (
+                <>
+                  {/* Header */}
+                  <div style={{ 
+                    padding: '24px 28px', 
+                    borderBottom: '1px solid var(--border-primary)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexShrink: 0,
+                    minWidth: 0
+                  }}>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <h3 style={{ 
+                        margin: 0, 
+                        color: 'var(--text-primary)', 
+                        fontSize: 20, 
+                        fontWeight: 600, 
+                        letterSpacing: '-0.25px',
+                        marginBottom: 12
+                      }}>Playerbase Growth</h3>
+                      <div style={{ 
+                        display: 'flex', 
+                        gap: 20, 
+                        marginTop: 12,
+                        fontSize: 14,
+                        color: 'var(--text-secondary)',
+                        flexWrap: 'wrap'
+                      }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span>Trend:</span>
+                          <span style={{ color: playerbaseTrend >= 0 ? '#4a9eff' : '#f44336', fontWeight: 500 }}>{playerbaseTrend >= 0 ? '+' : ''}{playerbaseTrend}%</span>
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span>Total:</span>
+                          <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{series.reduce((sum, s) => sum + s.value, 0)}</span>
+                        </span>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span>Average:</span>
+                          <span style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{series.length > 0 ? Math.round((series.reduce((sum, s) => sum + s.value, 0) / series.length) * 10) / 10 : 0}</span>
+                        </span>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => setShowPlayerbaseGraph(false)} 
+                      style={{ 
+                        background: 'var(--bg-primary)', 
+                        border: '1px solid var(--border-primary)', 
+                        color: 'var(--text-secondary)', 
+                        fontSize: 20, 
+                        cursor: 'pointer', 
+                        lineHeight: 1,
+                        width: 28,
+                        height: 28,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: 0,
+                        transition: 'var(--transition)'
+                      }}
+                      onMouseEnter={(e) => { 
+                        e.target.style.background = 'var(--bg-hover)'; 
+                        e.target.style.borderColor = 'var(--border-primary)';
+                        e.target.style.color = 'var(--text-primary)'; 
+                      }}
+                      onMouseLeave={(e) => { 
+                        e.target.style.background = 'var(--bg-primary)'; 
+                        e.target.style.borderColor = 'var(--border-primary)';
+                        e.target.style.color = 'var(--text-secondary)'; 
+                      }}
+                    >×</button>
+                  </div>
+
+                  {/* Graph */}
+                  <div style={{ 
+                    padding: '24px 28px', 
+                    flex: 1, 
+                    overflow: 'auto',
+                    background: 'var(--bg-primary)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 12,
+                    position: 'relative'
+                  }}>
+                    {/* Range Selector */}
+                    <div style={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'flex-end',
+                      gap: 6,
+                      paddingBottom: 8
+                    }}>
+                      {['day','week','month','year'].map(r => (
+                        <button 
+                          key={r} 
+                          onClick={() => setGraphRange(r)}
+                          style={{ 
+                            padding: '6px 12px', 
+                            borderRadius: 0, 
+                            border: '1px solid var(--border-primary)',
+                            background: graphRange === r 
+                              ? '#4a9eff' 
+                              : 'transparent', 
+                            color: graphRange === r ? '#ffffff' : 'var(--text-secondary)', 
+                            cursor: 'pointer', 
+                            fontSize: 12, 
+                            fontWeight: 500, 
+                            textTransform: 'capitalize',
+                            transition: 'var(--transition)',
+                            whiteSpace: 'nowrap'
+                          }}
+                          onMouseEnter={(e) => {
+                            if (graphRange !== r) {
+                              e.target.style.background = 'var(--bg-hover)';
+                              e.target.style.color = 'var(--text-primary)';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (graphRange !== r) {
+                              e.target.style.background = 'transparent';
+                              e.target.style.color = 'var(--text-secondary)';
+                            }
+                          }}
+                        >{r}</button>
+                      ))}
+                    </div>
+                    <div style={{
+                      flex: 1,
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      position: 'relative'
+                    }}>
+                      <div style={{ 
+                        position: 'relative', 
+                        width: graphWidth, 
+                        height: graphHeight,
+                        maxWidth: '100%',
+                        overflow: 'hidden'
+                      }}>
+                        <svg 
+                          width={graphWidth} 
+                          height={graphHeight} 
+                          viewBox={`0 0 ${graphWidth} ${graphHeight}`}
+                          style={{ 
+                            width: '100%', 
+                            height: '100%', 
+                            overflow: 'hidden',
+                            shapeRendering: 'geometricPrecision',
+                            textRendering: 'optimizeLegibility',
+                            display: 'block'
+                          }}
+                          onMouseMove={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const mouseX = e.clientX - rect.left;
+                            const mouseY = e.clientY - rect.top;
+                            if (series.length === 0 || stepX === 0) { 
+                              setPlayerbaseGraphTooltip(null); 
+                              setPlayerbaseHoveredIndex(null); 
+                              return; 
+                            }
+                            // Find the closest dot by X position first (prioritize horizontal matching)
+                            let closestIdx = -1;
+                            let minXDistance = Infinity;
+                            series.forEach((s, i) => {
+                              const dotX = leftPad + i * stepX;
+                              const xDistance = Math.abs(mouseX - dotX);
+                              // Find the dot with the smallest X distance (closest horizontally)
+                              if (xDistance < minXDistance) {
+                                minXDistance = xDistance;
+                                closestIdx = i;
+                              }
+                            });
+                            // Only show tooltip if we're reasonably close horizontally (within half the stepX)
+                            if (closestIdx >= 0 && minXDistance <= stepX / 2) {
+                              const s = series[closestIdx];
+                              const dotX = leftPad + closestIdx * stepX;
+                              const dotY = graphHeight - bottomPad - (s.value / max) * (graphHeight - bottomPad - topPad);
+                              setPlayerbaseGraphTooltip({ x: dotX, y: dotY, label: s.label, value: s.value });
+                              setPlayerbaseHoveredIndex(closestIdx);
+                            } else {
+                              setPlayerbaseGraphTooltip(null);
+                              setPlayerbaseHoveredIndex(null);
+                            }
+                          }}
+                          onMouseLeave={() => { 
+                            setPlayerbaseGraphTooltip(null); 
+                            setPlayerbaseHoveredIndex(null); 
+                          }}
+                        >
+                          <defs>
+                            <linearGradient id="playerbaseGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                              <stop offset="0%" stopColor={dotColor} stopOpacity="0.2" />
+                              <stop offset="100%" stopColor={dotColor} stopOpacity="0.02" />
+                            </linearGradient>
+                          </defs>
+                          
+                          {/* Grid lines */}
+                          {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
+                            const y = graphHeight - bottomPad - (ratio * (graphHeight - bottomPad - topPad));
+                            return (
+                              <line
+                                key={i}
+                                x1={leftPad}
+                                y1={y}
+                                x2={graphWidth - rightPad}
+                                y2={y}
+                                stroke="rgba(255,255,255,0.05)"
+                                strokeWidth={1}
+                              />
+                            );
+                          })}
+                          
+                          {/* Area fill */}
+                          {(() => {
+                            const points = series.map((s, i) => {
+                              const x = leftPad + i * stepX;
+                              const y = graphHeight - bottomPad - (s.value / max) * (graphHeight - bottomPad - topPad);
+                              return `${x},${y}`;
+                            }).join(' ');
+                            const areaPath = series.length > 0 
+                              ? `M ${leftPad},${graphHeight - bottomPad} ${points} L ${leftPad + (series.length - 1) * stepX},${graphHeight - bottomPad} Z` 
+                              : '';
+                            return (
+                              <path 
+                                key={`area-${graphRange}-${series.length}`}
+                                d={areaPath} 
+                                fill="url(#playerbaseGradient)"
+                              />
+                            );
+                          })()}
+                          
+                          {/* Line */}
+                          {(() => {
+                            const points = series.map((s, i) => {
+                              const x = leftPad + i * stepX;
+                              const y = graphHeight - bottomPad - (s.value / max) * (graphHeight - bottomPad - topPad);
+                              return `${x},${y}`;
+                            }).join(' ');
+                            return (
+                              <polyline 
+                                key={`line-${graphRange}-${series.length}`}
+                                fill="none" 
+                                stroke={dotColor} 
+                                strokeWidth="2" 
+                                points={points} 
+                                strokeLinecap="round" 
+                                strokeLinejoin="round"
+                                shapeRendering="geometricPrecision"
+                              />
+                            );
+                          })()}
+                          
+                          {/* Data points */}
+                          {series.map((s, i) => {
+                            const x = leftPad + i * stepX;
+                            const y = graphHeight - bottomPad - (s.value / max) * (graphHeight - bottomPad - topPad);
+                            const isHovered = playerbaseHoveredIndex === i;
+                            
+                            return (
+                              <g key={`point-${graphRange}-${i}-${s.label}-${s.value}`}>
+                                <circle 
+                                  cx={x} 
+                                  cy={y} 
+                                  r={isHovered ? 5 : 2.5} 
+                                  fill={dotColor} 
+                                  stroke={isHovered ? "#ffffff" : "#1a1a1a"} 
+                                  strokeWidth={isHovered ? 2 : 1}
+                                  opacity={isHovered ? 1 : 0.8}
+                                  style={{ 
+                                    transition: 'r 0.15s ease, stroke-width 0.15s ease, opacity 0.15s ease',
+                                    shapeRendering: 'geometricPrecision'
+                                  }}
+                                />
+                                <title>{`${s.label}: ${s.value} ${s.value === 1 ? 'player' : 'players'}`}</title>
+                              </g>
+                            );
+                          })}
+                          
+                          {/* X-axis labels */}
+                          {series.map((s, i) => {
+                            const x = leftPad + i * stepX;
+                            const labelY = graphHeight - 12;
+                            return (
+                              <text 
+                                key={`label-${graphRange}-${i}-${s.label}`} 
+                                x={x} 
+                                y={labelY}
+                                fontSize={11} 
+                                fill="var(--text-secondary)" 
+                                textAnchor="middle"
+                                fontWeight={500}
+                                style={{ 
+                                  pointerEvents: 'none',
+                                  WebkitFontSmoothing: 'antialiased',
+                                  MozOsxFontSmoothing: 'grayscale',
+                                  textRendering: 'optimizeLegibility'
+                                }}
+                              >{s.label}</text>
+                            );
+                          })}
+                          
+                          {/* Y-axis labels */}
+                          {[0, 0.25, 0.5, 0.75, 1].map((ratio, i) => {
+                            const y = graphHeight - bottomPad - (ratio * (graphHeight - bottomPad - topPad));
+                            const value = Math.round(max * ratio);
+                            return (
+                              <text
+                                key={`y-label-${i}`}
+                                x={leftPad - 12}
+                                y={y + 4}
+                                fontSize={11}
+                                fill="var(--text-secondary)"
+                                textAnchor="end"
+                                fontWeight={500}
+                                style={{ 
+                                  pointerEvents: 'none',
+                                  WebkitFontSmoothing: 'antialiased',
+                                  MozOsxFontSmoothing: 'grayscale',
+                                  textRendering: 'optimizeLegibility'
+                                }}
+                              >{value}</text>
+                            );
+                          })}
+                        </svg>
+                      
+                        {/* Tooltip */}
+                        {playerbaseGraphTooltip && series[playerbaseHoveredIndex] !== undefined && (
+                          <div style={{ 
+                            position: 'absolute', 
+                            left: playerbaseGraphTooltip.x, 
+                            top: playerbaseGraphTooltip.y - 50, 
+                            transform: 'translateX(-50%)',
+                            background: 'var(--bg-secondary)', 
+                            color: 'var(--text-primary)', 
+                            padding: '6px 10px', 
+                            borderRadius: 0, 
+                            fontSize: 11, 
+                            fontWeight: 500,
+                            pointerEvents: 'none', 
+                            border: '1px solid var(--border-accent)',
+                            boxShadow: 'var(--shadow-lg)',
+                            whiteSpace: 'nowrap',
+                            zIndex: 10,
+                            minWidth: 60,
+                            textAlign: 'center'
+                          }}>
+                            <div style={{ 
+                              color: dotColor, 
+                              marginBottom: 2,
+                              fontWeight: 600,
+                              fontSize: 13
+                            }}>{playerbaseGraphTooltip.value} {playerbaseGraphTooltip.value === 1 ? 'player' : 'players'}</div>
+                            <div style={{ 
+                              color: 'var(--text-secondary)',
+                              fontSize: 11
+                            }}>
+                              {playerbaseGraphTooltip.label}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
       {/* Image Lightbox */}
       {lightboxImage && (
         <div className="image-lightbox" onClick={closeLightbox}>
@@ -1974,7 +3377,7 @@ const Game = () => {
                         </div>
                         <div className="property-item">
                           <span className="property-label">Playtime</span>
-                          <span className="property-value">{game.playtime}</span>
+                          <span className="property-value">{formatPlaytime(playStats.playtimeSeconds)}</span>
                         </div>
                         <div className="property-item">
                           <span className="property-label">Genre</span>

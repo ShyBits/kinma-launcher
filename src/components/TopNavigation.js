@@ -99,6 +99,7 @@ const TopNavigation = ({
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const profileMenuRef = useRef(null);
   const profileButtonRef = useRef(null);
+  const profileHeaderRef = useRef(null);
   const [availableUsers, setAvailableUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [showQuickSwitchMenu, setShowQuickSwitchMenu] = useState(false);
@@ -1076,7 +1077,7 @@ const TopNavigation = ({
                   >
                     <User size={20} />
                     <span className="nav-user-name">{userName}</span>
-                    <span className="nav-user-level">{userLevel}</span>
+                    <span className="nav-user-level">Lv {userLevel}</span>
                   </button>
                 </CustomTooltip>
                 {showProfileMenu && (
@@ -1093,13 +1094,23 @@ const TopNavigation = ({
                       zIndex: 1000
                     }}
                   >
-                    <div className="profile-menu-header">
+                    <div 
+                      ref={profileHeaderRef}
+                      className="profile-menu-header"
+                      onClick={() => {
+                        handleNavigation('profile');
+                        setShowProfileMenu(false);
+                      }}
+                    >
                       <div className="profile-menu-user-info">
                         <div className="profile-menu-avatar">
                           {getInitials(authUser)}
                         </div>
                         <div className="profile-menu-user-details">
-                          <h3>{userName}</h3>
+                          <div className="profile-menu-name-row">
+                            <h3>{userName}</h3>
+                            <span className="profile-menu-level">Lv {userLevel}</span>
+                          </div>
                           <p>{authUser?.email || ''}</p>
                         </div>
                         <div style={{ marginLeft: 'auto' }}>
@@ -1127,32 +1138,33 @@ const TopNavigation = ({
                           {loadingUsers ? (
                             <div className="quick-switch-loading">Loading accounts...</div>
                           ) : (
-                            availableUsers.map((user) => {
-                              const isCurrentUser = user.id === authUser?.id;
-                              const userInitials = getInitials(user);
-                              const userDisplayName = user.name || user.username || user.email?.split('@')[0] || 'User';
-                              
-                              return (
-                                <button
-                                  key={user.id}
-                                  className={`quick-switch-item ${isCurrentUser ? 'active' : ''}`}
-                                  onClick={() => {
-                                    handleQuickSwitchFromMenu(user);
-                                    setShowQuickSwitchMenu(false);
-                                  }}
-                                  disabled={isCurrentUser}
-                                >
-                                  <div className="quick-switch-avatar">{userInitials}</div>
-                                  <div className="quick-switch-info">
-                                    <span className="quick-switch-name">{userDisplayName}</span>
-                                    {isCurrentUser && <span className="quick-switch-current-badge">Current</span>}
-                                  </div>
-                                  {isCurrentUser && <Check size={16} />}
-                                </button>
-                              );
-                            })
+                            // Show only top 3 non-current accounts
+                            availableUsers
+                              .filter((u) => u.id !== authUser?.id)
+                              .slice(0, 3)
+                              .map((user) => {
+                                const userInitials = getInitials(user);
+                                const userDisplayName = user.name || user.username || user.email?.split('@')[0] || 'User';
+                                
+                                return (
+                                  <button
+                                    key={user.id}
+                                    className={`quick-switch-item`}
+                                    onClick={() => {
+                                      handleQuickSwitchFromMenu(user);
+                                      setShowQuickSwitchMenu(false);
+                                    }}
+                                  >
+                                    <div className="quick-switch-avatar">{userInitials}</div>
+                                    <div className="quick-switch-info">
+                                      <span className="quick-switch-name">{userDisplayName}</span>
+                                    </div>
+                                  </button>
+                                );
+                              })
                           )}
                         </div>
+                        {null}
                       </div>
                     )}
 

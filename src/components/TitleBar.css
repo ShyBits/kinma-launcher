@@ -106,7 +106,7 @@
 
 .title-bar-button.close:hover {
   background: var(--accent-error);
-  color: white;
+  color: #ffffff;
 }
 
 .title-bar-button.disabled {

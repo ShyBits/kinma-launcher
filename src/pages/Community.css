@@ -18,26 +18,190 @@
 .community { flex: 1; background: var(--bg-primary); width: 100%; }
 .community-layout-3 {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) 280px;
-  gap: 20px;
+  grid-template-columns: 280px minmax(0, 1fr) 300px;
+  gap: 24px;
   padding: 24px;
-  max-width: 1400px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Tab-specific layout and design variations */
+.community[data-tab="posts"] .community-center {
+  background: linear-gradient(135deg, rgba(74, 158, 255, 0.02) 0%, rgba(255, 255, 255, 0.01) 100%);
+  border-left: 2px solid rgba(74, 158, 255, 0.1);
+  padding-left: 24px;
+}
+
+.community[data-tab="workshop"] .community-center {
+  background: linear-gradient(135deg, rgba(255, 167, 38, 0.02) 0%, rgba(255, 255, 255, 0.01) 100%);
+  border-left: 2px solid rgba(255, 167, 38, 0.1);
+  padding-left: 24px;
 }
 
 .community-topbar { width: 100%; position: sticky; top: 0; z-index: 5; background: rgba(10,12,16,0.65); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border-primary); }
-.community-topbar > .comm-tabs { max-width: 1400px; margin: 0 auto; padding: 8px 24px; display: flex; justify-content: center; }
+.community-topbar > .comm-tabs { width: 100%; padding: 8px 24px; display: flex; justify-content: center; }
 
 .community-left, .community-right { position: sticky; top: 24px; height: fit-content; }
 .community-center { min-width: 0; }
+
+/* Sidebar border accents based on active tab */
+.community[data-tab="posts"] .community-left .comm-card {
+  border-left: 3px solid rgba(74, 158, 255, 0.3);
+}
+.community[data-tab="workshop"] .community-left .comm-card {
+  border-left: 3px solid rgba(255, 167, 38, 0.3);
+}
 .comm-header { display:flex; flex-direction:column; gap:4px; margin-bottom: 8px; }
 .comm-title { color: var(--text-primary); font-size: 18px; font-weight: 800; letter-spacing: .2px; }
 .comm-subtitle { color: var(--text-secondary); font-size: 12px; }
+
+/* Tab-specific title colors */
+.community[data-tab="posts"] .comm-title {
+  color: #4a9eff;
+}
+.community[data-tab="workshop"] .comm-title {
+  color: #ffa726;
+}
 .comm-tabs { display: inline-flex; gap: 8px; background: transparent; border: none; padding: 0; }
 .comm-tab { display: inline-flex; align-items: center; gap: 8px; min-width: 140px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); color: var(--text-secondary); padding: 10px 16px; border-radius: 0; cursor: pointer; position: relative; font-weight: 600; letter-spacing: .2px; transition: background .15s, color .15s, border-color .15s; }
 .comm-tab:hover { color: var(--text-primary); background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.18); }
 .comm-tab.active { color: var(--text-primary); background: var(--gradient-primary); border-color: var(--accent-primary); }
 .comm-tab svg { opacity: .9; }
+
+/* Posts tab specific styling - Blue theme */
+.community[data-tab="posts"] .comm-tab[data-tab="posts"].active {
+  background: linear-gradient(135deg, #4a9eff 0%, #6b73ff 100%);
+  border-color: #4a9eff;
+}
+.community[data-tab="posts"] .comm-card {
+  background: rgba(74, 158, 255, 0.03);
+  border-color: rgba(74, 158, 255, 0.12);
+}
+.community[data-tab="posts"] .comm-card-title {
+  color: #4a9eff;
+}
+.community[data-tab="posts"] .comm-post {
+  background: rgba(74, 158, 255, 0.02);
+  border-color: rgba(74, 158, 255, 0.15);
+  border-left: 3px solid transparent;
+  transition: all 0.2s ease;
+}
+.community[data-tab="posts"] .comm-post:hover {
+  background: rgba(74, 158, 255, 0.04);
+  border-left-color: #4a9eff;
+  box-shadow: 0 4px 12px rgba(74, 158, 255, 0.1);
+}
+.community[data-tab="posts"] .comm-post-btn {
+  background: linear-gradient(135deg, #4a9eff 0%, #6b73ff 100%);
+}
+.community[data-tab="posts"] .comm-input:focus {
+  border-color: #4a9eff;
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.15);
+}
+.community[data-tab="posts"] .comm-picker-btn:hover {
+  border-color: rgba(74, 158, 255, 0.3);
+}
+.community[data-tab="posts"] .comm-picker-option:hover {
+  background: rgba(74, 158, 255, 0.08);
+}
+.community[data-tab="posts"] .comm-picker-option.active {
+  background: rgba(74, 158, 255, 0.15);
+  border-left: 3px solid #4a9eff;
+}
+.community[data-tab="posts"] .comm-mini-item:hover {
+  background: rgba(74, 158, 255, 0.06);
+  border-left: 2px solid #4a9eff;
+}
+
+/* Threads tab specific styling - Green theme */
+.community[data-tab="threads"] .comm-tab[data-tab="threads"].active {
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+  border-color: #4ade80;
+}
+.community[data-tab="threads"] .comm-card {
+  background: rgba(74, 222, 128, 0.03);
+  border-color: rgba(74, 222, 128, 0.12);
+}
+.community[data-tab="threads"] .comm-card-title {
+  color: #4ade80;
+}
+.community[data-tab="threads"] .comm-thread-card {
+  background: rgba(74, 222, 128, 0.02);
+  border-color: rgba(74, 222, 128, 0.15);
+  border-left: 3px solid transparent;
+  transition: all 0.2s ease;
+}
+.community[data-tab="threads"] .comm-thread-card:hover {
+  background: rgba(74, 222, 128, 0.04);
+  border-left-color: #4ade80;
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(74, 222, 128, 0.1);
+}
+.community[data-tab="threads"] .comm-thread-icon {
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+}
+.community[data-tab="threads"] .comm-thread-enter-btn {
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+}
+.community[data-tab="threads"] .comm-create-thread-btn-sidebar {
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+}
+.community[data-tab="threads"] .comm-thread-search-input:focus {
+  border-color: #4ade80;
+  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.15);
+}
+.community[data-tab="threads"] .comm-thread-list-item:hover {
+  background: rgba(74, 222, 128, 0.06);
+  border-color: rgba(74, 222, 128, 0.2);
+}
+.community[data-tab="threads"] .comm-thread-list-item.active {
+  background: rgba(74, 222, 128, 0.15);
+  border-color: #4ade80;
+}
+.community[data-tab="threads"] .comm-thread-list-icon {
+  background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+}
+.community[data-tab="threads"] .comm-picker-btn:hover {
+  border-color: rgba(74, 222, 128, 0.3);
+}
+.community[data-tab="threads"] .comm-picker-option:hover {
+  background: rgba(74, 222, 128, 0.08);
+}
+.community[data-tab="threads"] .comm-picker-option.active {
+  background: rgba(74, 222, 128, 0.15);
+  border-left: 3px solid #4ade80;
+}
+.community[data-tab="threads"] .comm-mini-item:hover {
+  background: rgba(74, 222, 128, 0.06);
+  border-left: 2px solid #4ade80;
+}
+
+/* Workshop tab specific styling - Orange/Amber theme */
+.community[data-tab="workshop"] .comm-tab[data-tab="workshop"].active {
+  background: linear-gradient(135deg, #ffa726 0%, #ff9800 100%);
+  border-color: #ffa726;
+}
+.community[data-tab="workshop"] .comm-card {
+  background: rgba(255, 167, 38, 0.03);
+  border-color: rgba(255, 167, 38, 0.12);
+}
+.community[data-tab="workshop"] .comm-card-title {
+  color: #ffa726;
+}
+.community[data-tab="workshop"] .comm-picker-btn:hover {
+  border-color: rgba(255, 167, 38, 0.3);
+}
+.community[data-tab="workshop"] .comm-picker-option:hover {
+  background: rgba(255, 167, 38, 0.08);
+}
+.community[data-tab="workshop"] .comm-picker-option.active {
+  background: rgba(255, 167, 38, 0.15);
+  border-left: 3px solid #ffa726;
+}
+.community[data-tab="workshop"] .comm-mini-item:hover {
+  background: rgba(255, 167, 38, 0.06);
+  border-left: 2px solid #ffa726;
+}
 
 .comm-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); padding: 14px; border-radius: 0; }
 .comm-card + .comm-card { margin-top: 16px; }
@@ -49,6 +213,45 @@
 
 .comm-filter-group { margin-top: 12px; }
 .comm-filter-label { color: var(--text-secondary); font-size: 12px; font-weight: 600; margin-bottom: 6px; }
+
+/* View switch button (Posts/Threads toggle) - at top of filters */
+.comm-view-switch {
+  display: flex;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0;
+  padding: 4px;
+  margin-bottom: 16px;
+}
+.comm-switch-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 0;
+}
+.comm-switch-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+}
+.comm-switch-btn.active {
+  background: var(--gradient-primary);
+  color: var(--text-primary);
+}
+.comm-switch-btn svg {
+  width: 14px;
+  height: 14px;
+}
 .comm-game-picker { position: relative; }
 .comm-picker-btn { width: 100%; display: flex; align-items: center; gap: 10px; background: rgba(255,255,255,0.04); color: var(--text-primary); border: 1px solid rgba(255,255,255,0.12); border-radius: 0; padding: 0 16px 0 84px; cursor: pointer; position: relative; min-height: 96px; overflow: hidden; }
 .comm-picker-card { width: 64px; height: 100%; background: var(--bg-secondary); border-right: 1px solid var(--border-primary); border-left: none; border-top: none; border-bottom: none; border-radius: 0; overflow: hidden; position: absolute; left: 0; top: 0; bottom: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; }
@@ -122,6 +325,435 @@
 
 .comm-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .comm-list-item { color: var(--text-secondary); display: flex; align-items: center; }
+
+/* Thread styles - Reddit-like thread spaces */
+.comm-thread-creator { margin-bottom: 16px; }
+.comm-create-thread-btn { 
+  width: 100%; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  gap: 8px; 
+  background: rgba(255, 255, 255, 0.04); 
+  border: 1px solid rgba(255, 255, 255, 0.12); 
+  color: var(--text-primary); 
+  padding: 12px 16px; 
+  border-radius: 0; 
+  cursor: pointer; 
+  transition: all 0.2s ease; 
+  font-weight: 600; 
+}
+.comm-create-thread-btn:hover { 
+  background: rgba(255, 255, 255, 0.06); 
+  border-color: rgba(255, 255, 255, 0.18); 
+}
+.comm-thread-form { 
+  background: rgba(255, 255, 255, 0.03); 
+  border: 1px solid rgba(255, 255, 255, 0.12); 
+  border-radius: 0; 
+  padding: 16px; 
+  display: flex; 
+  flex-direction: column; 
+  gap: 12px; 
+}
+.comm-thread-title { 
+  background: rgba(255, 255, 255, 0.04); 
+  border: 1px solid rgba(255, 255, 255, 0.12); 
+  color: var(--text-primary); 
+  border-radius: 0; 
+  padding: 10px 12px; 
+  font-size: 16px; 
+  font-weight: 600; 
+}
+.comm-thread-title:focus { 
+  outline: none; 
+  border-color: var(--accent-primary); 
+  box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.15); 
+}
+
+/* Thread-specific focus states */
+.community[data-tab="threads"] .comm-thread-title:focus,
+.community[data-tab="threads"] .comm-thread-content:focus {
+  border-color: #4ade80;
+  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.15);
+}
+.community[data-tab="threads"] .comm-thread-game-selector:focus {
+  border-color: #4ade80;
+  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.15);
+}
+.comm-thread-title::placeholder { 
+  color: var(--text-secondary); 
+}
+.comm-thread-content { 
+  background: rgba(255, 255, 255, 0.04); 
+  border: 1px solid rgba(255, 255, 255, 0.12); 
+  color: var(--text-primary); 
+  border-radius: 0; 
+  padding: 10px 12px; 
+  font-size: 14px; 
+  font-family: inherit; 
+  resize: vertical; 
+  min-height: 60px; 
+}
+.comm-thread-content:focus { 
+  outline: none; 
+  border-color: var(--accent-primary); 
+  box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.15); 
+}
+.comm-thread-content::placeholder { 
+  color: var(--text-secondary); 
+}
+.comm-thread-game-select { 
+  display: flex; 
+  align-items: center; 
+  gap: 8px; 
+}
+.comm-thread-label { 
+  color: var(--text-secondary); 
+  font-size: 13px; 
+  font-weight: 600; 
+  white-space: nowrap; 
+}
+.comm-thread-game-selector { 
+  flex: 1; 
+  background: rgba(255, 255, 255, 0.04); 
+  border: 1px solid rgba(255, 255, 255, 0.12); 
+  color: var(--text-primary); 
+  border-radius: 0; 
+  padding: 8px 12px; 
+  font-size: 14px; 
+  cursor: pointer; 
+}
+.comm-thread-game-selector:focus { 
+  outline: none; 
+  border-color: var(--accent-primary); 
+  box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.15); 
+}
+.comm-thread-actions { 
+  display: flex; 
+  gap: 8px; 
+  justify-content: flex-end; 
+}
+.comm-cancel-btn { 
+  background: transparent; 
+  border: 1px solid rgba(255, 255, 255, 0.12); 
+  color: var(--text-secondary); 
+  padding: 8px 14px; 
+  border-radius: 0; 
+  cursor: pointer; 
+  transition: all 0.2s ease; 
+  font-weight: 500; 
+}
+.comm-cancel-btn:hover { 
+  background: rgba(255, 255, 255, 0.04); 
+  color: var(--text-primary); 
+  border-color: rgba(255, 255, 255, 0.18); 
+}
+
+/* Thread card display (Reddit-like) */
+.comm-thread-card { 
+  background: rgba(255, 255, 255, 0.02); 
+  border: 1px solid var(--border-primary); 
+  border-radius: 0; 
+  padding: 16px; 
+  margin-bottom: 12px; 
+  transition: all 0.2s ease; 
+  cursor: pointer; 
+}
+.comm-thread-card:hover { 
+  background: rgba(255, 255, 255, 0.04); 
+  border-color: rgba(255, 255, 255, 0.15); 
+}
+.comm-thread-card-header { 
+  display: flex; 
+  align-items: flex-start; 
+  gap: 12px; 
+  margin-bottom: 12px; 
+}
+.comm-thread-icon { 
+  width: 40px; 
+  height: 40px; 
+  background: var(--gradient-primary); 
+  border-radius: 0; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  font-size: 20px; 
+  flex-shrink: 0; 
+}
+.comm-thread-card-info { 
+  flex: 1; 
+  min-width: 0; 
+}
+.comm-thread-card-title { 
+  color: var(--text-primary); 
+  font-size: 18px; 
+  font-weight: 700; 
+  margin: 0 0 6px 0; 
+  line-height: 1.3; 
+}
+.comm-thread-card-meta { 
+  display: flex; 
+  align-items: center; 
+  gap: 8px; 
+  flex-wrap: wrap; 
+}
+.comm-thread-card-author { 
+  color: var(--text-secondary); 
+  font-size: 12px; 
+}
+.comm-thread-card-description { 
+  color: var(--text-secondary); 
+  font-size: 14px; 
+  margin: 12px 0; 
+  line-height: 1.5; 
+}
+.comm-thread-card-stats { 
+  display: flex; 
+  gap: 16px; 
+  margin-bottom: 12px; 
+  flex-wrap: wrap; 
+}
+.comm-thread-stat { 
+  color: var(--text-secondary); 
+  font-size: 12px; 
+  display: flex; 
+  align-items: center; 
+  gap: 4px; 
+}
+.comm-thread-enter-btn { 
+  width: 100%; 
+  background: var(--gradient-primary); 
+  border: none; 
+  color: var(--text-primary); 
+  padding: 10px 16px; 
+  border-radius: 0; 
+  cursor: pointer; 
+  font-weight: 600; 
+  transition: all 0.2s ease; 
+  margin-top: 8px; 
+}
+.comm-thread-enter-btn:hover { 
+  opacity: 0.9; 
+  transform: translateY(-1px); 
+}
+
+/* Sidebar thread creation */
+.comm-create-thread-btn-sidebar { 
+  width: 100%; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  gap: 8px; 
+  background: var(--gradient-primary); 
+  border: none; 
+  color: var(--text-primary); 
+  padding: 10px 16px; 
+  border-radius: 0; 
+  cursor: pointer; 
+  transition: all 0.2s ease; 
+  font-weight: 600; 
+  margin-bottom: 12px; 
+}
+.comm-create-thread-btn-sidebar:hover { 
+  opacity: 0.9; 
+  transform: translateY(-1px); 
+}
+.comm-thread-form-sidebar { 
+  background: rgba(255, 255, 255, 0.02); 
+  border: 1px solid rgba(255, 255, 255, 0.08); 
+  border-radius: 0; 
+  padding: 12px; 
+  display: flex; 
+  flex-direction: column; 
+  gap: 10px; 
+  margin-bottom: 12px; 
+}
+.comm-thread-form-sidebar .comm-thread-title { 
+  font-size: 14px; 
+  padding: 8px 10px; 
+}
+.comm-thread-form-sidebar .comm-thread-content { 
+  font-size: 13px; 
+  padding: 8px 10px; 
+  min-height: 50px; 
+  rows: 2; 
+}
+.comm-thread-form-sidebar .comm-thread-game-select { 
+  margin: 0; 
+}
+.comm-thread-form-sidebar .comm-thread-game-selector { 
+  font-size: 13px; 
+  padding: 6px 10px; 
+}
+.comm-thread-form-sidebar .comm-post-btn { 
+  padding: 8px 12px; 
+  font-size: 13px; 
+  width: 100%; 
+}
+
+/* Thread list in sidebar */
+.comm-thread-list { 
+  list-style: none; 
+  padding: 0; 
+  margin: 0; 
+  display: flex; 
+  flex-direction: column; 
+  gap: 4px; 
+}
+.comm-thread-list-empty { 
+  padding: 12px; 
+  color: var(--text-secondary); 
+  font-size: 12px; 
+  text-align: center; 
+}
+.comm-thread-list-item { 
+  display: flex; 
+  align-items: flex-start; 
+  gap: 8px; 
+  padding: 8px 10px; 
+  background: rgba(255, 255, 255, 0.02); 
+  border: 1px solid transparent; 
+  border-radius: 0; 
+  cursor: pointer; 
+  transition: all 0.2s ease; 
+}
+.comm-thread-list-item:hover { 
+  background: rgba(255, 255, 255, 0.04); 
+  border-color: rgba(255, 255, 255, 0.08); 
+}
+.comm-thread-list-item.active { 
+  background: rgba(74, 158, 255, 0.1); 
+  border-color: var(--accent-primary); 
+}
+.comm-thread-list-icon { 
+  width: 24px; 
+  height: 24px; 
+  background: var(--gradient-primary); 
+  border-radius: 0; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  font-size: 12px; 
+  flex-shrink: 0; 
+}
+.comm-thread-list-info { 
+  flex: 1; 
+  min-width: 0; 
+}
+.comm-thread-list-title { 
+  color: var(--text-primary); 
+  font-size: 13px; 
+  font-weight: 600; 
+  margin-bottom: 4px; 
+  line-height: 1.3; 
+  white-space: nowrap; 
+  overflow: hidden; 
+  text-overflow: ellipsis; 
+}
+.comm-thread-list-meta { 
+  display: flex; 
+  align-items: center; 
+  gap: 6px; 
+  flex-wrap: wrap; 
+}
+.comm-game-badge-small { 
+  padding: 2px 6px; 
+  border: 1px solid var(--border-primary); 
+  background: var(--bg-tertiary); 
+  color: var(--text-secondary); 
+  font-size: 10px; 
+  border-radius: 0; 
+}
+.comm-thread-list-stats { 
+  color: var(--text-muted); 
+  font-size: 11px; 
+}
+
+/* Thread detail view */
+.comm-thread-detail { 
+  display: flex; 
+  flex-direction: column; 
+  gap: 16px; 
+}
+.comm-thread-detail-header { 
+  padding-bottom: 16px; 
+  border-bottom: 1px solid var(--border-primary); 
+}
+.comm-thread-back-btn { 
+  background: transparent; 
+  border: 1px solid rgba(255, 255, 255, 0.12); 
+  color: var(--text-secondary); 
+  padding: 6px 12px; 
+  border-radius: 0; 
+  cursor: pointer; 
+  transition: all 0.2s ease; 
+  font-size: 13px; 
+  margin-bottom: 12px; 
+}
+.comm-thread-back-btn:hover { 
+  background: rgba(255, 255, 255, 0.04); 
+  color: var(--text-primary); 
+  border-color: rgba(255, 255, 255, 0.18); 
+}
+.comm-thread-detail-title { 
+  color: var(--text-primary); 
+  font-size: 24px; 
+  font-weight: 700; 
+  margin: 0 0 12px 0; 
+  line-height: 1.3; 
+}
+.comm-thread-detail-meta { 
+  display: flex; 
+  align-items: center; 
+  gap: 12px; 
+  flex-wrap: wrap; 
+  color: var(--text-secondary); 
+  font-size: 13px; 
+}
+.comm-thread-detail-description { 
+  padding: 16px; 
+  background: rgba(255, 255, 255, 0.02); 
+  border: 1px solid var(--border-primary); 
+  border-radius: 0; 
+}
+.comm-thread-detail-description p { 
+  color: var(--text-primary); 
+  margin: 0; 
+  line-height: 1.6; 
+}
+.comm-thread-detail-stats { 
+  display: flex; 
+  gap: 20px; 
+  padding: 12px 0; 
+}
+.comm-thread-posts { 
+  margin-top: 16px; 
+}
+
+/* Thread search bar */
+.comm-thread-search { 
+  margin-bottom: 16px; 
+}
+.comm-thread-search-input { 
+  width: 100%; 
+  background: rgba(255, 255, 255, 0.04); 
+  border: 1px solid rgba(255, 255, 255, 0.12); 
+  color: var(--text-primary); 
+  border-radius: 0; 
+  padding: 12px 16px; 
+  font-size: 14px; 
+  transition: all 0.2s ease; 
+}
+.comm-thread-search-input:focus { 
+  outline: none; 
+  border-color: var(--accent-primary); 
+  box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.15); 
+  background: rgba(255, 255, 255, 0.06); 
+}
+.comm-thread-search-input::placeholder { 
+  color: var(--text-secondary); 
+}
 
 @media (max-width: 1100px) {
   .community-layout-3 { grid-template-columns: 1fr; }

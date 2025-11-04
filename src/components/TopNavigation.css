@@ -169,7 +169,7 @@
   width: 28px;
   height: 28px;
   background: transparent;
-  color: white;
+  color: #ffffff;
   border-radius: 0;
   display: flex;
   align-items: center;
@@ -224,7 +224,7 @@
   height: var(--nav-height);
   background: transparent;
   border: none;
-  color: white;
+  color: #ffffff;
   font-size: 14px;
   font-weight: 600;
   margin-right: 0;
@@ -236,11 +236,12 @@
   content: '';
   position: absolute;
   bottom: 0;
-  left: 0px;
+  left: 8px;
   right: 8px;
   height: 2px;
   background: transparent;
   transition: background 0.2s ease;
+  border-radius: 0 0 8px 8px;
 }
 
 .nav-balance:hover {
@@ -302,19 +303,13 @@
 }
 
 .nav-user-level {
-    color: #b3b3b3;
-    font-size: 11px;
-    font-weight: 500;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    color: #4a9eff;
+    font-size: 12px;
+    font-weight: 600;
+    background: transparent;
+    border: none;
+    padding: 0;
     white-space: nowrap;
-    flex-shrink: 0;
 }
 
 .nav-item {
@@ -389,7 +384,7 @@
   transform: translateX(-50%);
   padding: 6px 12px;
   background: rgba(0, 0, 0, 0.9);
-  color: white;
+  color: #ffffff;
   font-size: 12px;
   font-weight: 500;
   border-radius: 6px;
@@ -425,13 +420,14 @@
 
 .balance-menu {
   position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
+  top: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
   width: 360px;
-  background: rgb(18, 18, 18);
+  background: rgba(15, 17, 21, 0.98);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
-  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.8);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7);
   z-index: 1000;
   overflow: hidden;
 }
@@ -444,7 +440,7 @@
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: white;
+  color: #ffffff;
 }
 
 .balance-input-section {
@@ -463,7 +459,7 @@
   height: 48px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: transparent;
-  color: white;
+  color: #ffffff;
   cursor: pointer;
   transition: all 0.2s ease;
   display: flex;
@@ -493,7 +489,7 @@
 .currency {
   font-size: 24px;
   font-weight: 700;
-  color: white;
+  color: #ffffff;
 }
 
 .balance-amount-input {
@@ -501,7 +497,7 @@
   text-align: center;
   font-size: 32px;
   font-weight: 800;
-  color: white;
+  color: #ffffff;
   background: transparent;
   border: none;
   outline: none;
@@ -520,7 +516,7 @@
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 2px;
-  color: white;
+  color: #ffffff;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -553,7 +549,7 @@
 .cancel-btn {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  color: white;
+  color: #ffffff;
 }
 
 .cancel-btn:hover {
@@ -562,7 +558,7 @@
 
 .confirm-btn {
   background: var(--accent-primary);
-  color: white;
+  color: #ffffff;
 }
 
 .confirm-btn:hover:not(:disabled) {
@@ -590,7 +586,30 @@
   padding: 20px;
   position: relative;
   overflow: visible;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: none;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.profile-menu-header:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* Do not highlight header when the quick switch button is hovered */
+.profile-menu-header:hover:has(.profile-menu-quick-switch-btn:hover) {
+  background: transparent;
+}
+
+/* Removed JS-triggered header hover; header highlights only on direct hover */
+
+.profile-menu-header::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .profile-menu-user-info {
@@ -642,9 +661,10 @@
 }
 
 .profile-menu-quick-switch-btn:hover {
-  background: rgba(74, 158, 255, 0.1);
-  border-color: rgba(74, 158, 255, 0.3);
+  background: rgba(74, 158, 255, 0.16);
+  border-color: rgba(74, 158, 255, 0.45);
   color: #4a9eff;
+  box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.12);
 }
 
 .profile-menu-quick-switch-btn svg {
@@ -656,6 +676,20 @@
   transform: rotate(180deg);
 }
 
+.profile-menu-quick-switch-btn:focus-visible {
+  outline: none;
+  background: rgba(74, 158, 255, 0.18);
+  border-color: rgba(74, 158, 255, 0.5);
+  box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.2);
+  color: #4a9eff;
+}
+
+.profile-menu-name-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .profile-menu-user-details h3 {
   margin: 0;
   font-size: 16px;
@@ -665,6 +699,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
   line-height: 1.2;
+}
+
+.profile-menu-level {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4a9eff;
+  background: transparent;
+  border: none;
+  padding: 0;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .profile-menu-user-details p {
@@ -682,7 +727,7 @@
 }
 
 .profile-menu-quick-switch-section {
-  padding: 16px 20px 20px;
+  padding: 12px 14px 12px;
   animation: slideDown 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -707,7 +752,7 @@
 }
 
 .quick-switch-header {
-  margin-bottom: 14px;
+  margin-bottom: 8px;
 }
 
 .quick-switch-header span {
@@ -807,7 +852,9 @@
 .profile-menu-divider {
   height: 1px;
   background: rgba(255, 255, 255, 0.1);
-  margin: 0;
+  width: calc(100% - 24px);
+  margin: 8px 12px; /* inset divider, not full width */
+  border-radius: 1px;
 }
 
 .profile-menu-manage-accounts {
@@ -915,12 +962,13 @@
 }
 
 .quick-switch-accounts {
-  max-height: 280px;
+  /* Responsive cap: never let the menu grow too tall */
+  max-height: min(40vh, 260px);
   overflow-y: auto;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .quick-switch-accounts::-webkit-scrollbar {
@@ -943,8 +991,8 @@
 .quick-switch-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
+  gap: 10px;
+  padding: 8px 10px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 0;
@@ -971,8 +1019,8 @@
 }
 
 .quick-switch-avatar {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border-radius: 0;
   background: rgba(74, 158, 255, 0.15);
   border: 1px solid rgba(74, 158, 255, 0.3);
@@ -980,7 +1028,7 @@
   align-items: center;
   justify-content: center;
   color: #ffffff;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
   flex-shrink: 0;
   transition: all 0.2s ease;
@@ -1000,20 +1048,20 @@
 }
 
 .quick-switch-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: #e5e5e5;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  line-height: 1.3;
+  line-height: 1.2;
 }
 
 .quick-switch-current-badge {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
   color: #4a9eff;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .quick-switch-item svg {
@@ -1028,6 +1076,31 @@
   text-align: center;
   font-size: 13px;
   color: var(--text-secondary, rgba(255, 255, 255, 0.6));
+}
+
+/* Quick Switch Footer */
+.quick-switch-footer {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.quick-switch-manage-btn {
+  width: 100%;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  color: #e5e5e5;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.quick-switch-manage-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 /* Transaction Menu */
@@ -1070,7 +1143,7 @@
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  color: white;
+  color: #ffffff;
 }
 
 .transaction-close-btn {
@@ -1078,7 +1151,7 @@
   height: 32px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  color: white;
+  color: #ffffff;
   font-size: 24px;
   cursor: pointer;
   border-radius: 2px;
@@ -1106,14 +1179,14 @@
 .currency-symbol {
   font-size: 32px;
   font-weight: 700;
-  color: white;
+  color: #ffffff;
   margin-right: 8px;
 }
 
 .transaction-amount-value {
   font-size: 48px;
   font-weight: 800;
-  color: white;
+  color: #ffffff;
 }
 
 .transaction-methods {
@@ -1181,7 +1254,7 @@
   cursor: pointer;
   font-size: 14px;
   font-weight: 600;
-  color: white;
+  color: #ffffff;
 }
 
 .payment-form {
@@ -1215,7 +1288,7 @@
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 2px;
-  color: white;
+  color: #ffffff;
   font-size: 14px;
   outline: none;
   transition: all 0.2s ease;
@@ -1259,7 +1332,7 @@
 }
 
 .summary-row span:last-child {
-  color: white;
+  color: #ffffff;
 }
 
 .transaction-confirm-btn {
@@ -1269,7 +1342,7 @@
   background: var(--accent-primary);
   border: none;
   border-radius: 2px;
-  color: white;
+  color: #ffffff;
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
@@ -1289,7 +1362,7 @@
   margin: 0 0 16px 0;
   font-size: 16px;
   font-weight: 600;
-  color: white;
+  color: #ffffff;
 }
 
 .connect-btn,
@@ -1298,7 +1371,7 @@
   background: var(--accent-primary);
   border: none;
   border-radius: 2px;
-  color: white;
+  color: #ffffff;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -1353,7 +1426,7 @@
   margin: 0;
   font-size: 18px;
   font-weight: 700;
-  color: white;
+  color: #ffffff;
 }
 
 .modal-close {
@@ -1361,7 +1434,7 @@
   height: 32px;
   background: transparent;
   border: none;
-  color: white;
+  color: #ffffff;
   font-size: 24px;
   cursor: pointer;
   border-radius: 6px;

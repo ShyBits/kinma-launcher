@@ -27,7 +27,7 @@
   background: var(--accent-primary);
   border: none;
   border-radius: 12px;
-  color: white;
+  color: #ffffff;
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
@@ -192,8 +192,8 @@
 }
 
 .chart-filter-btn.active {
-  background: white;
-  border-color: white;
+  background: #ffffff;
+  border-color: #ffffff;
   color: var(--bg-primary);
 }
 
@@ -215,7 +215,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: white;
+  background: #ffffff;
   opacity: 0.8;
 }
 
@@ -300,7 +300,7 @@
 .chart-tooltip {
   position: absolute;
   background: rgba(0, 0, 0, 0.9);
-  color: white;
+  color: #ffffff;
   padding: 6px 10px;
   border-radius: 6px;
   font-size: 12px;
@@ -419,7 +419,7 @@
   background: rgba(255, 255, 255, 0.2);
   border: none;
   border-radius: 0;
-  color: white;
+  color: #ffffff;
   cursor: pointer;
   transition: all 0.2s ease;
   backdrop-filter: blur(10px);
@@ -443,7 +443,7 @@
   border-radius: 0;
   font-size: 12px;
   font-weight: 700;
-  color: white;
+  color: #ffffff;
   text-transform: uppercase;
   z-index: 10;
 }
@@ -715,7 +715,7 @@
   background: var(--accent-primary);
   border: none;
   border-radius: 8px;
-  color: white;
+  color: #ffffff;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -802,7 +802,7 @@
 .upload-preset-item.selected .upload-preset-number,
 .upload-preset-item.applied .upload-preset-number {
   background: var(--accent-primary);
-  color: white;
+  color: #ffffff;
 }
 
 .upload-preset-name {
@@ -848,7 +848,7 @@ select.upload-input:disabled {
   background: var(--accent-primary);
   border: none;
   border-radius: 8px;
-  color: white;
+  color: #ffffff;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -1021,7 +1021,7 @@ select.upload-input:disabled {
 
 .upload-keyboard-hint.active .keyboard-key,
 .upload-keyboard-hint.active svg {
-  color: white;
+  color: #ffffff;
   opacity: 1;
 }
 
@@ -1271,12 +1271,12 @@ select.upload-input:disabled {
 }
 
 .upload-step-circle svg {
-  color: white;
+  color: #ffffff;
   transition: color 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .upload-progress-step.active .upload-step-circle svg {
-  color: white;
+  color: #ffffff;
 }
 
 /* Active state with error - red outline and shadow */
@@ -1328,7 +1328,7 @@ select.upload-input:disabled {
 }
 
 .upload-progress-step.active .upload-step-circle span {
-  color: white;
+  color: #ffffff;
 }
 
 .upload-progress-step.completed .upload-step-circle {
@@ -1341,11 +1341,11 @@ select.upload-input:disabled {
 }
 
 .upload-progress-step.completed .upload-step-circle svg {
-  color: white;
+  color: #ffffff;
 }
 
 .upload-progress-step.completed .upload-step-circle span {
-  color: white;
+  color: #ffffff;
 }
 
 /* All circles animate immediately when completed class is added */
@@ -1369,11 +1369,11 @@ select.upload-input:disabled {
 }
 
 .upload-progress-step.optional-passed .upload-step-circle span {
-  color: white;
+  color: #ffffff;
 }
 
 .upload-progress-step.optional-passed .upload-step-label {
-  color: white;
+  color: #ffffff;
 }
 
 /* Confirm step styling */
@@ -1408,7 +1408,7 @@ select.upload-input:disabled {
 }
 
 .upload-progress-step.confirm-active .upload-step-circle svg {
-  color: white !important;
+  color: #ffffff !important;
 }
 
 .upload-progress-step.confirm-active .upload-step-label {
@@ -1451,7 +1451,7 @@ select.upload-input:disabled {
 .upload-step-label {
   font-size: 12px;
   font-weight: 700;
-  color: white;
+  color: #ffffff;
   text-transform: uppercase;
   letter-spacing: 1px;
   transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1510,7 +1510,7 @@ select.upload-input:disabled {
 
 .upload-progress-step.error .upload-step-circle span,
 .upload-progress-step.error .upload-step-circle svg {
-  color: white;
+  color: #ffffff;
 }
 
 .upload-progress-step.error .upload-step-label:not(.active) {
@@ -1577,7 +1577,7 @@ select.upload-input:disabled {
 .upload-position-btn.active {
   background: var(--accent-primary);
   border-color: var(--accent-primary);
-  color: white;
+  color: #ffffff;
 }
 
 .upload-input,
@@ -1820,12 +1820,12 @@ label.upload-file-upload {
 
 .upload-cancel-btn:hover {
   background: #FF4757;
-  color: white;
+  color: #ffffff;
 }
 
 .upload-submit-btn {
   background: var(--accent-primary);
-  color: white;
+  color: #ffffff;
 }
 
 .upload-submit-btn:hover {
@@ -1875,7 +1875,7 @@ label.upload-file-upload {
 
 .upload-next-btn:hover {
   background: var(--accent-primary);
-  color: white;
+  color: #ffffff;
 }
 
 .upload-next-btn:disabled {
@@ -2157,7 +2157,7 @@ label.upload-file-upload {
 }
 
 .upload-maximize-btn:hover {
-  color: white;
+  color: #ffffff;
   border-color: var(--accent-primary);
   background: rgba(102, 126, 234, 0.25);
   transform: scale(1.15);

@@ -36,7 +36,7 @@
 }
 
 .video-play-overlay svg {
-  color: white;
+  color: #ffffff;
   filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5));
 }
 
@@ -121,7 +121,7 @@
 .video-control-btn {
   background: transparent;
   border: none;
-  color: white;
+  color: #ffffff;
   cursor: pointer;
   padding: 4px;
   display: flex;
@@ -157,7 +157,7 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: white;
+  background: #ffffff;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -170,7 +170,7 @@
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: white;
+  background: #ffffff;
   cursor: pointer;
   border: none;
   transition: all 0.2s ease;
@@ -181,7 +181,7 @@
 }
 
 .video-time {
-  color: white;
+  color: #ffffff;
   font-size: 13px;
   font-weight: 500;
 }

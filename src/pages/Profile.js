@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { User, Activity, Trophy, Clock, Gamepad2, Star, TrendingUp } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { User, Edit2, X, Plus, Layout, BarChart3, Image, List, Code, Save, Terminal, Bug, FileText, AlertCircle } from 'lucide-react';
 import { getUserData, saveUserData } from '../utils/UserDataManager';
+import CodeEditor from '../components/CodeEditor';
 import './Profile.css';
 
 const Profile = ({ navigate }) => {
-  // Load user data from account-separated storage
   const [authUser, setAuthUser] = useState(() => {
     try {
       const u = localStorage.getItem('authUser');
@@ -14,77 +14,55 @@ const Profile = ({ navigate }) => {
     }
   });
 
-  // Load user stats (account-separated)
-  const [userStats, setUserStats] = useState(() => {
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [showCustomCode, setShowCustomCode] = useState(false);
+  const [profileHTML, setProfileHTML] = useState(() => {
     try {
-      const stats = getUserData('userStats', {
-        level: 1,
-        exp: 0,
-        expToNext: 100,
-        totalGames: 0,
-        achievements: 0,
-        totalPlaytime: 0,
-        rank: 'Novice'
-      });
-      return stats;
+      return getUserData('profileHTML', '');
     } catch (_) {
-      return {
-        level: 1,
-        exp: 0,
-        expToNext: 100,
-        totalGames: 0,
-        achievements: 0,
-        totalPlaytime: 0,
-        rank: 'Novice'
-      };
+      return '';
     }
   });
-
-  // Load user games (account-separated)
-  const [customGames, setCustomGames] = useState(() => {
+  const [profileCSS, setProfileCSS] = useState(() => {
     try {
-      return getUserData('customGames', []);
+      return getUserData('profileCSS', '');
     } catch (_) {
-      return [];
+      return '';
     }
   });
-
-  // Load recent achievements (account-separated)
-  const [recentAchievements, setRecentAchievements] = useState(() => {
+  const [profileJS, setProfileJS] = useState(() => {
     try {
-      return getUserData('recentAchievements', []);
+      return getUserData('profileJS', '');
     } catch (_) {
-      return [];
+      return '';
     }
   });
-
-  // Load recent activity (account-separated)
-  const [recentActivity, setRecentActivity] = useState(() => {
+  const [previewHeight, setPreviewHeight] = useState(() => {
     try {
-      return getUserData('recentActivity', []);
+      const saved = getUserData('profilePreviewHeight', null);
+      return saved !== null ? saved : 400;
     } catch (_) {
-      return [];
+      return 400;
     }
   });
+  const [activeTab, setActiveTab] = useState('html');
+  const [debugConsole, setDebugConsole] = useState([]);
+  const [output, setOutput] = useState([]);
+  const [terminal, setTerminal] = useState([]);
+  const [problems, setProblems] = useState([]);
 
-  // Reload data when user changes
+  const previewRef = useRef(null);
+  const editorRef = useRef(null);
+  const isResizingRef = useRef(false);
+
   useEffect(() => {
     const handleUserChange = () => {
       try {
         const u = localStorage.getItem('authUser');
         setAuthUser(u ? JSON.parse(u) : null);
-        setUserStats(getUserData('userStats', {
-          level: 1,
-          exp: 0,
-          expToNext: 100,
-          totalGames: 0,
-          achievements: 0,
-          totalPlaytime: 0,
-          rank: 'Novice'
-        }));
-        setCustomGames(getUserData('customGames', []));
-        setRecentAchievements(getUserData('recentAchievements', []));
-        setRecentActivity(getUserData('recentActivity', []));
+        setProfileHTML(getUserData('profileHTML', ''));
+        setProfileCSS(getUserData('profileCSS', ''));
+        setProfileJS(getUserData('profileJS', ''));
       } catch (_) {}
     };
 
@@ -92,190 +70,435 @@ const Profile = ({ navigate }) => {
     return () => window.removeEventListener('user-changed', handleUserChange);
   }, []);
 
-  // Calculate stats from actual games
   useEffect(() => {
-    if (customGames.length > 0) {
-      const totalPlaytime = customGames.reduce((sum, game) => sum + (parseInt(game.playtime) || 0), 0);
-      const updatedStats = {
-        ...userStats,
-        totalGames: customGames.length,
-        totalPlaytime: totalPlaytime
-      };
-      setUserStats(updatedStats);
-      saveUserData('userStats', updatedStats);
-    }
-  }, [customGames]);
+    saveUserData('profileHTML', profileHTML);
+  }, [profileHTML]);
+
+  useEffect(() => {
+    saveUserData('profileCSS', profileCSS);
+  }, [profileCSS]);
+
+  useEffect(() => {
+    saveUserData('profileJS', profileJS);
+  }, [profileJS]);
+
+  useEffect(() => {
+    saveUserData('profilePreviewHeight', previewHeight);
+  }, [previewHeight]);
+
+  const handleResizeStart = (e) => {
+    e.preventDefault();
+    isResizingRef.current = true;
+    
+    const startY = e.clientY;
+    const startHeight = previewHeight;
+    const containerHeight = e.currentTarget.closest('.profile-edit-content').offsetHeight;
+    
+    const handleMouseMove = (e) => {
+      if (!isResizingRef.current) return;
+      
+      const deltaY = e.clientY - startY;
+      const maxHeight = containerHeight * 0.9;
+      const newHeight = Math.max(200, Math.min(maxHeight, startHeight + deltaY));
+      setPreviewHeight(newHeight);
+    };
+    
+    const handleMouseUp = () => {
+      isResizingRef.current = false;
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
 
   const userName = authUser?.name || authUser?.username || authUser?.email?.split('@')[0] || 'Player';
-  const expPercentage = userStats.expToNext > 0 ? (userStats.exp / userStats.expToNext) * 100 : 0;
 
-  // Get library games (user's games with playtime info)
-  const gameLibrary = customGames.slice(0, 3).map(game => ({
-    id: game.gameId || game.id,
-    name: game.name || game.gameName || 'Untitled Game',
-    hours: parseInt(game.playtime) || 0,
-    lastPlayed: game.lastPlayed || 'Never',
-    progress: game.progress || 0,
-    favorite: game.favorite || false
-  }));
+  const handleAddPrebuilt = (type) => {
+    const prebuiltItems = {
+      header: {
+        html: '<div class="profile-header">\n  <div class="header-content">\n    <h1>Profile Header</h1>\n    <p class="header-subtitle">Welcome to my profile</p>\n  </div>\n</div>\n',
+        css: '.profile-header {\n  background: #ffffff;\n  padding: 40px;\n  border-radius: 8px;\n  margin-bottom: 20px;\n  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);\n}\n\n.profile-header .header-content {\n  text-align: center;\n}\n\n.profile-header h1 {\n  color: #000000;\n  margin: 0 0 10px 0;\n  font-size: 32px;\n  font-weight: 600;\n}\n\n.profile-header .header-subtitle {\n  color: #666666;\n  margin: 0;\n  font-size: 16px;\n  font-weight: 400;\n}\n',
+        cssSelector: '.profile-header',
+        js: ''
+      },
+      stats: {
+        html: '<div class="profile-stats">\n  <div class="stat-item">\n    <span class="stat-label">Stat Label</span>\n    <span class="stat-value">0</span>\n  </div>\n  <div class="stat-item">\n    <span class="stat-label">Another Stat</span>\n    <span class="stat-value">0</span>\n  </div>\n</div>\n',
+        css: '.profile-stats {\n  background: #ffffff;\n  padding: 30px;\n  border-radius: 8px;\n  margin-bottom: 20px;\n  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);\n}\n\n.profile-stats .stat-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  padding: 15px;\n  border-bottom: 1px solid #e0e0e0;\n  transition: background-color 0.2s ease;\n}\n\n.profile-stats .stat-item:hover {\n  background-color: #f5f5f5;\n}\n\n.profile-stats .stat-item:last-child {\n  border-bottom: none;\n}\n\n.profile-stats .stat-label {\n  color: #666666;\n  font-size: 14px;\n  font-weight: 400;\n}\n\n.profile-stats .stat-value {\n  color: #000000;\n  font-size: 18px;\n  font-weight: 600;\n}\n',
+        cssSelector: '.profile-stats',
+        js: ''
+      },
+      gallery: {
+        html: '<div class="profile-gallery">\n  <h2 class="gallery-title">Gallery</h2>\n  <div class="gallery-grid">\n    <div class="gallery-item">\n      <div class="gallery-item-placeholder">Image Placeholder</div>\n    </div>\n    <div class="gallery-item">\n      <div class="gallery-item-placeholder">Image Placeholder</div>\n    </div>\n    <div class="gallery-item">\n      <div class="gallery-item-placeholder">Image Placeholder</div>\n    </div>\n  </div>\n</div>\n',
+        css: '.profile-gallery {\n  background: #ffffff;\n  padding: 30px;\n  border-radius: 8px;\n  margin-bottom: 20px;\n  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);\n}\n\n.profile-gallery .gallery-title {\n  color: #000000;\n  margin: 0 0 20px 0;\n  font-size: 24px;\n  font-weight: 600;\n}\n\n.profile-gallery .gallery-grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));\n  gap: 15px;\n}\n\n.profile-gallery .gallery-item {\n  aspect-ratio: 1;\n  border-radius: 4px;\n  overflow: hidden;\n  transition: transform 0.2s ease;\n}\n\n.profile-gallery .gallery-item:hover {\n  transform: scale(1.05);\n}\n\n.profile-gallery .gallery-item-placeholder {\n  width: 100%;\n  height: 100%;\n  background: #f0f0f0;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  color: #999999;\n  font-size: 14px;\n}\n',
+        cssSelector: '.profile-gallery',
+        js: ''
+      },
+      bio: {
+        html: '<div class="profile-bio">\n  <h2 class="bio-title">About Me</h2>\n  <div class="bio-content">\n    <p>Your bio here. Write a brief description about yourself, your interests, and what makes you unique.</p>\n    <p>You can add multiple paragraphs to make your bio more detailed and engaging.</p>\n  </div>\n</div>\n',
+        css: '.profile-bio {\n  background: #ffffff;\n  padding: 30px;\n  border-radius: 8px;\n  margin-bottom: 20px;\n  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);\n}\n\n.profile-bio .bio-title {\n  color: #000000;\n  margin: 0 0 15px 0;\n  font-size: 24px;\n  font-weight: 600;\n}\n\n.profile-bio .bio-content {\n  color: #333333;\n}\n\n.profile-bio .bio-content p {\n  margin: 0 0 15px 0;\n  line-height: 1.6;\n  font-size: 16px;\n}\n\n.profile-bio .bio-content p:last-child {\n  margin-bottom: 0;\n}\n',
+        cssSelector: '.profile-bio',
+        js: ''
+      },
+      timeline: {
+        html: '<div class="profile-timeline">\n  <h2 class="timeline-title">Timeline</h2>\n  <div class="timeline-content">\n    <div class="timeline-item">\n      <div class="timeline-date">2024</div>\n      <div class="timeline-text">Timeline Item Description</div>\n    </div>\n    <div class="timeline-item">\n      <div class="timeline-date">2023</div>\n      <div class="timeline-text">Another Timeline Item</div>\n    </div>\n  </div>\n</div>\n',
+        css: '.profile-timeline {\n  background: #ffffff;\n  padding: 30px;\n  border-radius: 8px;\n  margin-bottom: 20px;\n  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);\n}\n\n.profile-timeline .timeline-title {\n  color: #000000;\n  margin: 0 0 20px 0;\n  font-size: 24px;\n  font-weight: 600;\n}\n\n.profile-timeline .timeline-content {\n  position: relative;\n}\n\n.profile-timeline .timeline-item {\n  display: flex;\n  gap: 20px;\n  padding: 15px;\n  padding-left: 20px;\n  border-left: 3px solid #4a9eff;\n  margin-bottom: 20px;\n  transition: background-color 0.2s ease;\n}\n\n.profile-timeline .timeline-item:hover {\n  background-color: #f5f5f5;\n}\n\n.profile-timeline .timeline-item:last-child {\n  margin-bottom: 0;\n}\n\n.profile-timeline .timeline-date {\n  color: #4a9eff;\n  font-weight: 600;\n  font-size: 14px;\n  min-width: 60px;\n  flex-shrink: 0;\n}\n\n.profile-timeline .timeline-text {\n  color: #333333;\n  font-size: 16px;\n  line-height: 1.5;\n}\n',
+        cssSelector: '.profile-timeline',
+        js: ''
+      }
+    };
 
-  return (
-    <div className="profile">
-      <div className="profile-container">
-        {/* Header Section */}
-        <div className="profile-header">
-          <div className="profile-header-left">
-            <div className="profile-avatar">
-              <User size={40} />
+    const item = prebuiltItems[type];
+    if (!item) return;
+
+    // Always add HTML (duplicates are fine)
+    const newHTML = profileHTML ? profileHTML + '\n' + item.html : item.html;
+    
+    // Check if CSS already exists - if the main selector is found, don't add it again
+    const cssExists = profileCSS && item.cssSelector && profileCSS.includes(item.cssSelector);
+    const newCSS = cssExists ? profileCSS : (profileCSS ? profileCSS + '\n' + item.css : item.css);
+    
+    // Handle JS
+    const newJS = item.js ? (profileJS ? profileJS + '\n' + item.js : item.js) : profileJS;
+
+    setProfileHTML(newHTML);
+    setProfileCSS(newCSS);
+    setProfileJS(newJS);
+  };
+
+  const handleSave = () => {
+    setIsEditMode(false);
+  };
+
+  const handleCancel = () => {
+    setIsEditMode(false);
+    setShowCustomCode(false);
+    setProfileHTML(getUserData('profileHTML', ''));
+    setProfileCSS(getUserData('profileCSS', ''));
+    setProfileJS(getUserData('profileJS', ''));
+  };
+
+  // Render view mode
+  if (!isEditMode) {
+    return (
+      <div className="profile">
+        <div className="profile-container">
+          <div className="profile-view-mode">
+            <div className="profile-placeholder">
+              <User size={64} />
+              <h2>{userName}</h2>
+              <p>Your custom profile page will appear here</p>
+              <button className="edit-profile-btn" onClick={() => setIsEditMode(true)}>
+                <Edit2 size={16} />
+                Edit Profile
+              </button>
             </div>
-            <div className="profile-header-info">
-              <div className="profile-username">{userName}</div>
-              <div className="profile-badges">
-                <span className="profile-rank-badge">{userStats.rank}</span>
-                <span className="profile-level-badge">Level {userStats.level}</span>
-              </div>
-              <div className="profile-progress-bar">
-                <div 
-                  className="profile-progress-fill" 
-                  style={{ width: `${expPercentage}%` }}
-                />
-                <div className="profile-progress-text">
-                  {userStats.exp} / {userStats.expToNext} EXP
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="profile-header-right">
-            <div className="profile-quick-stat">
-              <Gamepad2 size={20} />
-              <span>{userStats.totalGames}</span>
-            </div>
-            <div className="profile-quick-stat">
-              <Trophy size={20} />
-              <span>{userStats.achievements}</span>
-            </div>
-            <div className="profile-quick-stat">
-              <Clock size={20} />
-              <span>{userStats.totalPlaytime}h</span>
-            </div>
+            {(profileHTML || profileCSS || profileJS) && (
+              <div 
+                className="profile-content-preview"
+                dangerouslySetInnerHTML={{ 
+                  __html: `
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                      <style>${profileCSS}</style>
+                    </head>
+                    <body>
+                      ${profileHTML}
+                      <script>${profileJS}</script>
+                    </body>
+                    </html>
+                  `
+                }}
+              />
+            )}
           </div>
         </div>
+      </div>
+    );
+  }
 
-        {/* Main Content Grid */}
-        <div className="profile-grid">
-          {/* Left Column */}
-          <div className="profile-left">
-            {/* Stats Overview */}
-            <div className="profile-section">
-              <h2 className="profile-section-title">
-                <TrendingUp size={18} />
-                STATS OVERVIEW
-              </h2>
-              <div className="stats-grid">
-                <div className="stat-card">
-                  <Gamepad2 size={24} />
-                  <div className="stat-value">{userStats.totalGames}</div>
-                  <div className="stat-label">GAMES OWNED</div>
-                </div>
-                <div className="stat-card">
-                  <Trophy size={24} />
-                  <div className="stat-value">{userStats.achievements}</div>
-                  <div className="stat-label">ACHIEVEMENTS</div>
-                </div>
-                <div className="stat-card">
-                  <Clock size={24} />
-                  <div className="stat-value">{userStats.totalPlaytime}h</div>
-                  <div className="stat-label">PLAYTIME</div>
-                </div>
-                <div className="stat-card">
-                  <Star size={24} />
-                  <div className="stat-value">{userStats.rank}</div>
-                  <div className="stat-label">RANK</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Recent Activity */}
-            <div className="profile-section">
-              <h2 className="profile-section-title">
-                <Activity size={18} />
-                RECENT ACTIVITY
-              </h2>
-              <div className="activity-list">
-                {recentActivity.length > 0 ? (
-                  recentActivity.slice(0, 3).map((activity, index) => (
-                    <div key={activity.id || index} className="activity-item">
-                      <div className="activity-dot" />
-                      <div className="activity-content">
-                        <p>{activity.text || activity.message}</p>
-                        <span>{activity.time || activity.date}</span>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="activity-empty">No recent activity</div>
-                )}
-              </div>
+  // Render edit mode
+  return (
+    <div className="profile profile-edit-mode">
+      <div className="profile-edit-container">
+        {/* Main Content Area */}
+        <div className={`profile-edit-content ${isEditMode ? 'sidebar-open' : ''}`}>
+          <div className="profile-edit-header">
+            <h2>Edit Profile</h2>
+            <div className="profile-edit-actions">
+              <button className="save-profile-btn" onClick={handleSave}>
+                <Save size={16} />
+                Save
+              </button>
+              <button className="cancel-profile-btn" onClick={handleCancel}>
+                <X size={16} />
+                Cancel
+              </button>
             </div>
           </div>
 
-          {/* Right Column */}
-          <div className="profile-right">
-            {/* Your Library */}
-            <div className="profile-section">
-              <h2 className="profile-section-title">
-                <Gamepad2 size={18} />
-                YOUR LIBRARY
-              </h2>
-              <div className="library-list">
-                {gameLibrary.length > 0 ? (
-                  gameLibrary.map(game => (
-                    <div key={game.id} className="library-card">
-                      <div className="library-card-header">
-                        <div className="library-game-info">
-                          <h3>{game.name}</h3>
-                          {game.favorite && <Star size={16} className="favorite-icon" fill="currentColor" />}
-                        </div>
-                        <div className="library-hours">{game.hours}h</div>
+          {!showCustomCode ? (
+            <div className="profile-edit-placeholder">
+              <p>Click "Custom Code" in the sidebar to start building your profile</p>
+            </div>
+          ) : (
+            <>
+              {/* Preview Area */}
+              <div 
+                className="profile-preview-wrapper" 
+                ref={previewRef}
+                style={{ height: `${previewHeight}px` }}
+              >
+                <h3>Preview</h3>
+                <div 
+                  className="profile-preview-content"
+                  dangerouslySetInnerHTML={{ 
+                    __html: `
+                      <!DOCTYPE html>
+                      <html>
+                      <head>
+                        <style>${profileCSS}</style>
+                      </head>
+                      <body>
+                        ${profileHTML}
+                        <script>${profileJS}</script>
+                      </body>
+                      </html>
+                    `
+                  }}
+                />
+              </div>
+
+              {/* Resize Handle */}
+              <div 
+                className="profile-resize-handle"
+                onMouseDown={handleResizeStart}
+              />
+
+              {/* Code Editor with Tabs */}
+              <div 
+                className="profile-editor-wrapper" 
+                ref={editorRef}
+              >
+                <div className="code-section-tabs">
+                  <button
+                    className={`code-tab ${activeTab === 'html' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('html')}
+                  >
+                    <Code size={14} />
+                    HTML
+                  </button>
+                  <button
+                    className={`code-tab ${activeTab === 'css' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('css')}
+                  >
+                    <Code size={14} />
+                    CSS
+                  </button>
+                  <button
+                    className={`code-tab ${activeTab === 'js' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('js')}
+                  >
+                    <Code size={14} />
+                    JavaScript
+                  </button>
+                  
+                  <div className="code-tab-separator" />
+                  
+                  <button
+                    className={`code-tab ${activeTab === 'debug' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('debug')}
+                  >
+                    <Bug size={14} />
+                    Debug Console
+                  </button>
+                  <button
+                    className={`code-tab ${activeTab === 'output' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('output')}
+                  >
+                    <FileText size={14} />
+                    Output
+                  </button>
+                  <button
+                    className={`code-tab ${activeTab === 'terminal' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('terminal')}
+                  >
+                    <Terminal size={14} />
+                    Terminal
+                  </button>
+                </div>
+
+                <div className="code-section-content">
+                  {activeTab === 'html' && (
+                    <CodeEditor
+                      value={profileHTML}
+                      onChange={(e) => setProfileHTML(e.target.value)}
+                      language="html"
+                      placeholder="Enter your HTML code here..."
+                    />
+                  )}
+
+                  {activeTab === 'css' && (
+                    <CodeEditor
+                      value={profileCSS}
+                      onChange={(e) => setProfileCSS(e.target.value)}
+                      language="css"
+                      placeholder="Enter your CSS code here..."
+                    />
+                  )}
+
+                  {activeTab === 'js' && (
+                    <CodeEditor
+                      value={profileJS}
+                      onChange={(e) => setProfileJS(e.target.value)}
+                      language="javascript"
+                      placeholder="Enter your JavaScript code here..."
+                    />
+                  )}
+
+                  {activeTab === 'debug' && (
+                    <div className="debug-console-panel">
+                      <div className="panel-header">
+                        <span>Debug Console</span>
+                        <button 
+                          className="clear-panel-btn"
+                          onClick={() => setDebugConsole([])}
+                        >
+                          Clear
+                        </button>
                       </div>
-                      <div className="library-progress">
-                        <div 
-                          className="library-progress-bar"
-                          style={{ width: `${game.progress}%` }}
-                        />
-                      </div>
-                      <div className="library-footer">
-                        <span>Last played: {game.lastPlayed}</span>
+                      <div className="panel-content">
+                        {debugConsole.length === 0 ? (
+                          <div className="panel-empty">No debug messages</div>
+                        ) : (
+                          debugConsole.map((msg, index) => (
+                            <div key={index} className={`console-message ${msg.type}`}>
+                              <span className="console-time">{msg.time}</span>
+                              <span className="console-text">{msg.text}</span>
+                            </div>
+                          ))
+                        )}
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <div className="library-empty">No games in library</div>
-                )}
+                  )}
+
+                  {activeTab === 'output' && (
+                    <div className="output-panel">
+                      <div className="panel-header">
+                        <span>Output</span>
+                        <button 
+                          className="clear-panel-btn"
+                          onClick={() => setOutput([])}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      <div className="panel-content">
+                        {output.length === 0 ? (
+                          <div className="panel-empty">No output</div>
+                        ) : (
+                          output.map((msg, index) => (
+                            <div key={index} className="output-message">
+                              {msg}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {activeTab === 'terminal' && (
+                    <div className="terminal-panel">
+                      <div className="panel-header">
+                        <span>Terminal</span>
+                        <button 
+                          className="clear-panel-btn"
+                          onClick={() => setTerminal([])}
+                        >
+                          Clear
+                        </button>
+                      </div>
+                      <div className="panel-content terminal-content">
+                        {terminal.length === 0 ? (
+                          <div className="panel-empty">Terminal ready</div>
+                        ) : (
+                          terminal.map((line, index) => (
+                            <div key={index} className="terminal-line">
+                              {line}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
+            </>
+          )}
+        </div>
+
+        {/* Sidebar */}
+        <div className={`profile-edit-sidebar ${isEditMode ? 'open' : ''}`}>
+          <div className="sidebar-header">
+            <h3>Add Items</h3>
+            <button className="close-sidebar-btn" onClick={() => setIsEditMode(false)}>
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="sidebar-content">
+            <div className="prebuilt-items">
+              <h4>Pre-built Items</h4>
+              
+              <button className="prebuilt-item-btn" onClick={() => handleAddPrebuilt('header')}>
+                <Layout size={20} />
+                <span>Header</span>
+              </button>
+
+              <button className="prebuilt-item-btn" onClick={() => handleAddPrebuilt('stats')}>
+                <BarChart3 size={20} />
+                <span>Stats</span>
+              </button>
+
+              <button className="prebuilt-item-btn" onClick={() => handleAddPrebuilt('gallery')}>
+                <Image size={20} />
+                <span>Gallery</span>
+              </button>
+
+              <button className="prebuilt-item-btn" onClick={() => handleAddPrebuilt('bio')}>
+                <List size={20} />
+                <span>Bio</span>
+              </button>
+
+              <button className="prebuilt-item-btn" onClick={() => handleAddPrebuilt('timeline')}>
+                <BarChart3 size={20} />
+                <span>Timeline</span>
+              </button>
             </div>
 
-            {/* Recent Achievements */}
-            <div className="profile-section">
-              <h2 className="profile-section-title">
-                <Trophy size={18} />
-                RECENT ACHIEVEMENTS
-              </h2>
-              <div className="achievements-list">
-                {recentAchievements.length > 0 ? (
-                  recentAchievements.slice(0, 3).map((achievement, index) => (
-                    <div key={achievement.id || index} className="achievement-card">
-                      <div className="achievement-icon">{achievement.icon || '🏆'}</div>
-                      <div className="achievement-info">
-                        <h3>{achievement.name}</h3>
-                        <p>{achievement.date || achievement.time}</p>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="achievements-empty">No achievements yet</div>
-                )}
-              </div>
+            <div className="sidebar-divider" />
+
+            <div className="custom-code-section">
+              <button 
+                className="custom-code-btn" 
+                onClick={() => {
+                  setShowCustomCode(true);
+                  if (!profileHTML && !profileCSS && !profileJS) {
+                    const customHTML = '<div class="custom-profile">\n  <h1>Custom Profile Page</h1>\n</div>\n';
+                    const customCSS = 'body {\n  font-family: Arial, sans-serif;\n  margin: 0;\n  padding: 0;\n}\n\n.custom-profile {\n  padding: 20px;\n}\n';
+                    const customJS = 'console.log("Custom profile loaded");\n';
+                    setProfileHTML(customHTML);
+                    setProfileCSS(customCSS);
+                    setProfileJS(customJS);
+                  }
+                }}
+              >
+                <Code size={20} />
+                <span>Custom Code</span>
+                <small>Full profile page builder</small>
+              </button>
             </div>
           </div>
         </div>
