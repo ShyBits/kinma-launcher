@@ -28,6 +28,10 @@
   --border-secondary: rgba(255, 255, 255, 0.2);
   --border-accent: rgba(74, 158, 255, 0.3);
   
+  /* Typography */
+  --font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+  --font-family-mono: 'Consolas', 'Monaco', 'Courier New', monospace;
+  
   /* Layout */
   --nav-height: 60px;
   --border-radius: 6px;
@@ -59,10 +63,19 @@
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
+  font-family: var(--font-family);
+}
+
+html {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
 }
 
 body {
-  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+  font-family: var(--font-family);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: var(--bg-primary);
@@ -77,6 +90,8 @@ body {
   border: none;
   margin: 0;
   padding: 0;
+  height: 100%;
+  width: 100%;
 }
 
 #root {
@@ -148,6 +163,8 @@ body {
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
+  min-height: 0;
+  max-height: 100%;
 }
 
 /* Typography */

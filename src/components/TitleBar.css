@@ -42,7 +42,7 @@
 }
 
 .logo-icon {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-family);
 }
 
 .app-title {

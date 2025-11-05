@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Star, Users, TrendingUp, TrendingDown, Play, ArrowLeft, CheckCircle2, Volume2, VolumeX, ChevronLeft, ChevronRight, Edit2, X, Save, Code, Terminal, Bug, FileText, Layout, BarChart3, Image, List, Sparkles, Palette } from 'lucide-react';
+import { Star, Users, TrendingUp, TrendingDown, Play, ArrowLeft, CheckCircle2, Volume2, VolumeX, ChevronLeft, ChevronRight, Edit2, X, Save, Code, Terminal, Bug, FileText, Layout, BarChart3, Image, List, Sparkles, Palette, ChevronDown, ChevronUp, Minimize2, Zap, Target, Sword, Shield, Trophy, Mountain, Heart, Skull, Activity, Laugh, Split, Columns, Rows, PanelLeftClose, PanelRightClose, FileCode, Paintbrush, Brackets, Search, Filter } from 'lucide-react';
 import { getUserData, getAllUsersData, getCurrentUserId, saveUserData } from '../utils/UserDataManager';
 import CustomVideoPlayer from '../components/CustomVideoPlayer';
 import CodeEditor from '../components/CodeEditor';
@@ -18,8 +18,21 @@ const GamePromo = ({ gamesData = {} }) => {
   // Edit mode states
   const [isEditMode, setIsEditMode] = useState(false);
   const [showCustomCode, setShowCustomCode] = useState(false);
-  const [promoMode, setPromoMode] = useState('prebuilt'); // 'prebuilt' or 'custom'
-  const [showPreviewLabels, setShowPreviewLabels] = useState(true);
+  const [promoMode, setPromoMode] = useState(() => {
+    try {
+      return localStorage.getItem(`gamePromoMode_${gameId}`) || 'prebuilt';
+    } catch (_) {
+      return 'prebuilt';
+    }
+  });
+  const [showPreviewLabels, setShowPreviewLabels] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`gamePromoPreviewLabels_${gameId}`);
+      return saved !== null ? saved === 'true' : true;
+    } catch (_) {
+      return true;
+    }
+  });
   const [promoHTML, setPromoHTML] = useState(() => {
     try {
       return localStorage.getItem(`gamePromoHTML_${gameId}`) || '';
@@ -49,14 +62,96 @@ const GamePromo = ({ gamesData = {} }) => {
       return 400;
     }
   });
+  const [previewWidth, setPreviewWidth] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`gamePromoPreviewWidth_${gameId}`);
+      return saved ? parseInt(saved, 10) : 700;
+    } catch (_) {
+      return 700;
+    }
+  });
+  const [isTabsCompact, setIsTabsCompact] = useState(false);
+  const editorTabsRef = useRef(null);
   const [activeTab, setActiveTab] = useState('html');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [cssFilter, setCssFilter] = useState('all'); // 'all', 'keyframes', 'media', 'import', 'variables', etc.
   const [debugConsole, setDebugConsole] = useState([]);
   const [output, setOutput] = useState([]);
   const [terminal, setTerminal] = useState([]);
+  const [problems, setProblems] = useState([]);
+  const [isTemplatesExpanded, setIsTemplatesExpanded] = useState(true);
+  const [codeLayoutMode, setCodeLayoutMode] = useState(() => {
+    try {
+      return localStorage.getItem(`gamePromoCodeLayout_${gameId}`) || 'bottom';
+    } catch (_) {
+      return 'bottom';
+    }
+  });
   
   const previewRef = useRef(null);
   const editorRef = useRef(null);
   const isResizingRef = useRef(false);
+  const [isResizing, setIsResizing] = useState(false);
+  
+  // Check if tabs should be compact based on editor width
+  useEffect(() => {
+    if (!editorRef.current || codeLayoutMode === 'bottom') {
+      setIsTabsCompact(false);
+      return;
+    }
+    
+    const checkCompact = () => {
+      const editorWidth = editorRef.current?.offsetWidth || 0;
+      // Lower threshold to ensure buttons are always visible - switch to compact mode earlier
+      setIsTabsCompact(editorWidth < 500);
+    };
+    
+    checkCompact();
+    const resizeObserver = new ResizeObserver(checkCompact);
+    if (editorRef.current) {
+      resizeObserver.observe(editorRef.current);
+    }
+    
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [codeLayoutMode, previewWidth]);
+
+  // Reset CSS filter when switching away from CSS tab
+  useEffect(() => {
+    if (activeTab !== 'css') {
+      setCssFilter('all');
+    }
+  }, [activeTab]);
+
+  // Ensure previewWidth respects minimum size when switching to left/right mode
+  useEffect(() => {
+    if ((codeLayoutMode === 'left' || codeLayoutMode === 'right') && previewWidth < 400) {
+      setPreviewWidth(400);
+    }
+    
+    // Ensure code editor has minimum width
+    if (codeLayoutMode === 'left' || codeLayoutMode === 'right') {
+      const container = document.querySelector('.promo-edit-content');
+      if (container) {
+        const containerWidth = container.offsetWidth;
+        const codeEditorMinWidth = 480;
+        const previewMaxWidth = containerWidth - codeEditorMinWidth;
+        if (previewWidth > previewMaxWidth) {
+          setPreviewWidth(Math.max(400, previewMaxWidth));
+        }
+      }
+    }
+  }, [codeLayoutMode, previewWidth]);
+
+  // Save code layout mode when it changes
+  useEffect(() => {
+    if (gameId && codeLayoutMode) {
+      try {
+        localStorage.setItem(`gamePromoCodeLayout_${gameId}`, codeLayoutMode);
+      } catch (_) {}
+    }
+  }, [codeLayoutMode, gameId]);
 
   // Load all published games
   useEffect(() => {
@@ -278,73 +373,121 @@ const GamePromo = ({ gamesData = {} }) => {
 
   const isOwned = checkOwnership();
 
-  // Save promo HTML/CSS/JS to localStorage
-  useEffect(() => {
-    if (gameId) {
-      try {
-        localStorage.setItem(`gamePromoHTML_${gameId}`, promoHTML);
-      } catch (_) {}
-    }
-  }, [promoHTML, gameId]);
-
-  useEffect(() => {
-    if (gameId) {
-      try {
-        localStorage.setItem(`gamePromoCSS_${gameId}`, promoCSS);
-      } catch (_) {}
-    }
-  }, [promoCSS, gameId]);
-
-  useEffect(() => {
-    if (gameId) {
-      try {
-        localStorage.setItem(`gamePromoJS_${gameId}`, promoJS);
-      } catch (_) {}
-    }
-  }, [promoJS, gameId]);
-
-  useEffect(() => {
-    if (gameId) {
-      try {
-        localStorage.setItem(`gamePromoPreviewHeight_${gameId}`, previewHeight.toString());
-      } catch (_) {}
-    }
-  }, [previewHeight, gameId]);
+  // Save promo HTML/CSS/JS to localStorage ONLY when explicitly saved
+  // Removed automatic saving - changes should only persist when Save is clicked
 
   // Reload promo code when gameId changes
   useEffect(() => {
     try {
-      setPromoHTML(localStorage.getItem(`gamePromoHTML_${gameId}`) || '');
-      setPromoCSS(localStorage.getItem(`gamePromoCSS_${gameId}`) || '');
-      setPromoJS(localStorage.getItem(`gamePromoJS_${gameId}`) || '');
+      if (gameId) {
+        setPromoHTML(localStorage.getItem(`gamePromoHTML_${gameId}`) || '');
+        setPromoCSS(localStorage.getItem(`gamePromoCSS_${gameId}`) || '');
+        setPromoJS(localStorage.getItem(`gamePromoJS_${gameId}`) || '');
+        const savedHeight = localStorage.getItem(`gamePromoPreviewHeight_${gameId}`);
+        if (savedHeight) setPreviewHeight(parseInt(savedHeight, 10));
+        const savedLabels = localStorage.getItem(`gamePromoPreviewLabels_${gameId}`);
+        if (savedLabels !== null) setShowPreviewLabels(savedLabels === 'true');
+        const savedMode = localStorage.getItem(`gamePromoMode_${gameId}`);
+        if (savedMode) setPromoMode(savedMode);
+      }
     } catch (_) {}
   }, [gameId]);
 
   const handleResizeStart = (e) => {
     e.preventDefault();
-    isResizingRef.current = true;
+    e.stopPropagation();
+    setIsResizing(true);
     
-    const startY = e.clientY;
-    const startHeight = previewHeight;
-    const containerHeight = e.currentTarget.closest('.promo-edit-content').offsetHeight;
-    
-    const handleMouseMove = (e) => {
-      if (!isResizingRef.current) return;
+    if (codeLayoutMode === 'bottom') {
+      // Vertical resize for bottom mode
+      isResizingRef.current = true;
+      const startY = e.clientY;
+      const startHeight = previewHeight;
       
-      const deltaY = e.clientY - startY;
-      const maxHeight = containerHeight * 0.9;
-      const newHeight = Math.max(200, Math.min(maxHeight, startHeight + deltaY));
-      setPreviewHeight(newHeight);
-    };
-    
-    const handleMouseUp = () => {
-      isResizingRef.current = false;
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-    
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+      const handleMouseMove = (e) => {
+        if (!isResizingRef.current) return;
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const container = e.currentTarget?.closest?.('.promo-edit-content') || document.querySelector('.promo-edit-content');
+        if (!container) return;
+        
+        const containerHeight = container.offsetHeight;
+        const deltaY = e.clientY - startY;
+        const maxHeight = containerHeight * 0.9;
+        const newHeight = Math.max(200, Math.min(maxHeight, startHeight + deltaY));
+        setPreviewHeight(newHeight);
+      };
+      
+      const handleMouseUp = () => {
+        isResizingRef.current = false;
+        setIsResizing(false);
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+        document.body.style.pointerEvents = '';
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+      
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'row-resize';
+      document.body.style.pointerEvents = 'none';
+      document.addEventListener('mousemove', handleMouseMove, { passive: false });
+      document.addEventListener('mouseup', handleMouseUp, { passive: false });
+    } else if (codeLayoutMode === 'left' || codeLayoutMode === 'right') {
+      // Horizontal resize for left/right modes - exactly like bottom mode but for X axis
+      isResizingRef.current = true;
+      const startX = e.clientX;
+      const startWidth = previewWidth;
+      
+      const handleMouseMove = (e) => {
+        if (!isResizingRef.current) return;
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const container = document.querySelector('.promo-edit-content');
+        if (!container) return;
+        
+        const containerWidth = container.offsetWidth;
+        
+        // Ensure code editor has minimum width of 480px (enough for buttons to be visible)
+        const codeEditorMinWidth = 480;
+        const previewMaxWidth = containerWidth - codeEditorMinWidth;
+        
+        // Calculate delta based on direction
+        let deltaX;
+        if (codeLayoutMode === 'left') {
+          // For left mode: preview is on left, code on right
+          // Moving handle right increases preview width
+          deltaX = e.clientX - startX;
+        } else {
+          // For right mode: code is on left, preview on right (row-reverse)
+          // Moving handle left increases preview width
+          deltaX = startX - e.clientX;
+        }
+        
+        const maxWidth = Math.max(400, previewMaxWidth); // Ensure preview doesn't make code editor too small
+        const minWidth = Math.max(400, containerWidth * 0.25); // At least 400px, or 25% of container
+        const newWidth = Math.max(minWidth, Math.min(maxWidth, startWidth + deltaX));
+        setPreviewWidth(newWidth);
+      };
+      
+      const handleMouseUp = () => {
+        isResizingRef.current = false;
+        setIsResizing(false);
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+        document.body.style.pointerEvents = '';
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+      
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'col-resize';
+      document.body.style.pointerEvents = 'none';
+      document.addEventListener('mousemove', handleMouseMove, { passive: false });
+      document.addEventListener('mouseup', handleMouseUp, { passive: false });
+    }
   };
 
   // Template metadata for display in sidebar
@@ -367,34 +510,47 @@ const GamePromo = ({ gamesData = {} }) => {
 
   const templateMetadata = getTemplateMetadata();
 
-  const handleAddPrebuilt = (type) => {
-    const prebuiltItems = {
-      header: {
-        html: '<div class="promo-header">\n  <h1>Game Title</h1>\n  <p class="promo-subtitle">Amazing Game Experience</p>\n</div>\n',
-        css: '.promo-header {\n  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n  padding: 60px 40px;\n  text-align: center;\n  color: #ffffff;\n  border-radius: 12px;\n  margin-bottom: 30px;\n}\n\n.promo-header h1 {\n  font-size: 48px;\n  font-weight: 900;\n  margin: 0 0 16px 0;\n}\n\n.promo-header .promo-subtitle {\n  font-size: 20px;\n  margin: 0;\n  opacity: 0.9;\n}\n',
-        cssSelector: '.promo-header',
-        js: ''
-      },
-      stats: {
-        html: '<div class="promo-stats-section">\n  <div class="stat-card">\n    <span class="stat-label">Rating</span>\n    <span class="stat-value">4.5</span>\n  </div>\n  <div class="stat-card">\n    <span class="stat-label">Players</span>\n    <span class="stat-value">12,345</span>\n  </div>\n  <div class="stat-card">\n    <span class="stat-label">Trending</span>\n    <span class="stat-value">+15%</span>\n  </div>\n</div>\n',
-        css: '.promo-stats-section {\n  display: flex;\n  gap: 20px;\n  margin-bottom: 30px;\n}\n\n.promo-stats-section .stat-card {\n  flex: 1;\n  background: rgba(255, 255, 255, 0.1);\n  padding: 24px;\n  border-radius: 12px;\n  backdrop-filter: blur(10px);\n  border: 1px solid rgba(255, 255, 255, 0.2);\n}\n\n.promo-stats-section .stat-label {\n  display: block;\n  font-size: 14px;\n  color: rgba(255, 255, 255, 0.7);\n  margin-bottom: 8px;\n  text-transform: uppercase;\n  letter-spacing: 0.5px;\n}\n\n.promo-stats-section .stat-value {\n  display: block;\n  font-size: 32px;\n  font-weight: 700;\n  color: #ffffff;\n}\n',
-        cssSelector: '.promo-stats-section',
-        js: ''
-      },
-      gallery: {
-        html: '<div class="promo-gallery">\n  <h2 class="gallery-title">Screenshots</h2>\n  <div class="gallery-grid">\n    <div class="gallery-item">\n      <div class="gallery-placeholder">Screenshot 1</div>\n    </div>\n    <div class="gallery-item">\n      <div class="gallery-placeholder">Screenshot 2</div>\n    </div>\n    <div class="gallery-item">\n      <div class="gallery-placeholder">Screenshot 3</div>\n    </div>\n  </div>\n</div>\n',
-        css: '.promo-gallery {\n  margin-bottom: 30px;\n}\n\n.promo-gallery .gallery-title {\n  font-size: 32px;\n  font-weight: 800;\n  margin: 0 0 24px 0;\n  color: #ffffff;\n}\n\n.promo-gallery .gallery-grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));\n  gap: 20px;\n}\n\n.promo-gallery .gallery-item {\n  aspect-ratio: 16/9;\n  border-radius: 12px;\n  overflow: hidden;\n  background: rgba(255, 255, 255, 0.1);\n  border: 1px solid rgba(255, 255, 255, 0.2);\n}\n\n.promo-gallery .gallery-placeholder {\n  width: 100%;\n  height: 100%;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  color: rgba(255, 255, 255, 0.5);\n  font-size: 16px;\n}\n',
-        cssSelector: '.promo-gallery',
-        js: ''
-      },
-      description: {
-        html: '<div class="promo-description-section">\n  <h2>About This Game</h2>\n  <p>Write a compelling description about your game here. Tell players what makes it special, what they can expect, and why they should play it.</p>\n  <p>You can add multiple paragraphs to provide more details and create an engaging narrative.</p>\n</div>\n',
-        css: '.promo-description-section {\n  background: rgba(255, 255, 255, 0.05);\n  padding: 40px;\n  border-radius: 12px;\n  margin-bottom: 30px;\n  border: 1px solid rgba(255, 255, 255, 0.1);\n}\n\n.promo-description-section h2 {\n  font-size: 32px;\n  font-weight: 800;\n  margin: 0 0 20px 0;\n  color: #ffffff;\n}\n\n.promo-description-section p {\n  font-size: 18px;\n  line-height: 1.8;\n  color: rgba(255, 255, 255, 0.9);\n  margin: 0 0 16px 0;\n}\n\n.promo-description-section p:last-child {\n  margin-bottom: 0;\n}\n',
-        cssSelector: '.promo-description-section',
-        js: ''
-      }
-    };
+  // Get prebuilt items definition
+  const getPrebuiltItems = () => ({
+    header: {
+      html: '<div class="promo-header">\n  <h1>Game Title</h1>\n  <p class="promo-subtitle">Amazing Game Experience</p>\n</div>\n',
+      css: '.promo-header {\n  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n  padding: 60px 40px;\n  text-align: center;\n  color: #ffffff;\n  border-radius: 12px;\n  margin-bottom: 30px;\n}\n\n.promo-header h1 {\n  font-size: 48px;\n  font-weight: 900;\n  margin: 0 0 16px 0;\n}\n\n.promo-header .promo-subtitle {\n  font-size: 20px;\n  margin: 0;\n  opacity: 0.9;\n}\n',
+      cssSelector: '.promo-header',
+      js: ''
+    },
+    stats: {
+      html: '<div class="promo-stats-section">\n  <div class="stat-card">\n    <span class="stat-label">Rating</span>\n    <span class="stat-value">4.5</span>\n  </div>\n  <div class="stat-card">\n    <span class="stat-label">Players</span>\n    <span class="stat-value">12,345</span>\n  </div>\n  <div class="stat-card">\n    <span class="stat-label">Trending</span>\n    <span class="stat-value">+15%</span>\n  </div>\n</div>\n',
+      css: '.promo-stats-section {\n  display: flex;\n  gap: 20px;\n  margin-bottom: 30px;\n}\n\n.promo-stats-section .stat-card {\n  flex: 1;\n  background: rgba(255, 255, 255, 0.1);\n  padding: 24px;\n  border-radius: 12px;\n  backdrop-filter: blur(10px);\n  border: 1px solid rgba(255, 255, 255, 0.2);\n}\n\n.promo-stats-section .stat-label {\n  display: block;\n  font-size: 14px;\n  color: rgba(255, 255, 255, 0.7);\n  margin-bottom: 8px;\n  text-transform: uppercase;\n  letter-spacing: 0.5px;\n}\n\n.promo-stats-section .stat-value {\n  display: block;\n  font-size: 32px;\n  font-weight: 700;\n  color: #ffffff;\n}\n',
+      cssSelector: '.promo-stats-section',
+      js: ''
+    },
+    gallery: {
+      html: '<div class="promo-gallery">\n  <h2 class="gallery-title">Screenshots</h2>\n  <div class="gallery-grid">\n    <div class="gallery-item">\n      <div class="gallery-placeholder">Screenshot 1</div>\n    </div>\n    <div class="gallery-item">\n      <div class="gallery-placeholder">Screenshot 2</div>\n    </div>\n    <div class="gallery-item">\n      <div class="gallery-placeholder">Screenshot 3</div>\n    </div>\n  </div>\n</div>\n',
+      css: '.promo-gallery {\n  margin-bottom: 30px;\n}\n\n.promo-gallery .gallery-title {\n  font-size: 32px;\n  font-weight: 800;\n  margin: 0 0 24px 0;\n  color: #ffffff;\n}\n\n.promo-gallery .gallery-grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));\n  gap: 20px;\n}\n\n.promo-gallery .gallery-item {\n  aspect-ratio: 16/9;\n  border-radius: 12px;\n  overflow: hidden;\n  background: rgba(255, 255, 255, 0.1);\n  border: 1px solid rgba(255, 255, 255, 0.2);\n}\n\n.promo-gallery .gallery-placeholder {\n  width: 100%;\n  height: 100%;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  color: rgba(255, 255, 255, 0.5);\n  font-size: 16px;\n}\n',
+      cssSelector: '.promo-gallery',
+      js: ''
+    },
+    description: {
+      html: '<div class="promo-description-section">\n  <h2>About This Game</h2>\n  <p>Write a compelling description about your game here. Tell players what makes it special, what they can expect, and why they should play it.</p>\n  <p>You can add multiple paragraphs to provide more details and create an engaging narrative.</p>\n</div>\n',
+      css: '.promo-description-section {\n  background: rgba(255, 255, 255, 0.05);\n  padding: 40px;\n  border-radius: 12px;\n  margin-bottom: 30px;\n  border: 1px solid rgba(255, 255, 255, 0.1);\n}\n\n.promo-description-section h2 {\n  font-size: 32px;\n  font-weight: 800;\n  margin: 0 0 20px 0;\n  color: #ffffff;\n}\n\n.promo-description-section p {\n  font-size: 18px;\n  line-height: 1.8;\n  color: rgba(255, 255, 255, 0.9);\n  margin: 0 0 16px 0;\n}\n\n.promo-description-section p:last-child {\n  margin-bottom: 0;\n}\n',
+      cssSelector: '.promo-description-section',
+      js: ''
+    }
+  });
 
+  // Check if a prebuilt item is already added
+  const isPrebuiltItemAdded = (type) => {
+    const prebuiltItems = getPrebuiltItems();
+    const item = prebuiltItems[type];
+    if (!item || !item.cssSelector) return false;
+    
+    // Check if the CSS selector exists in the HTML
+    const selectorWithoutDot = item.cssSelector.replace('.', '');
+    return promoHTML.includes(`class="${selectorWithoutDot}"`) || promoHTML.includes(`class="${item.cssSelector.replace('.', '')}"`);
+  };
+
+  const handleAddPrebuilt = (type) => {
+    const prebuiltItems = getPrebuiltItems();
     const item = prebuiltItems[type];
     if (!item) return;
 
@@ -406,6 +562,295 @@ const GamePromo = ({ gamesData = {} }) => {
     setPromoHTML(newHTML);
     setPromoCSS(newCSS);
     setPromoJS(newJS);
+  };
+
+  // Process HTML to add X buttons to prebuilt items in edit mode
+  const processPreviewHTML = (html) => {
+    if (!isEditMode || !html) return html;
+    
+    const prebuiltItems = getPrebuiltItems();
+    let processedHTML = html;
+    
+    // Add X button to each prebuilt item - handle ALL instances
+    Object.keys(prebuiltItems).forEach(type => {
+      const item = prebuiltItems[type];
+      if (!item || !item.cssSelector) return;
+      
+      const selectorWithoutDot = item.cssSelector.replace('.', '');
+      // Match opening div tag with the class - use global flag to find ALL instances
+      const classPattern = `class=["'][^"']*${selectorWithoutDot}[^"']*["']`;
+      const openingTagRegex = new RegExp(`(<div[^>]*${classPattern}[^>]*>)`, 'gi');
+      
+      // Process all matches
+      let lastIndex = 0;
+      const matches = [];
+      let match;
+      
+      // Find all matches first
+      while ((match = openingTagRegex.exec(processedHTML)) !== null) {
+        matches.push({
+          index: match.index,
+          match: match[0],
+          openingTag: match[1]
+        });
+      }
+      
+      // Process matches in reverse order to preserve indices
+      for (let i = matches.length - 1; i >= 0; i--) {
+        const { index, match: fullMatch, openingTag } = matches[i];
+        
+        // Skip if already has a remove button
+        if (fullMatch.includes('prebuilt-item-remove-btn')) {
+          continue;
+        }
+        
+        // Add data attribute and X button
+        const dataAttr = `data-prebuilt-item="${type}"`;
+        const xButton = `<button class="prebuilt-item-remove-btn" data-remove-type="${type}" data-remove-class="${selectorWithoutDot}" title="Remove item">×</button>`;
+        
+        // Add data attribute to the tag
+        let modifiedTag = openingTag;
+        if (modifiedTag.includes('style=')) {
+          modifiedTag = modifiedTag.replace('style=', `${dataAttr} style=`);
+        } else {
+          modifiedTag = modifiedTag.replace('>', ` ${dataAttr}>`);
+        }
+        
+        // Replace in the HTML string
+        const before = processedHTML.substring(0, index);
+        const after = processedHTML.substring(index + fullMatch.length);
+        processedHTML = before + modifiedTag + xButton + after;
+      }
+    });
+    
+    return processedHTML;
+  };
+
+  // Handle remove button clicks in preview
+  useEffect(() => {
+    if (!isEditMode || !previewRef.current) return;
+    
+    const handleRemoveClick = (e) => {
+      const removeBtn = e.target.closest('.prebuilt-item-remove-btn');
+      if (!removeBtn) return;
+      
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const type = removeBtn.getAttribute('data-remove-type');
+      const removeClass = removeBtn.getAttribute('data-remove-class');
+      
+      if (type) {
+        // Create a synthetic event that includes the target
+        const syntheticEvent = {
+          stopPropagation: () => {},
+          preventDefault: () => {},
+          target: {
+            closest: (selector) => {
+              if (selector === '.prebuilt-item-remove-btn') {
+                return removeBtn;
+              }
+              return null;
+            }
+          }
+        };
+        handleRemovePrebuilt(type, syntheticEvent);
+      }
+    };
+    
+    const previewContent = previewRef.current?.querySelector('.promo-preview-content');
+    if (previewContent) {
+      previewContent.addEventListener('click', handleRemoveClick);
+      return () => {
+        previewContent.removeEventListener('click', handleRemoveClick);
+      };
+    }
+  }, [isEditMode, promoHTML, promoCSS]);
+
+  const handleRemovePrebuilt = (type, e) => {
+    if (e) {
+      e.stopPropagation(); // Prevent triggering the add button
+    }
+    
+    // Get the remove button element to find the class name
+    const removeBtn = e?.target?.closest?.('.prebuilt-item-remove-btn');
+    const removeClass = removeBtn?.getAttribute('data-remove-class');
+    
+    // If we have a specific class, try to remove by that
+    if (removeClass) {
+      const selectorWithoutDot = removeClass.split(/\s+/)[0].replace(/^\./, '');
+      let newHTML = promoHTML;
+      
+      // Remove HTML block - handle nested divs properly
+      const classPattern = `class=["'][^"']*${selectorWithoutDot}[^"']*["']`;
+      const openingTagRegex = new RegExp(`<div[^>]*${classPattern}[^>]*>`, 'i');
+      
+      if (openingTagRegex.test(newHTML)) {
+        let depth = 0;
+        let startIndex = -1;
+        let endIndex = -1;
+        
+        const match = newHTML.match(openingTagRegex);
+        if (match) {
+          startIndex = match.index;
+          let i = startIndex;
+          
+          while (i < newHTML.length) {
+            if (newHTML.substring(i).startsWith('<div')) {
+              depth++;
+            } else if (newHTML.substring(i).startsWith('</div>')) {
+              depth--;
+              if (depth === 0) {
+                endIndex = i + 6;
+                break;
+              }
+            }
+            i++;
+          }
+          
+          if (startIndex >= 0 && endIndex > startIndex) {
+            newHTML = newHTML.substring(0, startIndex) + newHTML.substring(endIndex);
+            newHTML = newHTML.trim();
+          }
+        }
+      }
+      
+      // Check if there are still more instances of this class in the HTML
+      const remainingInstances = (newHTML.match(new RegExp(classPattern, 'gi')) || []).length;
+      
+      // Only remove CSS if no instances remain
+      let newCSS = promoCSS;
+      if (newCSS && selectorWithoutDot && remainingInstances === 0) {
+        const cssSelector = `.${selectorWithoutDot}`;
+        const lines = newCSS.split('\n');
+        let inBlock = false;
+        let blockDepth = 0;
+        const filteredLines = [];
+        
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          const isSelectorLine = line.includes(cssSelector) && (line.includes('{') || line.includes('}'));
+          
+          if (isSelectorLine && !inBlock && line.includes('{')) {
+            const selectorEscaped = cssSelector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            if (new RegExp(`^${selectorEscaped}\\s*\\{`).test(line)) {
+              inBlock = true;
+              blockDepth = (line.match(/{/g) || []).length - (line.match(/}/g) || []).length;
+              continue;
+            }
+          }
+          
+          if (inBlock) {
+            blockDepth += (line.match(/{/g) || []).length - (line.match(/}/g) || []).length;
+            if (blockDepth <= 0) {
+              inBlock = false;
+              blockDepth = 0;
+            }
+            continue;
+          }
+          
+          filteredLines.push(lines[i]);
+        }
+        
+        newCSS = filteredLines.join('\n').trim();
+      }
+      
+      setPromoHTML(newHTML);
+      setPromoCSS(newCSS);
+      return;
+    }
+    
+    // Fallback to original prebuilt items removal logic
+    const prebuiltItems = getPrebuiltItems();
+    const item = prebuiltItems[type];
+    if (!item || !item.cssSelector) return;
+
+    // Remove HTML element matching the cssSelector
+    const selectorWithoutDot = item.cssSelector.replace('.', '');
+    let newHTML = promoHTML;
+    
+    // Remove HTML block - handle nested divs properly
+    // Match opening tag with the class
+    const classPattern = `class=["'][^"']*${selectorWithoutDot}[^"']*["']`;
+    const openingTagRegex = new RegExp(`<div[^>]*${classPattern}[^>]*>`, 'i');
+    
+    if (openingTagRegex.test(newHTML)) {
+      let depth = 0;
+      let startIndex = -1;
+      let endIndex = -1;
+      
+      // Find the opening tag
+      const match = newHTML.match(openingTagRegex);
+      if (match) {
+        startIndex = match.index;
+        let i = startIndex;
+        
+        // Find the matching closing tag
+        while (i < newHTML.length) {
+          if (newHTML.substring(i).startsWith('<div')) {
+            depth++;
+          } else if (newHTML.substring(i).startsWith('</div>')) {
+            depth--;
+            if (depth === 0) {
+              endIndex = i + 6; // Length of '</div>'
+              break;
+            }
+          }
+          i++;
+        }
+        
+        // Remove the matched block
+        if (startIndex >= 0 && endIndex > startIndex) {
+          newHTML = newHTML.substring(0, startIndex) + newHTML.substring(endIndex);
+          newHTML = newHTML.trim();
+        }
+      }
+    }
+
+    // Check if there are still more instances of this class in the HTML
+    const remainingInstances = (newHTML.match(new RegExp(classPattern, 'gi')) || []).length;
+
+    // Remove CSS rules matching the cssSelector - only if no instances remain
+    let newCSS = promoCSS;
+    if (newCSS && item.cssSelector && remainingInstances === 0) {
+      // Parse CSS to remove rules for this selector (including nested rules)
+      const lines = newCSS.split('\n');
+      let inBlock = false;
+      let blockDepth = 0;
+      const filteredLines = [];
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        const isSelectorLine = line.includes(item.cssSelector) && (line.includes('{') || line.includes('}'));
+        
+        if (isSelectorLine && !inBlock && line.includes('{')) {
+          // Check if this is a selector line (starts with the selector)
+          const selectorEscaped = item.cssSelector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          if (new RegExp(`^${selectorEscaped}\\s*\\{`).test(line)) {
+            inBlock = true;
+            blockDepth = (line.match(/{/g) || []).length - (line.match(/}/g) || []).length;
+            continue; // Skip this line
+          }
+        }
+        
+        if (inBlock) {
+          blockDepth += (line.match(/{/g) || []).length - (line.match(/}/g) || []).length;
+          if (blockDepth <= 0) {
+            inBlock = false;
+            blockDepth = 0;
+          }
+          continue; // Skip lines in the block
+        }
+        
+        filteredLines.push(lines[i]);
+      }
+      
+      newCSS = filteredLines.join('\n').trim();
+    }
+
+    setPromoHTML(newHTML);
+    setPromoCSS(newCSS);
+    // Note: JS removal is not implemented as items don't have JS currently
   };
 
   const handleLoadPrebuiltTemplate = (templateName) => {
@@ -484,7 +929,7 @@ const GamePromo = ({ gamesData = {} }) => {
   </div>
 </div>`,
         css: `body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
   margin: 0;
   padding: 0;
   background: #0a0a0a;
@@ -647,7 +1092,7 @@ const GamePromo = ({ gamesData = {} }) => {
   </div>
 </div>`,
         css: `body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
   margin: 0;
   padding: 0;
   background: #0a0a0a;
@@ -868,7 +1313,7 @@ const GamePromo = ({ gamesData = {} }) => {
   </div>
 </div>`,
         css: `body {
-  font-family: "Orbitron", "Arial Black", sans-serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
   margin: 0;
   padding: 0;
   background: #000000;
@@ -886,20 +1331,13 @@ const GamePromo = ({ gamesData = {} }) => {
   width: 100%;
   height: 100vh;
   background: linear-gradient(135deg, #ff006e 0%, #8338ec 25%, #3a86ff 50%, #06ffa5 75%, #ffbe0b 100%);
-  background-size: 400% 400%;
-  animation: gradientShift 8s ease infinite;
+  background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-}
-
-@keyframes gradientShift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
 }
 
 .banner-overlay {
@@ -972,7 +1410,6 @@ const GamePromo = ({ gamesData = {} }) => {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  animation: gradientShift 6s ease infinite;
   letter-spacing: 8px;
   text-shadow: 0 0 40px rgba(255, 255, 255, 0.5);
   line-height: 1;
@@ -1232,7 +1669,7 @@ const GamePromo = ({ gamesData = {} }) => {
   </div>
 </div>`,
         css: `body {
-  font-family: 'Rajdhani', 'Arial', sans-serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
   margin: 0;
   padding: 0;
   background: #0a0a0a;
@@ -1473,7 +1910,7 @@ const GamePromo = ({ gamesData = {} }) => {
   </div>
 </div>`,
         css: `body {
-  font-family: 'Cinzel', 'Times New Roman', serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
   margin: 0;
   padding: 0;
   background: #0f0a0a;
@@ -1527,7 +1964,7 @@ const GamePromo = ({ gamesData = {} }) => {
   color: #d4af37;
   text-shadow: 0 0 30px rgba(212, 175, 55, 0.6), 0 4px 20px rgba(0, 0, 0, 0.8);
   letter-spacing: 4px;
-  font-family: 'Cinzel', serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
 }
 
 .rpg-tagline {
@@ -1581,7 +2018,7 @@ const GamePromo = ({ gamesData = {} }) => {
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 0 30px rgba(212, 175, 55, 0.4);
-  font-family: 'Cinzel', serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
 }
 
 .rpg-play-btn:hover {
@@ -1724,7 +2161,7 @@ const GamePromo = ({ gamesData = {} }) => {
   </div>
 </div>`,
         css: `body {
-  font-family: 'Roboto Condensed', 'Arial', sans-serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
   margin: 0;
   padding: 0;
   background: #0a0f1a;
@@ -1966,7 +2403,7 @@ const GamePromo = ({ gamesData = {} }) => {
   </div>
 </div>`,
         css: `body {
-  font-family: 'Oswald', 'Arial Black', sans-serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
   margin: 0;
   padding: 0;
   background: #000000;
@@ -2215,7 +2652,7 @@ const GamePromo = ({ gamesData = {} }) => {
   </div>
 </div>`,
         css: `body {
-  font-family: 'Merriweather', 'Georgia', serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
   margin: 0;
   padding: 0;
   background: #0f1419;
@@ -2279,7 +2716,7 @@ const GamePromo = ({ gamesData = {} }) => {
   color: #d4a574;
   text-shadow: 0 0 30px rgba(212, 165, 116, 0.5), 0 4px 20px rgba(0, 0, 0, 0.8);
   letter-spacing: 2px;
-  font-family: 'Merriweather', serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
 }
 
 .adv-tagline {
@@ -2330,7 +2767,7 @@ const GamePromo = ({ gamesData = {} }) => {
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 0 30px rgba(212, 165, 116, 0.4);
-  font-family: 'Merriweather', serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
 }
 
 .adv-explore-btn:hover {
@@ -2358,7 +2795,7 @@ const GamePromo = ({ gamesData = {} }) => {
   text-align: center;
   text-shadow: 0 0 15px rgba(212, 165, 116, 0.5);
   letter-spacing: 2px;
-  font-family: 'Merriweather', serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
 }
 
 .adv-story-text {
@@ -2466,7 +2903,7 @@ const GamePromo = ({ gamesData = {} }) => {
   </div>
 </div>`,
         css: `body {
-  font-family: 'Poppins', 'Arial', sans-serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
   margin: 0;
   padding: 0;
   background: #fafafa;
@@ -2519,7 +2956,7 @@ const GamePromo = ({ gamesData = {} }) => {
   margin: 0 0 24px 0;
   color: #2d2d2d;
   letter-spacing: -1px;
-  font-family: 'Poppins', sans-serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
 }
 
 .indie-subtitle {
@@ -2700,7 +3137,7 @@ const GamePromo = ({ gamesData = {} }) => {
   </div>
 </div>`,
         css: `body {
-  font-family: 'Creepster', 'Impact', sans-serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
   margin: 0;
   padding: 0;
   background: #0a0a0a;
@@ -2960,7 +3397,7 @@ const GamePromo = ({ gamesData = {} }) => {
   </div>
 </div>`,
         css: `body {
-  font-family: 'Bebas Neue', 'Arial Black', sans-serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
   margin: 0;
   padding: 0;
   background: #ffffff;
@@ -3218,7 +3655,7 @@ const GamePromo = ({ gamesData = {} }) => {
   </div>
 </div>`,
         css: `body {
-  font-family: 'Comic Sans MS', 'Impact', cursive;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
   margin: 0;
   padding: 0;
   background: #000000;
@@ -3235,9 +3672,7 @@ const GamePromo = ({ gamesData = {} }) => {
   position: relative;
   width: 100%;
   height: 100vh;
-  background: linear-gradient(135deg, #ff006e 0%, #8338ec 25%, #3a86ff 50%, #06ffa5 75%, #ffbe0b 100%);
-  background-size: 400% 400%;
-  animation: dankGradientShift 5s ease infinite;
+  background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
   display: flex;
@@ -3246,10 +3681,99 @@ const GamePromo = ({ gamesData = {} }) => {
   overflow: hidden;
 }
 
-@keyframes dankGradientShift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+.dank-hero::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    linear-gradient(135deg, 
+      rgba(76, 175, 80, 0.4) 0%, 
+      rgba(102, 187, 106, 0.4) 15%, 
+      rgba(124, 179, 66, 0.4) 30%, 
+      rgba(139, 195, 74, 0.4) 45%, 
+      rgba(156, 204, 101, 0.4) 60%, 
+      rgba(67, 160, 71, 0.4) 75%, 
+      rgba(46, 125, 50, 0.4) 90%, 
+      rgba(76, 175, 80, 0.4) 100%);
+  background-size: 300% 300%;
+  animation: dankChromeShift 8s ease-in-out infinite;
+  mix-blend-mode: color;
+  filter: contrast(1.2) brightness(1.1);
+  z-index: 1;
+}
+
+.dank-hero::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(circle at 30% 50%, rgba(76, 175, 80, 0.3) 0%, transparent 50%),
+    radial-gradient(circle at 70% 50%, rgba(139, 195, 74, 0.3) 0%, transparent 50%),
+    linear-gradient(45deg, 
+      rgba(124, 179, 66, 0.2) 0%, 
+      transparent 25%, 
+      rgba(102, 187, 106, 0.2) 50%, 
+      transparent 75%, 
+      rgba(67, 160, 71, 0.2) 100%);
+  background-size: 200% 200%;
+  animation: dankChromeDistort 6s ease-in-out infinite;
+  mix-blend-mode: overlay;
+  filter: blur(2px) contrast(1.3);
+  opacity: 0.7;
+  z-index: 1;
+}
+
+@keyframes dankChromeShift {
+  0% { 
+    background-position: 0% 50%;
+    filter: contrast(1.2) brightness(1.1) hue-rotate(0deg);
+  }
+  33% { 
+    background-position: 100% 50%;
+    filter: contrast(1.3) brightness(1.2) hue-rotate(30deg);
+  }
+  66% { 
+    background-position: 50% 100%;
+    filter: contrast(1.25) brightness(1.15) hue-rotate(60deg);
+  }
+  100% { 
+    background-position: 0% 50%;
+    filter: contrast(1.2) brightness(1.1) hue-rotate(0deg);
+  }
+}
+
+@keyframes dankChromeDistort {
+  0% { 
+    background-position: 0% 0%;
+    transform: scale(1) rotate(0deg);
+    filter: blur(2px) contrast(1.3) hue-rotate(0deg);
+  }
+  25% { 
+    background-position: 100% 0%;
+    transform: scale(1.02) rotate(1deg);
+    filter: blur(2.5px) contrast(1.35) hue-rotate(15deg);
+  }
+  50% { 
+    background-position: 100% 100%;
+    transform: scale(1.01) rotate(-1deg);
+    filter: blur(2px) contrast(1.3) hue-rotate(30deg);
+  }
+  75% { 
+    background-position: 0% 100%;
+    transform: scale(1.02) rotate(1deg);
+    filter: blur(2.5px) contrast(1.35) hue-rotate(15deg);
+  }
+  100% { 
+    background-position: 0% 0%;
+    transform: scale(1) rotate(0deg);
+    filter: blur(2px) contrast(1.3) hue-rotate(0deg);
+  }
 }
 
 .dank-overlay {
@@ -3259,6 +3783,7 @@ const GamePromo = ({ gamesData = {} }) => {
   right: 0;
   bottom: 0;
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.6) 100%);
+  z-index: 1;
 }
 
 .dank-hero-content {
@@ -3285,7 +3810,7 @@ const GamePromo = ({ gamesData = {} }) => {
   text-transform: uppercase;
   animation: dankPulse 1.5s ease-in-out infinite, dankSpin 3s linear infinite;
   box-shadow: 0 0 30px currentColor;
-  font-family: 'Impact', sans-serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
 }
 
 .dank-badge-new {
@@ -3328,11 +3853,11 @@ const GamePromo = ({ gamesData = {} }) => {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  animation: dankGradientShift 4s ease infinite, dankTextBounce 2s ease-in-out infinite;
+  animation: dankTextBounce 2s ease-in-out infinite;
   letter-spacing: 8px;
   text-shadow: 0 0 60px rgba(255, 255, 255, 0.8);
   line-height: 1;
-  font-family: 'Impact', sans-serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
   text-transform: uppercase;
 }
 
@@ -3349,7 +3874,7 @@ const GamePromo = ({ gamesData = {} }) => {
   font-weight: 700;
   text-shadow: 0 0 30px rgba(255, 255, 255, 0.8);
   animation: dankBlink 2s ease-in-out infinite;
-  font-family: 'Comic Sans MS', cursive;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
 }
 
 @keyframes dankBlink {
@@ -3424,7 +3949,7 @@ const GamePromo = ({ gamesData = {} }) => {
   font-weight: 900;
   color: #ffffff;
   text-shadow: 0 0 25px rgba(255, 255, 255, 0.9);
-  font-family: 'Impact', sans-serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
 }
 
 .dank-stat-label {
@@ -3433,7 +3958,7 @@ const GamePromo = ({ gamesData = {} }) => {
   color: rgba(255, 255, 255, 0.95);
   font-weight: 900;
   text-transform: uppercase;
-  font-family: 'Impact', sans-serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
 }
 
 .dank-btn {
@@ -3450,7 +3975,7 @@ const GamePromo = ({ gamesData = {} }) => {
   box-shadow: 0 0 60px rgba(255, 0, 110, 0.8);
   border-radius: 20px;
   animation: dankButtonGlow 2s ease-in-out infinite, dankButtonBounce 1s ease-in-out infinite;
-  font-family: 'Impact', sans-serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
 }
 
 @keyframes dankButtonGlow {
@@ -3526,7 +4051,7 @@ const GamePromo = ({ gamesData = {} }) => {
   color: #06ffa5;
   text-shadow: 0 0 40px #06ffa5;
   animation: dank420Pulse 2s ease-in-out infinite;
-  font-family: 'Impact', sans-serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
 }
 
 @keyframes dank420Pulse {
@@ -3598,7 +4123,7 @@ const GamePromo = ({ gamesData = {} }) => {
   letter-spacing: 4px;
   text-align: center;
   animation: dankTitleRainbow 3s ease infinite;
-  font-family: 'Impact', sans-serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
   text-transform: uppercase;
 }
 
@@ -3612,7 +4137,7 @@ const GamePromo = ({ gamesData = {} }) => {
   line-height: 2;
   color: rgba(255, 255, 255, 0.95);
   text-align: center;
-  font-family: 'Comic Sans MS', cursive;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
 }
 
 .dank-gallery {
@@ -3681,7 +4206,7 @@ const GamePromo = ({ gamesData = {} }) => {
   transition: all 0.3s ease;
   box-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
   animation: dankFeaturePulse 2s ease-in-out infinite;
-  font-family: 'Impact', sans-serif;
+  font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
 }
 
 .dank-feature:nth-child(odd) {
@@ -3723,17 +4248,43 @@ const GamePromo = ({ gamesData = {} }) => {
   };
 
   const handleSave = () => {
+    // Explicitly save all promo data to localStorage
+    if (gameId) {
+      try {
+        localStorage.setItem(`gamePromoHTML_${gameId}`, promoHTML);
+        localStorage.setItem(`gamePromoCSS_${gameId}`, promoCSS);
+        localStorage.setItem(`gamePromoJS_${gameId}`, promoJS);
+        localStorage.setItem(`gamePromoPreviewHeight_${gameId}`, previewHeight.toString());
+        localStorage.setItem(`gamePromoPreviewWidth_${gameId}`, previewWidth.toString());
+        localStorage.setItem(`gamePromoPreviewLabels_${gameId}`, showPreviewLabels.toString());
+        localStorage.setItem(`gamePromoMode_${gameId}`, promoMode);
+        localStorage.setItem(`gamePromoCodeLayout_${gameId}`, codeLayoutMode);
+      } catch (_) {}
+    }
     setIsEditMode(false);
   };
 
   const handleCancel = () => {
+    // Reload from localStorage to discard changes
+    try {
+      if (gameId) {
+        setPromoHTML(localStorage.getItem(`gamePromoHTML_${gameId}`) || '');
+        setPromoCSS(localStorage.getItem(`gamePromoCSS_${gameId}`) || '');
+        setPromoJS(localStorage.getItem(`gamePromoJS_${gameId}`) || '');
+        const savedHeight = localStorage.getItem(`gamePromoPreviewHeight_${gameId}`);
+        if (savedHeight) setPreviewHeight(parseInt(savedHeight, 10));
+        const savedWidth = localStorage.getItem(`gamePromoPreviewWidth_${gameId}`);
+        if (savedWidth) setPreviewWidth(parseInt(savedWidth, 10));
+        const savedLabels = localStorage.getItem(`gamePromoPreviewLabels_${gameId}`);
+        if (savedLabels !== null) setShowPreviewLabels(savedLabels === 'true');
+        const savedMode = localStorage.getItem(`gamePromoMode_${gameId}`);
+        if (savedMode) setPromoMode(savedMode);
+        const savedLayout = localStorage.getItem(`gamePromoCodeLayout_${gameId}`);
+        if (savedLayout) setCodeLayoutMode(savedLayout);
+      }
+    } catch (_) {}
     setIsEditMode(false);
     setShowCustomCode(false);
-    try {
-      setPromoHTML(localStorage.getItem(`gamePromoHTML_${gameId}`) || '');
-      setPromoCSS(localStorage.getItem(`gamePromoCSS_${gameId}`) || '');
-      setPromoJS(localStorage.getItem(`gamePromoJS_${gameId}`) || '');
-    } catch (_) {}
   };
 
   const getPriceValue = (game) => {
@@ -3762,33 +4313,94 @@ const GamePromo = ({ gamesData = {} }) => {
     );
   }
 
+  // Filter CSS code based on selected filter
+  const getFilteredCSS = (css) => {
+    if (cssFilter === 'all' || !css) return css;
+    
+    const lines = css.split('\n');
+    const filteredLines = [];
+    let inBlock = false;
+    let blockType = '';
+    let braceCount = 0;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      
+      // Count braces for this line
+      const openBraces = (line.match(/\{/g) || []).length;
+      const closeBraces = (line.match(/\}/g) || []).length;
+      const prevBraceCount = braceCount;
+      braceCount += openBraces - closeBraces;
+      
+      if (cssFilter === 'keyframes') {
+        if (trimmed.startsWith('@keyframes')) {
+          inBlock = true;
+          blockType = 'keyframes';
+          filteredLines.push(line);
+        } else if (inBlock && blockType === 'keyframes') {
+          filteredLines.push(line);
+          // End block when braces are balanced and we just closed a brace
+          if (prevBraceCount > 0 && braceCount === 0) {
+            inBlock = false;
+            blockType = '';
+          }
+        }
+      } else if (cssFilter === 'media') {
+        if (trimmed.startsWith('@media')) {
+          inBlock = true;
+          blockType = 'media';
+          filteredLines.push(line);
+        } else if (inBlock && blockType === 'media') {
+          filteredLines.push(line);
+          if (prevBraceCount > 0 && braceCount === 0) {
+            inBlock = false;
+            blockType = '';
+          }
+        }
+      } else if (cssFilter === 'import') {
+        if (trimmed.startsWith('@import')) {
+          filteredLines.push(line);
+        }
+      } else if (cssFilter === 'variables') {
+        if (trimmed.startsWith(':root')) {
+          inBlock = true;
+          blockType = 'variables';
+          filteredLines.push(line);
+        } else if (inBlock && blockType === 'variables') {
+          // Include all lines inside :root block
+          filteredLines.push(line);
+          if (prevBraceCount > 0 && braceCount === 0) {
+            inBlock = false;
+            blockType = '';
+          }
+        } else if (trimmed.startsWith('--') && !inBlock) {
+          // Standalone CSS variables (not in :root)
+          filteredLines.push(line);
+        }
+      }
+    }
+    
+    return filteredLines.length > 0 ? filteredLines.join('\n') : '';
+  };
+
   // Render Edit Mode
   if (isEditMode && isOwned) {
     return (
       <div className="game-promo-page promo-edit-mode">
         <div className="promo-edit-container">
           {/* Main Content Area */}
-          <div className={`promo-edit-content ${isEditMode ? 'sidebar-open' : ''}`}>
-            <div className="promo-edit-header">
-              <h2>Edit Promo Page</h2>
-              <div className="promo-edit-actions">
-                <button className="save-promo-btn" onClick={handleSave}>
-                  <Save size={16} />
-                  Save
-                </button>
-                <button className="cancel-promo-btn" onClick={handleCancel}>
-                  <X size={16} />
-                  Cancel
-                </button>
-              </div>
-            </div>
-
+          <div className={`promo-edit-content ${isEditMode ? 'sidebar-open' : ''} code-layout-${codeLayoutMode}`}>
             {/* Preview Area - Always visible when there's content, takes full available space */}
             {(promoHTML || promoCSS || promoJS) && (
               <div 
-                className="promo-preview-wrapper" 
+                className={`promo-preview-wrapper ${isResizing ? 'resizing' : ''}`}
                 ref={previewRef}
-                style={{ height: promoMode === 'custom' ? `${previewHeight}px` : '100%', flex: promoMode === 'prebuilt' ? '1' : 'none' }}
+                style={{ 
+                  height: showCustomCode && codeLayoutMode === 'bottom' ? `${previewHeight}px` : '100%', 
+                  flex: showCustomCode && codeLayoutMode === 'bottom' ? 'none' : (showCustomCode && (codeLayoutMode === 'left' || codeLayoutMode === 'right') ? '0 0 auto' : '1'),
+                  width: showCustomCode && (codeLayoutMode === 'left' || codeLayoutMode === 'right') ? `${previewWidth}px` : '100%'
+                }}
               >
                 {showPreviewLabels && (
                   <>
@@ -3799,16 +4411,51 @@ const GamePromo = ({ gamesData = {} }) => {
                   </>
                 )}
                 <div 
-                  className="promo-preview-content"
+                  className={`promo-preview-content ${isResizing ? 'resizing' : ''}`}
                   dangerouslySetInnerHTML={{ 
                     __html: `
                       <!DOCTYPE html>
                       <html>
                       <head>
                         <style>${promoCSS}</style>
+                        <style>
+                          [data-prebuilt-item] {
+                            position: relative !important;
+                          }
+                          .prebuilt-item-remove-btn {
+                            position: absolute !important;
+                            top: 8px !important;
+                            right: 8px !important;
+                            width: 28px !important;
+                            height: 28px !important;
+                            display: flex !important;
+                            align-items: center !important;
+                            justify-content: center !important;
+                            background: rgba(255, 77, 77, 0.9) !important;
+                            border: 2px solid rgba(255, 255, 255, 0.3) !important;
+                            border-radius: 6px !important;
+                            color: #ffffff !important;
+                            cursor: pointer !important;
+                            font-size: 20px !important;
+                            font-weight: bold !important;
+                            line-height: 1 !important;
+                            padding: 0 !important;
+                            z-index: 1000 !important;
+                            transition: all 0.2s ease !important;
+                            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+                          }
+                          .prebuilt-item-remove-btn:hover {
+                            background: rgba(255, 77, 77, 1) !important;
+                            transform: scale(1.1) !important;
+                            box-shadow: 0 4px 12px rgba(255, 77, 77, 0.5) !important;
+                          }
+                          .prebuilt-item-remove-btn:active {
+                            transform: scale(0.95) !important;
+                          }
+                        </style>
                       </head>
                       <body>
-                        ${promoHTML}
+                        ${processPreviewHTML(promoHTML)}
                         <script>${promoJS}</script>
                       </body>
                       </html>
@@ -3818,77 +4465,199 @@ const GamePromo = ({ gamesData = {} }) => {
               </div>
             )}
 
-            {/* Resize Handle - Only in Custom Mode */}
-            {promoMode === 'custom' && (promoHTML || promoCSS || promoJS) && (
-              <div 
-                className="promo-resize-handle"
-                onMouseDown={handleResizeStart}
-              />
+            {/* Resize Handle - Positioned between preview and code editor based on layout mode */}
+            {showCustomCode && (promoHTML || promoCSS || promoJS) && (
+              <>
+                {codeLayoutMode === 'bottom' && (
+                  <div 
+                    className="promo-resize-handle promo-resize-handle-bottom"
+                    onMouseDown={handleResizeStart}
+                  />
+                )}
+                {codeLayoutMode === 'left' && (
+                  <div 
+                    className="promo-resize-handle promo-resize-handle-left"
+                    onMouseDown={handleResizeStart}
+                  />
+                )}
+                {codeLayoutMode === 'right' && (
+                  <div 
+                    className="promo-resize-handle promo-resize-handle-right"
+                    onMouseDown={handleResizeStart}
+                  />
+                )}
+              </>
             )}
 
             {/* Placeholder or Code Editor */}
             {!promoHTML && !promoCSS && !promoJS ? (
               <div className="promo-edit-placeholder">
-                <p>{promoMode === 'prebuilt' ? 'Choose a prebuilt template or add items to start building your promo page' : 'Click "Custom Code" in the sidebar to start building your promo page'}</p>
+                <p>Choose a prebuilt template or add items to start building your promo page</p>
               </div>
-            ) : promoMode === 'custom' && showCustomCode ? (
+            ) : showCustomCode ? (
               <>
                 {/* Code Editor with Tabs */}
                 <div 
                   className="promo-editor-wrapper" 
                   ref={editorRef}
+                  style={{
+                    width: codeLayoutMode === 'left' || codeLayoutMode === 'right' ? 'auto' : '100%',
+                    flex: codeLayoutMode === 'bottom' ? '1 1 300px' : '1',
+                    height: codeLayoutMode === 'bottom' ? 'auto' : '100%',
+                    minHeight: codeLayoutMode === 'bottom' ? '300px' : '0',
+                    minWidth: codeLayoutMode === 'left' || codeLayoutMode === 'right' ? '480px' : '0'
+                  }}
                 >
-                  <div className="code-section-tabs">
+                  <div className={`code-section-tabs ${isTabsCompact ? 'compact' : ''}`} ref={editorTabsRef}>
                     <button
                       className={`code-tab ${activeTab === 'html' ? 'active' : ''}`}
                       onClick={() => setActiveTab('html')}
+                      title="HTML"
                     >
-                      <Code size={14} />
-                      HTML
+                      <FileCode size={14} />
+                      {!isTabsCompact && <span>HTML</span>}
                     </button>
                     <button
                       className={`code-tab ${activeTab === 'css' ? 'active' : ''}`}
                       onClick={() => setActiveTab('css')}
+                      title="CSS"
                     >
-                      <Code size={14} />
-                      CSS
+                      <Paintbrush size={14} />
+                      {!isTabsCompact && <span>CSS</span>}
                     </button>
                     <button
                       className={`code-tab ${activeTab === 'js' ? 'active' : ''}`}
                       onClick={() => setActiveTab('js')}
+                      title="JavaScript"
                     >
-                      <Code size={14} />
-                      JavaScript
+                      <Brackets size={14} />
+                      {!isTabsCompact && <span>JavaScript</span>}
                     </button>
                     
-                    {promoMode === 'custom' && (
-                      <>
-                        <div className="code-tab-separator" />
-                        
-                        <button
-                          className={`code-tab ${activeTab === 'debug' ? 'active' : ''}`}
-                          onClick={() => setActiveTab('debug')}
-                        >
-                          <Bug size={14} />
-                          Debug Console
-                        </button>
-                        <button
-                          className={`code-tab ${activeTab === 'output' ? 'active' : ''}`}
-                          onClick={() => setActiveTab('output')}
-                        >
-                          <FileText size={14} />
-                          Output
-                        </button>
-                        <button
-                          className={`code-tab ${activeTab === 'terminal' ? 'active' : ''}`}
-                          onClick={() => setActiveTab('terminal')}
-                        >
-                          <Terminal size={14} />
-                          Terminal
-                        </button>
-                      </>
-                    )}
+                    <>
+                      <button
+                        className={`code-tab ${activeTab === 'debug' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('debug')}
+                        title="Debug Console"
+                      >
+                        <Bug size={14} />
+                        {!isTabsCompact && <span>Debug Console</span>}
+                      </button>
+                      <button
+                        className={`code-tab ${activeTab === 'output' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('output')}
+                        title="Output"
+                      >
+                        <FileText size={14} />
+                        {!isTabsCompact && <span>Output</span>}
+                      </button>
+                      <button
+                        className={`code-tab ${activeTab === 'terminal' ? 'active' : ''}`}
+                        onClick={() => setActiveTab('terminal')}
+                        title="Terminal"
+                      >
+                        <Terminal size={14} />
+                        {!isTabsCompact && <span>Terminal</span>}
+                      </button>
+                    </>
+                    
+                    <div className="code-layout-controls">
+                      <button
+                        className={`layout-btn ${codeLayoutMode === 'bottom' ? 'active' : ''}`}
+                        onClick={() => setCodeLayoutMode('bottom')}
+                        title="Code below preview"
+                      >
+                        <Rows size={18} />
+                      </button>
+                      <button
+                        className={`layout-btn ${codeLayoutMode === 'left' ? 'active' : ''}`}
+                        onClick={() => setCodeLayoutMode('left')}
+                        title="Code on left side"
+                      >
+                        <PanelLeftClose size={18} />
+                      </button>
+                      <button
+                        className={`layout-btn ${codeLayoutMode === 'right' ? 'active' : ''}`}
+                        onClick={() => setCodeLayoutMode('right')}
+                        title="Code on right side"
+                      >
+                        <PanelRightClose size={18} />
+                      </button>
+                    </div>
                   </div>
+
+                  {/* Search and Filter Bar - Below tabs */}
+                  {(activeTab === 'html' || activeTab === 'css' || activeTab === 'js') && (
+                    <div className="code-search-filter-bar">
+                      {/* CSS Filter Buttons - only show when CSS tab is active */}
+                      {activeTab === 'css' && (
+                        <div className="css-filter-container">
+                          <Filter size={14} />
+                          <button
+                            className={`css-filter-btn ${cssFilter === 'all' ? 'active' : ''}`}
+                            onClick={() => setCssFilter('all')}
+                            title="Show all"
+                          >
+                            All
+                          </button>
+                          <button
+                            className={`css-filter-btn ${cssFilter === 'keyframes' ? 'active' : ''}`}
+                            onClick={() => setCssFilter('keyframes')}
+                            title="Show @keyframes"
+                          >
+                            @keyframes
+                          </button>
+                          <button
+                            className={`css-filter-btn ${cssFilter === 'media' ? 'active' : ''}`}
+                            onClick={() => setCssFilter('media')}
+                            title="Show @media"
+                          >
+                            @media
+                          </button>
+                          <button
+                            className={`css-filter-btn ${cssFilter === 'import' ? 'active' : ''}`}
+                            onClick={() => setCssFilter('import')}
+                            title="Show @import"
+                          >
+                            @import
+                          </button>
+                          <button
+                            className={`css-filter-btn ${cssFilter === 'variables' ? 'active' : ''}`}
+                            onClick={() => setCssFilter('variables')}
+                            title="Show CSS variables"
+                          >
+                            Variables
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Search Bar - Right side */}
+                      <div className="code-search-container">
+                        <Search size={14} />
+                        <input
+                          type="text"
+                          className="code-search-input"
+                          placeholder={`Search ${activeTab === 'html' ? 'HTML' : activeTab === 'css' ? 'CSS' : activeTab === 'js' ? 'JavaScript' : activeTab}...`}
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Escape') {
+                              setSearchQuery('');
+                            }
+                          }}
+                        />
+                        {searchQuery && (
+                          <button
+                            className="code-search-clear"
+                            onClick={() => setSearchQuery('')}
+                            title="Clear search"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="code-section-content">
                     {activeTab === 'html' && (
@@ -3897,15 +4666,23 @@ const GamePromo = ({ gamesData = {} }) => {
                         onChange={(e) => setPromoHTML(e.target.value)}
                         language="html"
                         placeholder="Enter your HTML code here..."
+                        searchQuery={activeTab === 'html' ? searchQuery : ''}
                       />
                     )}
 
                     {activeTab === 'css' && (
                       <CodeEditor
-                        value={promoCSS}
-                        onChange={(e) => setPromoCSS(e.target.value)}
+                        value={cssFilter === 'all' ? promoCSS : getFilteredCSS(promoCSS)}
+                        onChange={(e) => {
+                          if (cssFilter === 'all') {
+                            setPromoCSS(e.target.value);
+                          }
+                          // When filtering, don't allow editing - user must switch to 'all' first
+                        }}
                         language="css"
-                        placeholder="Enter your CSS code here..."
+                        placeholder={cssFilter === 'all' ? "Enter your CSS code here..." : "Switch to 'All' filter to edit CSS"}
+                        searchQuery={activeTab === 'css' ? searchQuery : ''}
+                        readOnly={cssFilter !== 'all'}
                       />
                     )}
 
@@ -3915,80 +4692,183 @@ const GamePromo = ({ gamesData = {} }) => {
                         onChange={(e) => setPromoJS(e.target.value)}
                         language="javascript"
                         placeholder="Enter your JavaScript code here..."
+                        searchQuery={activeTab === 'js' ? searchQuery : ''}
                       />
                     )}
 
-                    {activeTab === 'debug' && promoMode === 'custom' && (
+                    {activeTab === 'debug' && (
                       <div className="debug-console-panel">
                         <div className="panel-header">
                           <span>Debug Console</span>
-                          <button 
-                            className="clear-panel-btn"
-                            onClick={() => setDebugConsole([])}
-                          >
-                            Clear
-                          </button>
+                          <div className="panel-header-actions">
+                            <div className="code-search-container">
+                              <Search size={14} />
+                              <input
+                                type="text"
+                                className="code-search-input"
+                                placeholder="Search..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Escape') {
+                                    setSearchQuery('');
+                                  }
+                                }}
+                              />
+                              {searchQuery && (
+                                <button
+                                  className="code-search-clear"
+                                  onClick={() => setSearchQuery('')}
+                                  title="Clear search"
+                                >
+                                  <X size={14} />
+                                </button>
+                              )}
+                            </div>
+                            <button 
+                              className="clear-panel-btn"
+                              onClick={() => setDebugConsole([])}
+                            >
+                              Clear
+                            </button>
+                          </div>
                         </div>
                         <div className="panel-content">
                           {debugConsole.length === 0 ? (
                             <div className="panel-empty">No debug messages</div>
                           ) : (
-                            debugConsole.map((msg, index) => (
-                              <div key={index} className={`console-message ${msg.type}`}>
-                                <span className="console-time">{msg.time}</span>
-                                <span className="console-text">{msg.text}</span>
-                              </div>
-                            ))
+                            debugConsole
+                              .filter((msg) => {
+                                if (!searchQuery) return true;
+                                const query = searchQuery.toLowerCase();
+                                return (
+                                  msg.text.toLowerCase().includes(query) ||
+                                  msg.type.toLowerCase().includes(query) ||
+                                  msg.time.toLowerCase().includes(query)
+                                );
+                              })
+                              .map((msg, index) => (
+                                <div key={index} className={`console-message ${msg.type}`}>
+                                  <span className="console-time">{msg.time}</span>
+                                  <span className="console-text">{msg.text}</span>
+                                </div>
+                              ))
                           )}
                         </div>
                       </div>
                     )}
 
-                    {activeTab === 'output' && promoMode === 'custom' && (
+                    {activeTab === 'output' && (
                       <div className="output-panel">
                         <div className="panel-header">
                           <span>Output</span>
-                          <button 
-                            className="clear-panel-btn"
-                            onClick={() => setOutput([])}
-                          >
-                            Clear
-                          </button>
+                          <div className="panel-header-actions">
+                            <div className="code-search-container">
+                              <Search size={14} />
+                              <input
+                                type="text"
+                                className="code-search-input"
+                                placeholder="Search..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Escape') {
+                                    setSearchQuery('');
+                                  }
+                                }}
+                              />
+                              {searchQuery && (
+                                <button
+                                  className="code-search-clear"
+                                  onClick={() => setSearchQuery('')}
+                                  title="Clear search"
+                                >
+                                  <X size={14} />
+                                </button>
+                              )}
+                            </div>
+                            <button 
+                              className="clear-panel-btn"
+                              onClick={() => setOutput([])}
+                            >
+                              Clear
+                            </button>
+                          </div>
                         </div>
                         <div className="panel-content">
                           {output.length === 0 ? (
                             <div className="panel-empty">No output</div>
                           ) : (
-                            output.map((msg, index) => (
-                              <div key={index} className="output-message">
-                                {msg}
-                              </div>
-                            ))
+                            output
+                              .filter((msg) => {
+                                if (!searchQuery) return true;
+                                const query = searchQuery.toLowerCase();
+                                const msgStr = typeof msg === 'string' ? msg : String(msg);
+                                return msgStr.toLowerCase().includes(query);
+                              })
+                              .map((msg, index) => (
+                                <div key={index} className="output-message">
+                                  {msg}
+                                </div>
+                              ))
                           )}
                         </div>
                       </div>
                     )}
 
-                    {activeTab === 'terminal' && promoMode === 'custom' && (
+                    {activeTab === 'terminal' && (
                       <div className="terminal-panel">
                         <div className="panel-header">
                           <span>Terminal</span>
-                          <button 
-                            className="clear-panel-btn"
-                            onClick={() => setTerminal([])}
-                          >
-                            Clear
-                          </button>
+                          <div className="panel-header-actions">
+                            <div className="code-search-container">
+                              <Search size={14} />
+                              <input
+                                type="text"
+                                className="code-search-input"
+                                placeholder="Search..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Escape') {
+                                    setSearchQuery('');
+                                  }
+                                }}
+                              />
+                              {searchQuery && (
+                                <button
+                                  className="code-search-clear"
+                                  onClick={() => setSearchQuery('')}
+                                  title="Clear search"
+                                >
+                                  <X size={14} />
+                                </button>
+                              )}
+                            </div>
+                            <button 
+                              className="clear-panel-btn"
+                              onClick={() => setTerminal([])}
+                            >
+                              Clear
+                            </button>
+                          </div>
                         </div>
                         <div className="panel-content terminal-content">
                           {terminal.length === 0 ? (
                             <div className="panel-empty">Terminal ready</div>
                           ) : (
-                            terminal.map((line, index) => (
-                              <div key={index} className="terminal-line">
-                                {line}
-                              </div>
-                            ))
+                            terminal
+                              .filter((line) => {
+                                if (!searchQuery) return true;
+                                const query = searchQuery.toLowerCase();
+                                const lineStr = typeof line === 'string' ? line : String(line);
+                                return lineStr.toLowerCase().includes(query);
+                              })
+                              .map((line, index) => (
+                                <div key={index} className="terminal-line">
+                                  {line}
+                                </div>
+                              ))
                           )}
                         </div>
                       </div>
@@ -4003,9 +4883,6 @@ const GamePromo = ({ gamesData = {} }) => {
           <div className={`promo-edit-sidebar ${isEditMode ? 'open' : ''}`}>
             <div className="sidebar-header">
               <h3>Options</h3>
-              <button className="close-sidebar-btn" onClick={() => setIsEditMode(false)}>
-                <X size={16} />
-              </button>
             </div>
 
             <div className="sidebar-content">
@@ -4025,183 +4902,139 @@ const GamePromo = ({ gamesData = {} }) => {
 
               {(promoHTML || promoCSS || promoJS) && <div className="sidebar-divider" />}
 
-              {/* Mode Selection */}
-              <div className="promo-mode-selection">
-                <h4>Choose Mode</h4>
-                <div className="mode-buttons">
-                  <button 
-                    className={`mode-btn ${promoMode === 'prebuilt' ? 'active' : ''}`}
-                    onClick={() => {
-                      setPromoMode('prebuilt');
-                      // Don't hide custom code if content exists - just switch mode
-                      // User can still see preview and switch to custom code if needed
-                    }}
-                  >
-                    <Sparkles size={18} />
-                    <span>Prebuilt Profile</span>
-                  </button>
-                  <button 
-                    className={`mode-btn ${promoMode === 'custom' ? 'active' : ''}`}
-                    onClick={() => {
-                      setPromoMode('custom');
-                      setShowCustomCode(true);
-                      // Only add default content if no content exists
-                      if (!promoHTML && !promoCSS && !promoJS) {
-                        const customHTML = '<div class="custom-promo">\n  <h1>Custom Promo Page</h1>\n  <p>Build your amazing game promotion page!</p>\n</div>\n';
-                        const customCSS = 'body {\n  font-family: Arial, sans-serif;\n  margin: 0;\n  padding: 20px;\n  background: #0a0a0a;\n  color: #ffffff;\n}\n\n.custom-promo {\n  padding: 40px;\n  background: rgba(255, 255, 255, 0.05);\n  border-radius: 12px;\n}\n';
-                        const customJS = 'console.log("Custom promo page loaded");\n';
-                        setPromoHTML(customHTML);
-                        setPromoCSS(customCSS);
-                        setPromoJS(customJS);
-                      }
-                    }}
-                  >
-                    <Code size={18} />
-                    <span>Custom Code</span>
-                  </button>
+              {/* Prebuilt Templates */}
+              <div className="prebuilt-templates">
+                <div className="prebuilt-templates-header" onClick={() => setIsTemplatesExpanded(!isTemplatesExpanded)}>
+                  <h4>Prebuilt Templates</h4>
+                  {isTemplatesExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </div>
+                
+                {isTemplatesExpanded && (
+                  <div className="template-grid">
+                    <button className="template-square-btn template-minimal" onClick={() => handleLoadPrebuiltTemplate('minimal')}>
+                      <Minimize2 size={20} />
+                      <span className="template-square-name">Minimal</span>
+                    </button>
+
+                    <button className="template-square-btn template-modern" onClick={() => handleLoadPrebuiltTemplate('modern')}>
+                      <Sparkles size={20} />
+                      <span className="template-square-name">Modern</span>
+                    </button>
+
+                    <button className="template-square-btn template-gaming" onClick={() => handleLoadPrebuiltTemplate('gaming')}>
+                      <Play size={20} />
+                      <span className="template-square-name">Gaming</span>
+                    </button>
+
+                    <button className="template-square-btn template-fps" onClick={() => handleLoadPrebuiltTemplate('fps')}>
+                      <Target size={20} />
+                      <span className="template-square-name">FPS</span>
+                    </button>
+
+                    <button className="template-square-btn template-rpg" onClick={() => handleLoadPrebuiltTemplate('rpg')}>
+                      <Sword size={20} />
+                      <span className="template-square-name">RPG</span>
+                    </button>
+
+                    <button className="template-square-btn template-strategy" onClick={() => handleLoadPrebuiltTemplate('strategy')}>
+                      <Shield size={20} />
+                      <span className="template-square-name">Strategy</span>
+                    </button>
+
+                    <button className="template-square-btn template-competitive" onClick={() => handleLoadPrebuiltTemplate('competitive')}>
+                      <Trophy size={20} />
+                      <span className="template-square-name">Competitive</span>
+                    </button>
+
+                    <button className="template-square-btn template-adventure" onClick={() => handleLoadPrebuiltTemplate('adventure')}>
+                      <Mountain size={20} />
+                      <span className="template-square-name">Adventure</span>
+                    </button>
+
+                    <button className="template-square-btn template-indie" onClick={() => handleLoadPrebuiltTemplate('indie')}>
+                      <Heart size={20} />
+                      <span className="template-square-name">Indie</span>
+                    </button>
+
+                    <button className="template-square-btn template-horror" onClick={() => handleLoadPrebuiltTemplate('horror')}>
+                      <Skull size={20} />
+                      <span className="template-square-name">Horror</span>
+                    </button>
+
+                    <button className="template-square-btn template-sports" onClick={() => handleLoadPrebuiltTemplate('sports')}>
+                      <Activity size={20} />
+                      <span className="template-square-name">Sports</span>
+                    </button>
+
+                    <button className="template-square-btn template-dank" onClick={() => handleLoadPrebuiltTemplate('dank')}>
+                      <Laugh size={20} />
+                      <span className="template-square-name">Dank</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="sidebar-divider" />
 
-              {promoMode === 'prebuilt' ? (
-                <>
-                  {/* Prebuilt Templates */}
-                  <div className="prebuilt-templates">
-                    <h4>Prebuilt Templates</h4>
-                    
-                    <button className="template-btn" onClick={() => handleLoadPrebuiltTemplate('minimal')}>
-                      <Palette size={20} />
-                      <div className="template-info">
-                        <span className="template-name">Minimal</span>
-                        <small className="template-desc">{templateMetadata.minimal.category} - {templateMetadata.minimal.description}</small>
-                      </div>
-                    </button>
+              {/* Pre-built Items */}
+              <div className="prebuilt-items">
+                <h4>Pre-built Items</h4>
+                
+                <button 
+                  className={`prebuilt-item-btn ${isPrebuiltItemAdded('header') ? 'added' : ''}`}
+                  onClick={() => handleAddPrebuilt('header')}
+                >
+                  <Layout size={20} />
+                  <span>Header</span>
+                </button>
 
-                    <button className="template-btn" onClick={() => handleLoadPrebuiltTemplate('modern')}>
-                      <Palette size={20} />
-                      <div className="template-info">
-                        <span className="template-name">Modern</span>
-                        <small className="template-desc">{templateMetadata.modern.category} - {templateMetadata.modern.description}</small>
-                      </div>
-                    </button>
+                <button 
+                  className={`prebuilt-item-btn ${isPrebuiltItemAdded('stats') ? 'added' : ''}`}
+                  onClick={() => handleAddPrebuilt('stats')}
+                >
+                  <BarChart3 size={20} />
+                  <span>Stats</span>
+                </button>
 
-                    <button className="template-btn" onClick={() => handleLoadPrebuiltTemplate('gaming')}>
-                      <Palette size={20} />
-                      <div className="template-info">
-                        <span className="template-name">Gaming</span>
-                        <small className="template-desc">{templateMetadata.gaming.category} - {templateMetadata.gaming.description}</small>
-                      </div>
-                    </button>
+                <button 
+                  className={`prebuilt-item-btn ${isPrebuiltItemAdded('gallery') ? 'added' : ''}`}
+                  onClick={() => handleAddPrebuilt('gallery')}
+                >
+                  <Image size={20} />
+                  <span>Gallery</span>
+                </button>
 
-                    <button className="template-btn" onClick={() => handleLoadPrebuiltTemplate('fps')}>
-                      <Palette size={20} />
-                      <div className="template-info">
-                        <span className="template-name">FPS</span>
-                        <small className="template-desc">{templateMetadata.fps.category} - {templateMetadata.fps.description}</small>
-                      </div>
-                    </button>
+                <button 
+                  className={`prebuilt-item-btn ${isPrebuiltItemAdded('description') ? 'added' : ''}`}
+                  onClick={() => handleAddPrebuilt('description')}
+                >
+                  <List size={20} />
+                  <span>Description</span>
+                </button>
+              </div>
+            </div>
 
-                    <button className="template-btn" onClick={() => handleLoadPrebuiltTemplate('rpg')}>
-                      <Palette size={20} />
-                      <div className="template-info">
-                        <span className="template-name">RPG</span>
-                        <small className="template-desc">{templateMetadata.rpg.category} - {templateMetadata.rpg.description}</small>
-                      </div>
-                    </button>
-
-                    <button className="template-btn" onClick={() => handleLoadPrebuiltTemplate('strategy')}>
-                      <Palette size={20} />
-                      <div className="template-info">
-                        <span className="template-name">Strategy</span>
-                        <small className="template-desc">{templateMetadata.strategy.category} - {templateMetadata.strategy.description}</small>
-                      </div>
-                    </button>
-
-                    <button className="template-btn" onClick={() => handleLoadPrebuiltTemplate('competitive')}>
-                      <Palette size={20} />
-                      <div className="template-info">
-                        <span className="template-name">Competitive</span>
-                        <small className="template-desc">{templateMetadata.competitive.category} - {templateMetadata.competitive.description}</small>
-                      </div>
-                    </button>
-
-                    <button className="template-btn" onClick={() => handleLoadPrebuiltTemplate('adventure')}>
-                      <Palette size={20} />
-                      <div className="template-info">
-                        <span className="template-name">Adventure</span>
-                        <small className="template-desc">{templateMetadata.adventure.category} - {templateMetadata.adventure.description}</small>
-                      </div>
-                    </button>
-
-                    <button className="template-btn" onClick={() => handleLoadPrebuiltTemplate('indie')}>
-                      <Palette size={20} />
-                      <div className="template-info">
-                        <span className="template-name">Indie</span>
-                        <small className="template-desc">{templateMetadata.indie.category} - {templateMetadata.indie.description}</small>
-                      </div>
-                    </button>
-
-                    <button className="template-btn" onClick={() => handleLoadPrebuiltTemplate('horror')}>
-                      <Palette size={20} />
-                      <div className="template-info">
-                        <span className="template-name">Horror</span>
-                        <small className="template-desc">{templateMetadata.horror.category} - {templateMetadata.horror.description}</small>
-                      </div>
-                    </button>
-
-                    <button className="template-btn" onClick={() => handleLoadPrebuiltTemplate('sports')}>
-                      <Palette size={20} />
-                      <div className="template-info">
-                        <span className="template-name">Sports</span>
-                        <small className="template-desc">{templateMetadata.sports.category} - {templateMetadata.sports.description}</small>
-                      </div>
-                    </button>
-
-                    <button className="template-btn" onClick={() => handleLoadPrebuiltTemplate('dank')}>
-                      <Palette size={20} />
-                      <div className="template-info">
-                        <span className="template-name">Dank</span>
-                        <small className="template-desc">{templateMetadata.dank.category} - {templateMetadata.dank.description}</small>
-                      </div>
-                    </button>
-                  </div>
-
-                  <div className="sidebar-divider" />
-
-                  {/* Pre-built Items */}
-                  <div className="prebuilt-items">
-                    <h4>Pre-built Items</h4>
-                    
-                    <button className="prebuilt-item-btn" onClick={() => handleAddPrebuilt('header')}>
-                      <Layout size={20} />
-                      <span>Header</span>
-                    </button>
-
-                    <button className="prebuilt-item-btn" onClick={() => handleAddPrebuilt('stats')}>
-                      <BarChart3 size={20} />
-                      <span>Stats</span>
-                    </button>
-
-                    <button className="prebuilt-item-btn" onClick={() => handleAddPrebuilt('gallery')}>
-                      <Image size={20} />
-                      <span>Gallery</span>
-                    </button>
-
-                    <button className="prebuilt-item-btn" onClick={() => handleAddPrebuilt('description')}>
-                      <List size={20} />
-                      <span>Description</span>
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {/* Custom Code Section */}
-                  <div className="custom-code-section">
-                    <p className="custom-code-info">Start building your custom promo page with HTML, CSS, and JavaScript.</p>
-                  </div>
-                </>
+            {/* Sidebar Footer with Save/Cancel buttons */}
+            <div className="sidebar-footer">
+              {(promoHTML || promoCSS || promoJS) && (
+                <button 
+                  className="promo-custom-code-toggle-btn" 
+                  onClick={() => setShowCustomCode(!showCustomCode)}
+                  title={showCustomCode ? 'Hide Code' : 'Show Code'}
+                >
+                  <span className="code-symbol">&lt;/&gt;</span>
+                  <span className="code-btn-text">{showCustomCode ? 'exit code view' : 'add custom design to current'}</span>
+                </button>
               )}
+              <div className="button-row">
+                <button className="cancel-promo-btn" onClick={handleCancel}>
+                  <X size={18} />
+                </button>
+                <button className="save-promo-btn" onClick={handleSave}>
+                  <Save size={16} />
+                  Save
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -4216,7 +5049,7 @@ const GamePromo = ({ gamesData = {} }) => {
     <div className="game-promo-page">
       {hasCustomPromo ? (
         // Custom Promo Page
-        <>
+        <div className="promo-custom-content-wrapper">
           {isOwned && (
             <button className="promo-edit-mode-btn" onClick={() => setIsEditMode(true)}>
               <Edit2 size={18} />
@@ -4240,7 +5073,7 @@ const GamePromo = ({ gamesData = {} }) => {
               `
             }}
           />
-        </>
+        </div>
       ) : (
         // Default Promo Page (existing code)
         <>

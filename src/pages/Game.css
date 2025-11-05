@@ -3071,7 +3071,7 @@
 
 .location-path {
   flex: 1;
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-family-mono);
   font-size: 13px;
   color: var(--text-primary);
 }

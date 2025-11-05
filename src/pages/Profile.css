@@ -354,7 +354,7 @@
   flex: 1;
   overflow: auto;
   padding: 16px 20px;
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-family-mono);
   font-size: 13px;
 }
 
@@ -413,7 +413,7 @@
 .terminal-content {
   background: #000;
   color: #0f0;
-  font-family: 'Courier New', monospace;
+  font-family: var(--font-family-mono);
 }
 
 .terminal-line {

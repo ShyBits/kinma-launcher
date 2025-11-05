@@ -526,20 +526,18 @@ const highlightCode = (code, language) => {
       return `<span class="code-string">${match}</span>`;
     });
   } else if (language === 'css') {
-    // Process CSS similar to HTML - find all syntax elements first, then build result
-    // First escape all HTML entities
+    // Complete CSS highlighting rewrite - cleaner and more reliable
     const escapedCode = result
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
     
-    // Collect all syntax elements with their positions
     const elements = [];
-    
-    // Find CSS comments
-    const commentRegex = /\/\*[\s\S]*?\*\//g;
     let match;
+    
+    // 1. Comments first (highest priority)
+    const commentRegex = /\/\*[\s\S]*?\*\//g;
     while ((match = commentRegex.exec(escapedCode)) !== null) {
       elements.push({
         index: match.index,
@@ -549,235 +547,331 @@ const highlightCode = (code, language) => {
       });
     }
     
-    // Find CSS strings
-    const stringRegex = /(&quot;)(?:(?=(\\?))\2.)*?\1/g;
+    // 2. Strings (second priority)
+    const stringRegex = /(&quot;|')(?:(?=(\\?))\2.)*?\1/g;
     while ((match = stringRegex.exec(escapedCode)) !== null) {
-      elements.push({
-        index: match.index,
-        endIndex: match.index + match[0].length,
-        type: 'string',
-        content: match[0]
-      });
+      // Check if inside comment
+      const inComment = elements.some(e => 
+        e.type === 'comment' && e.index <= match.index && e.endIndex >= match.index + match[0].length
+      );
+      if (!inComment) {
+        elements.push({
+          index: match.index,
+          endIndex: match.index + match[0].length,
+          type: 'string',
+          content: match[0]
+        });
+      }
     }
     
-    // Find CSS selectors (before {)
-    const selectorRegex = /([^{}]+)(\{)/g;
+    // 3. @-rules (@media, @keyframes, @import, etc.)
+    const atRuleRegex = /(@[a-zA-Z-]+)(\s*)([^{;]*)/g;
+    while ((match = atRuleRegex.exec(escapedCode)) !== null) {
+      const inComment = elements.some(e => 
+        e.type === 'comment' && e.index <= match.index && e.endIndex >= match.index + match[0].length
+      );
+      const inString = elements.some(e => 
+        e.type === 'string' && e.index <= match.index && e.endIndex >= match.index + match[0].length
+      );
+      if (!inComment && !inString) {
+        elements.push({
+          index: match.index,
+          endIndex: match.index + match[1].length,
+          type: 'atrule',
+          content: match[1]
+        });
+        // Add the rule content as selector-like
+        if (match[3].trim()) {
+          elements.push({
+            index: match.index + match[1].length + match[2].length,
+            endIndex: match.index + match[0].length,
+            type: 'selector',
+            content: match[3].trim()
+          });
+        }
+      }
+    }
+    
+    // 4. Selectors (before {, but not inside comments/strings)
+    const selectorRegex = /([^{}@\/]+?)(\{)/g;
     while ((match = selectorRegex.exec(escapedCode)) !== null) {
       const selectorIndex = match.index;
       const braceIndex = selectorIndex + match[1].length;
-      const hasError = cssErrors.has(braceIndex);
-      elements.push({
-        index: selectorIndex,
-        endIndex: selectorIndex + match[1].length,
-        type: 'selector',
-        content: match[1].trim(),
-        hasError: false
-      });
-      elements.push({
-        index: braceIndex,
-        endIndex: braceIndex + 1,
-        type: 'brace',
-        content: '{',
-        hasError: hasError
-      });
-    }
-    
-    // Find CSS properties and values together (property: value;)
-    const propertyValueRegex = /(\s+)(\w+)(\s*:\s*)([^;{]+)(;)/g;
-    while ((match = propertyValueRegex.exec(escapedCode)) !== null) {
-      const whitespaceIndex = match.index;
-      const propIndex = whitespaceIndex + match[1].length;
-      const colonIndex = propIndex + match[2].length;
-      const valueIndex = colonIndex + match[3].length;
-      const valueEndIndex = valueIndex + match[4].trim().length;
-      const semicolonIndex = match.index + match[0].length - 1;
       
-      const hasError = cssErrors.has(propIndex + match[2].length) || cssErrors.has(colonIndex) || cssErrors.has(valueIndex);
-      
-      // Add whitespace before property
-      if (match[1]) {
-        elements.push({
-          index: whitespaceIndex,
-          endIndex: propIndex,
-          type: 'whitespace',
-          content: match[1]
-        });
-      }
-      
-      // Add property
-      elements.push({
-        index: propIndex,
-        endIndex: colonIndex,
-        type: 'property',
-        content: match[2],
-        hasError: hasError
-      });
-      
-      // Add colon and spaces after property
-      if (match[3]) {
-        elements.push({
-          index: colonIndex,
-          endIndex: valueIndex,
-          type: 'colon',
-          content: match[3]
-        });
-      }
-      
-      // Add value
-      if (match[4].trim()) {
-        elements.push({
-          index: valueIndex,
-          endIndex: valueEndIndex,
-          type: 'value',
-          content: match[4].trim(),
-          hasError: hasError
-        });
-      }
-      
-      // Add semicolon
-      elements.push({
-        index: semicolonIndex,
-        endIndex: match.index + match[0].length,
-        type: 'semicolon',
-        content: match[5]
-      });
-    }
-    
-    // Find CSS values without semicolon (missing semicolon errors)
-    const valueWithoutSemicolonRegex = /:([^;{]+)(\s*[}\n])/g;
-    while ((match = valueWithoutSemicolonRegex.exec(escapedCode)) !== null) {
-      // Check if this was already captured by propertyValueRegex
-      const alreadyCaptured = elements.some(e => 
-        e.index <= match.index && e.endIndex >= match.index + match[0].length
+      const inComment = elements.some(e => 
+        e.type === 'comment' && e.index <= selectorIndex && e.endIndex >= selectorIndex + match[0].length
       );
-      if (!alreadyCaptured) {
-        const colonIndex = match.index;
-        const valueIndex = colonIndex + 1;
-        const valueEndIndex = valueIndex + match[1].trim().length;
-        const hasError = cssErrors.has(colonIndex) || cssErrors.has(valueIndex);
-        
-        if (match[1].trim()) {
-          elements.push({
-            index: colonIndex,
-            endIndex: valueIndex,
-            type: 'colon',
-            content: ':'
+      const inString = elements.some(e => 
+        e.type === 'string' && e.index <= selectorIndex && e.endIndex >= selectorIndex + match[0].length
+      );
+      const isAtRule = escapedCode.substring(0, selectorIndex).match(/@[a-zA-Z-]+\s*$/);
+      
+      if (!inComment && !inString && !isAtRule) {
+        // Check if already captured as part of @-rule
+        const alreadyCaptured = elements.some(e => 
+          e.type === 'selector' && e.index <= selectorIndex && e.endIndex >= selectorIndex + match[1].length
+        );
+        if (!alreadyCaptured) {
+          const selectorText = match[1].trim();
+          // Split selector into parts (for pseudo-classes/elements)
+          const selectorParts = selectorText.split(/(::?[a-zA-Z-]+)/);
+          let currentIndex = selectorIndex;
+          
+          selectorParts.forEach((part, i) => {
+            if (!part.trim()) return;
+            
+            const partStart = escapedCode.indexOf(part, currentIndex);
+            if (partStart !== -1 && partStart < selectorIndex + match[1].length) {
+              if (part.match(/^::?[a-zA-Z-]+$/)) {
+                // Pseudo-class or pseudo-element
+                elements.push({
+                  index: partStart,
+                  endIndex: partStart + part.length,
+                  type: 'pseudo',
+                  content: part
+                });
+              } else {
+                // Regular selector part
+                elements.push({
+                  index: partStart,
+                  endIndex: partStart + part.length,
+                  type: 'selector',
+                  content: part
+                });
+              }
+              currentIndex = partStart + part.length;
+            }
           });
+          
+          // Add opening brace
+          const hasError = cssErrors.has(braceIndex);
           elements.push({
-            index: valueIndex,
-            endIndex: valueEndIndex,
-            type: 'value',
-            content: match[1].trim(),
+            index: braceIndex,
+            endIndex: braceIndex + 1,
+            type: 'brace',
+            content: '{',
             hasError: hasError
           });
         }
       }
     }
     
-    // Find CSS numbers (but skip if already in a value or comment or string)
-    const numberRegex = /\b(\d+\.?\d*)(px|em|rem|%|vh|vw|s|ms|deg|rad)?\b/g;
-    while ((match = numberRegex.exec(escapedCode)) !== null) {
-      // Check if this number is already captured by a value, comment, or string
-      const alreadyCaptured = elements.some(e => 
-        (e.type === 'value' || e.type === 'comment' || e.type === 'string') &&
-        e.index <= match.index && e.endIndex >= match.index + match[0].length
+    // 5. Properties and values (inside {})
+    // Find all property: value pairs
+    const propertyRegex = /([a-zA-Z-]+)(\s*:\s*)([^;{}]+?)(;|\s*[}\n])/g;
+    while ((match = propertyRegex.exec(escapedCode)) !== null) {
+      const propIndex = match.index;
+      const colonIndex = propIndex + match[1].length;
+      const valueIndex = colonIndex + match[2].length;
+      const valueEndIndex = valueIndex + match[3].trim().length;
+      const semicolonIndex = match.index + match[0].length - (match[4] === ';' ? 1 : 0);
+      
+      const inComment = elements.some(e => 
+        e.type === 'comment' && e.index <= propIndex && e.endIndex >= propIndex + match[0].length
       );
-      if (!alreadyCaptured) {
+      const inString = elements.some(e => 
+        e.type === 'string' && e.index <= propIndex && e.endIndex >= propIndex + match[0].length
+      );
+      const inSelector = elements.some(e => 
+        e.type === 'selector' && e.index <= propIndex && e.endIndex >= propIndex + match[0].length
+      );
+      
+      if (!inComment && !inString && !inSelector) {
+        const hasError = cssErrors.has(propIndex) || cssErrors.has(colonIndex) || cssErrors.has(valueIndex);
+        
+        // Add property
         elements.push({
-          index: match.index,
-          endIndex: match.index + match[0].length,
-          type: 'number',
-          content: match[0]
+          index: propIndex,
+          endIndex: colonIndex,
+          type: 'property',
+          content: match[1],
+          hasError: hasError
         });
+        
+        // Add colon
+        elements.push({
+          index: colonIndex,
+          endIndex: valueIndex,
+          type: 'colon',
+          content: match[2]
+        });
+        
+        // Process value - extract functions, numbers, units, colors
+        const value = match[3].trim();
+        if (value) {
+          const valueElements = [];
+          
+          // Find CSS functions (calc(), rgba(), url(), etc.)
+          const functionRegex = /([a-zA-Z-]+)(\()/g;
+          let funcMatch;
+          while ((funcMatch = functionRegex.exec(value)) !== null) {
+            const funcStart = valueIndex + funcMatch.index;
+            valueElements.push({
+              index: funcStart,
+              endIndex: funcStart + funcMatch[1].length,
+              type: 'function',
+              content: funcMatch[1]
+            });
+            valueElements.push({
+              index: funcStart + funcMatch[1].length,
+              endIndex: funcStart + funcMatch[1].length + 1,
+              type: 'brace',
+              content: '('
+            });
+          }
+          
+          // Find colors (#hex, rgb(), rgba(), hsl(), named colors)
+          const colorRegex = /(#[\da-fA-F]{3,8}|rgb\([^)]+\)|rgba\([^)]+\)|hsl\([^)]+\)|hsla\([^)]+\)|\b(red|blue|green|yellow|orange|purple|pink|black|white|gray|grey|transparent|currentColor)\b)/g;
+          while ((funcMatch = colorRegex.exec(value)) !== null) {
+            const colorStart = valueIndex + funcMatch.index;
+            const inFunc = valueElements.some(e => 
+              e.type === 'function' && e.index <= colorStart && e.endIndex > colorStart
+            );
+            if (!inFunc) {
+              valueElements.push({
+                index: colorStart,
+                endIndex: colorStart + funcMatch[0].length,
+                type: 'color',
+                content: funcMatch[0]
+              });
+            }
+          }
+          
+          // Find numbers with units (but not inside functions/colors)
+          const numberRegex = /(-?\d+\.?\d*)(px|em|rem|%|vh|vw|vmin|vmax|ch|ex|pt|pc|in|cm|mm|s|ms|deg|rad|grad|turn|Hz|kHz|dpi|dpcm|dppx)?/g;
+          while ((funcMatch = numberRegex.exec(value)) !== null) {
+            const numStart = valueIndex + funcMatch.index;
+            const alreadyCaptured = valueElements.some(e => 
+              (e.index <= numStart && e.endIndex > numStart)
+            );
+            if (!alreadyCaptured) {
+              valueElements.push({
+                index: numStart,
+                endIndex: numStart + funcMatch[1].length,
+                type: 'number',
+                content: funcMatch[1]
+              });
+              if (funcMatch[2]) {
+                valueElements.push({
+                  index: numStart + funcMatch[1].length,
+                  endIndex: numStart + funcMatch[0].length,
+                  type: 'unit',
+                  content: funcMatch[2]
+                });
+              }
+            }
+          }
+          
+          // Add all value elements
+          valueElements.forEach(el => elements.push(el));
+          
+          // Add remaining value parts as default
+          if (valueElements.length === 0) {
+            elements.push({
+              index: valueIndex,
+              endIndex: valueEndIndex,
+              type: 'value',
+              content: value,
+              hasError: hasError
+            });
+          }
+        }
+        
+        // Add semicolon if present
+        if (match[4] === ';') {
+          elements.push({
+            index: semicolonIndex,
+            endIndex: semicolonIndex + 1,
+            type: 'semicolon',
+            content: ';'
+          });
+        }
       }
     }
     
-    // Find closing braces with errors (but skip if already captured)
+    // 6. Closing braces
     const closingBraceRegex = /\}/g;
     while ((match = closingBraceRegex.exec(escapedCode)) !== null) {
       const braceIndex = match.index;
-      // Check if this brace was already captured by selector regex
       const alreadyCaptured = elements.some(e => 
         e.type === 'brace' && e.index === braceIndex
       );
       if (!alreadyCaptured) {
-        const hasError = cssErrors.has(braceIndex);
-        elements.push({
-          index: braceIndex,
-          endIndex: braceIndex + 1,
-          type: 'brace',
-          content: '}',
-          hasError: hasError
-        });
+        const inComment = elements.some(e => 
+          e.type === 'comment' && e.index <= braceIndex && e.endIndex >= braceIndex + 1
+        );
+        const inString = elements.some(e => 
+          e.type === 'string' && e.index <= braceIndex && e.endIndex >= braceIndex + 1
+        );
+        if (!inComment && !inString) {
+          const hasError = cssErrors.has(braceIndex);
+          elements.push({
+            index: braceIndex,
+            endIndex: braceIndex + 1,
+            type: 'brace',
+            content: '}',
+            hasError: hasError
+          });
+        }
       }
     }
     
-    // Sort elements by index
+    // Sort and deduplicate elements
     elements.sort((a, b) => a.index - b.index);
     
-    // Remove overlapping elements (keep the most specific/earliest one)
-    const filteredElements = [];
+    // Remove overlaps (keep highest priority)
+    const filtered = [];
     for (const current of elements) {
       let shouldAdd = true;
-      
-      for (let j = 0; j < filteredElements.length; j++) {
-        const existing = filteredElements[j];
-        // Check if current overlaps with existing
-        const overlaps = (current.index < existing.endIndex && current.endIndex > existing.index);
-        
-        if (overlaps) {
-          shouldAdd = false;
-          // Priority: comment > string > other types
-          const currentPriority = current.type === 'comment' ? 3 : (current.type === 'string' ? 2 : 1);
-          const existingPriority = existing.type === 'comment' ? 3 : (existing.type === 'string' ? 2 : 1);
+      for (let i = 0; i < filtered.length; i++) {
+        const existing = filtered[i];
+        if (current.index < existing.endIndex && current.endIndex > existing.index) {
+          // Overlap - prioritize: comment > string > function > atrule > other
+          const priorities = { comment: 5, string: 4, function: 3, atrule: 2, selector: 1 };
+          const currPriority = priorities[current.type] || 0;
+          const existPriority = priorities[existing.type] || 0;
           
-          // If current has higher priority or same priority but starts earlier, replace
-          if (currentPriority > existingPriority || 
-              (currentPriority === existingPriority && current.index < existing.index)) {
-            filteredElements[j] = current;
+          if (currPriority > existPriority || (currPriority === existPriority && current.index < existing.index)) {
+            filtered[i] = current;
           }
+          shouldAdd = false;
           break;
         }
       }
-      
-      if (shouldAdd) {
-        filteredElements.push(current);
-      }
+      if (shouldAdd) filtered.push(current);
     }
     
-    // Re-sort after filtering
-    filteredElements.sort((a, b) => a.index - b.index);
-    elements.length = 0;
-    elements.push(...filteredElements);
-    
-    // Build result by iterating through elements
+    // Build result
+    filtered.sort((a, b) => a.index - b.index);
     const parts = [];
     let lastIndex = 0;
     
-    for (const element of elements) {
-      // Add text before this element (wrapped in default span)
+    for (const element of filtered) {
       if (element.index > lastIndex) {
         const beforeText = escapedCode.substring(lastIndex, element.index);
-        if (beforeText) {
-          parts.push(`<span class="code-value">${beforeText}</span>`);
-        }
+        if (beforeText) parts.push(`<span class="code-default">${beforeText}</span>`);
       }
       
-      // Add the element itself with appropriate span
       const escapedContent = element.content
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
       
-      let className = 'code-value';
+      let className = 'code-default';
       if (element.type === 'comment') className = 'code-comment';
       else if (element.type === 'string') className = 'code-string';
+      else if (element.type === 'atrule') className = 'code-atrule';
       else if (element.type === 'selector') className = 'code-selector';
+      else if (element.type === 'pseudo') className = 'code-pseudo';
       else if (element.type === 'property') className = 'code-property';
       else if (element.type === 'value') className = 'code-value';
+      else if (element.type === 'function') className = 'code-function';
       else if (element.type === 'number') className = 'code-number';
-      else if (element.type === 'brace') className = element.hasError ? 'code-brace-error' : 'code-value';
-      else if (element.type === 'colon' || element.type === 'semicolon' || element.type === 'whitespace') className = 'code-value';
+      else if (element.type === 'unit') className = 'code-unit';
+      else if (element.type === 'color') className = 'code-color';
+      else if (element.type === 'brace') className = element.hasError ? 'code-brace-error' : 'code-brace';
+      else if (element.type === 'colon') className = 'code-colon';
+      else if (element.type === 'semicolon') className = 'code-semicolon';
       
       if (element.hasError && element.type !== 'brace') {
         className += ' code-tag-error';
@@ -787,12 +881,9 @@ const highlightCode = (code, language) => {
       lastIndex = element.endIndex;
     }
     
-    // Add remaining text at the end
     if (lastIndex < escapedCode.length) {
       const remaining = escapedCode.substring(lastIndex);
-      if (remaining) {
-        parts.push(`<span class="code-value">${remaining}</span>`);
-      }
+      if (remaining) parts.push(`<span class="code-default">${remaining}</span>`);
     }
     
     result = parts.join('');
@@ -990,11 +1081,91 @@ const highlightCode = (code, language) => {
   return result;
 };
 
-const CodeEditor = ({ value, onChange, language, placeholder }) => {
+const CodeEditor = ({ value, onChange, language, placeholder, searchQuery = '', readOnly = false }) => {
   const textareaRef = useRef(null);
   const highlightRef = useRef(null);
   const [highlightedCode, setHighlightedCode] = useState('');
   const lastFormattedValueRef = useRef('');
+  
+  // Highlight search matches in the code
+  const highlightSearchMatches = (highlighted) => {
+    if (!searchQuery || !highlighted) return highlighted;
+    
+    // Escape special regex characters in search query
+    const escapedQuery = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
+    // Split by HTML tags to avoid breaking them
+    const parts = [];
+    let lastIndex = 0;
+    const regex = new RegExp(`(${escapedQuery})`, 'gi');
+    let match;
+    
+    // Find all matches in the original text (before HTML)
+    const textContent = highlighted.replace(/<[^>]*>/g, '');
+    const matches = [];
+    while ((match = regex.exec(textContent)) !== null) {
+      matches.push({
+        index: match.index,
+        length: match[0].length
+      });
+    }
+    
+    if (matches.length === 0) return highlighted;
+    
+    // Now apply highlighting to HTML, being careful not to break tags
+    let result = highlighted;
+    let offset = 0;
+    
+    // We need to find text positions in the HTML string
+    // This is tricky because we need to skip HTML tags
+    const textPositions = [];
+    let textIndex = 0;
+    for (let i = 0; i < highlighted.length; i++) {
+      if (highlighted[i] === '<') {
+        // Skip until closing >
+        while (i < highlighted.length && highlighted[i] !== '>') i++;
+        continue;
+      }
+      textPositions[i] = textIndex++;
+    }
+    
+    // Apply highlights
+    for (const match of matches.reverse()) {
+      // Find the corresponding position in HTML
+      let htmlStart = -1;
+      let htmlEnd = -1;
+      let currentTextIndex = 0;
+      
+      for (let i = 0; i < highlighted.length; i++) {
+        if (highlighted[i] === '<') {
+          while (i < highlighted.length && highlighted[i] !== '>') i++;
+          continue;
+        }
+        if (currentTextIndex === match.index) htmlStart = i;
+        if (currentTextIndex === match.index + match.length) {
+          htmlEnd = i;
+          break;
+        }
+        currentTextIndex++;
+      }
+      
+      if (htmlStart !== -1 && htmlEnd !== -1) {
+        // Check if this is inside a tag
+        const beforeMatch = highlighted.substring(0, htmlStart);
+        const lastTagStart = beforeMatch.lastIndexOf('<');
+        const lastTagEnd = beforeMatch.lastIndexOf('>');
+        const isInsideTag = lastTagStart > lastTagEnd;
+        
+        if (!isInsideTag) {
+          result = result.substring(0, htmlStart) + 
+                  `<span class="code-search-match">${result.substring(htmlStart, htmlEnd)}</span>` +
+                  result.substring(htmlEnd);
+        }
+      }
+    }
+    
+    return result;
+  };
 
   useEffect(() => {
     if (value) {
@@ -1031,12 +1202,14 @@ const CodeEditor = ({ value, onChange, language, placeholder }) => {
       // Don't escape here - we'll handle escaping in the highlight function
       // Apply highlighting directly to the formatted value
       const highlighted = highlightCode(formattedValue, language);
-      setHighlightedCode(highlighted);
+      // Apply search highlighting if search query exists
+      const finalHighlighted = searchQuery ? highlightSearchMatches(highlighted) : highlighted;
+      setHighlightedCode(finalHighlighted);
     } else {
       setHighlightedCode('');
       lastFormattedValueRef.current = '';
     }
-  }, [value, language, onChange]);
+  }, [value, language, onChange, searchQuery]);
 
   const handleScroll = () => {
     if (highlightRef.current && textareaRef.current) {
@@ -1064,6 +1237,8 @@ const CodeEditor = ({ value, onChange, language, placeholder }) => {
   }, [highlightedCode, value]);
 
   const handleKeyDown = (e) => {
+    if (readOnly) return; // Don't handle key events when read-only
+    
     const textarea = textareaRef.current;
     
     if (e.key === 'Tab') {
@@ -1128,6 +1303,46 @@ const CodeEditor = ({ value, onChange, language, placeholder }) => {
       } else {
         // No opening tag found, just insert the > normally
         const newValue = value.substring(0, start) + '>' + value.substring(end);
+        onChange({ target: { value: newValue } });
+        setTimeout(() => {
+          textarea.selectionStart = textarea.selectionEnd = start + 1;
+        }, 0);
+      }
+    } else if (language === 'css' && e.key === '{') {
+      // Smart braces for CSS - auto-close and format
+      e.preventDefault();
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const textBefore = value.substring(0, start);
+      const textAfter = value.substring(end);
+      const lines = textBefore.split('\n');
+      const currentLine = lines[lines.length - 1] || '';
+      
+      // Get indentation
+      const indentMatch = currentLine.match(/^(\s*)/);
+      const indent = indentMatch ? indentMatch[1] : '';
+      
+      // Check if we're after a selector (like "div {")
+      const selectorMatch = currentLine.match(/([^{}\n]+)$/);
+      const hasSelector = selectorMatch && selectorMatch[1].trim();
+      
+      if (hasSelector) {
+        // Insert { and add closing brace on new line
+        const newValue = textBefore + 
+                        '{' + 
+                        '\n' + (indent + '  ') +
+                        '\n' + indent +
+                        '}' +
+                        textAfter;
+        
+        onChange({ target: { value: newValue } });
+        setTimeout(() => {
+          const newPos = start + 1 + 1 + indent.length + 2;
+          textarea.selectionStart = textarea.selectionEnd = newPos;
+        }, 0);
+      } else {
+        // Just insert {
+        const newValue = textBefore + '{' + textAfter;
         onChange({ target: { value: newValue } });
         setTimeout(() => {
           textarea.selectionStart = textarea.selectionEnd = start + 1;
