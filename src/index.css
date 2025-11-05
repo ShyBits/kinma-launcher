@@ -99,6 +99,40 @@ body {
   display: flex;
   flex: 1;
   overflow: hidden;
+  position: relative;
+}
+
+.sidebar-resizer {
+  position: relative;
+  width: 4px;
+  background: transparent;
+  cursor: col-resize;
+  flex-shrink: 0;
+  z-index: 100;
+  transition: background 0.2s ease;
+  margin: 0 -2px;
+}
+
+.sidebar-resizer:hover {
+  background: rgba(59, 130, 246, 0.5);
+}
+
+.sidebar-resizer.resizing {
+  background: rgba(59, 130, 246, 0.8);
+}
+
+.sidebar-resizer::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  background: transparent;
+}
+
+.sidebar-resizer:hover::before {
+  background: rgba(59, 130, 246, 0.3);
 }
 
 .app-content-wrapper {

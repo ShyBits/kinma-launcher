@@ -57,6 +57,15 @@ const Game = () => {
   const [showRatingMenu, setShowRatingMenu] = useState(false);
   const [contentSection, setContentSection] = useState('description'); // 'description' or 'patchnotes'
   const [ratings, setRatings] = useState(() => {
+    // Load ratings from localStorage
+    try {
+      const savedRatings = localStorage.getItem(`gameRatings_${gameId}`);
+      if (savedRatings) {
+        return JSON.parse(savedRatings);
+      }
+    } catch (_) {}
+    
+    // Fallback to dummy data for built-in games
     const gameRatings = {
       "the-finals": [
         { id: 1, user: 'GamerPro99', rating: 5, comment: 'Absolutely love this game! Best purchase ever.' },
@@ -100,13 +109,7 @@ const Game = () => {
         { id: 5, user: 'ProPlayer', rating: 4, comment: 'Balanced and competitive scene is strong.' },
       ]
     };
-    return gameRatings[gameId] || [
-      { id: 1, user: 'GamerPro99', rating: 5, comment: 'Absolutely love this game! Best purchase ever.' },
-      { id: 2, user: 'CasualPlayer', rating: 5, comment: 'Perfect for relaxing after work.' },
-      { id: 3, user: 'SpeedRunner', rating: 4, comment: 'Great replay value.' },
-      { id: 4, user: 'Explorer123', rating: 5, comment: 'Incredible world design.' },
-      { id: 5, user: 'ReviewMaster', rating: 4, comment: 'Solid game overall.' },
-    ];
+    return gameRatings[gameId] || [];
   });
   const [newRatingComment, setNewRatingComment] = useState('');
   const [selectedStars, setSelectedStars] = useState(0);
@@ -1594,6 +1597,29 @@ const Game = () => {
     setSelectedStars(0);
   };
 
+  // Save ratings to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(`gameRatings_${gameId}`, JSON.stringify(ratings));
+      
+      // Update rating in customGames if this is a custom game
+      const list = Array.isArray(getUserData('customGames', [])) ? getUserData('customGames', []) : [];
+      const idx = list.findIndex((g) => String(g.gameId) === String(gameId));
+      
+      if (idx !== -1 && ratings.length > 0) {
+        const sum = ratings.reduce((acc, r) => acc + r.rating, 0);
+        const avgRating = Math.round((sum / ratings.length) * 10) / 10;
+        list[idx] = { ...list[idx], rating: avgRating };
+        saveUserData('customGames', list);
+        
+        // Dispatch event to notify other components
+        window.dispatchEvent(new CustomEvent('gameRatingUpdated', { 
+          detail: { gameId, rating: avgRating } 
+        }));
+      }
+    } catch (_) {}
+  }, [ratings, gameId]);
+
   const getColorForRating = (rating) => {
     // Red to Gold gradient
     if (rating >= 4.5) return '#FFD700'; // Gold
@@ -1847,16 +1873,16 @@ const Game = () => {
                   title="View current playing activity"
                 >
                   <Users size={18} />
-                  <span>{formatCompactNumber(isPlaying ? 1 : 0)} playing</span>
+                  <span>{formatCompactNumber(game.playerCount || game.currentPlaying || '0')}</span>
                 </div>
                 <div 
-                  className={`stat-item ${playerbaseTrend > 0 ? 'trending-positive' : playerbaseTrend < 0 ? 'trending-negative' : ''}`}
+                  className={`stat-item ${(game.trending && (game.trending.startsWith('+') || parseFloat(game.trending) > 0)) ? 'trending-positive' : (game.trending && (game.trending.startsWith('-') || parseFloat(game.trending) < 0)) ? 'trending-negative' : ''}`}
                   style={{ cursor: 'pointer' }}
                   onClick={() => setShowPlayerbaseGraph(true)}
                   title="View player base growth"
                 >
-                  {playerbaseTrend < 0 ? <TrendingDown size={18} /> : <TrendingUp size={18} />}
-                  <span>{Math.abs(playerbaseTrend)}%</span>
+                  {game.trending && (game.trending.startsWith('-') || parseFloat(game.trending) < 0) ? <TrendingDown size={18} /> : <TrendingUp size={18} />}
+                  <span>{game.trending ? (game.trending.startsWith('+') || game.trending.startsWith('-') ? game.trending.replace(/^\+/, '') : `+${game.trending}`) : '0%'}</span>
                 </div>
               </div>
             </div>

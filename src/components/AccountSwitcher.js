@@ -78,7 +78,9 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
       if (api && api.getUsers) {
         const result = await api.getUsers();
         if (result && result.success && Array.isArray(result.users)) {
-          const sorted = result.users.sort((a, b) => {
+          // Filter to only show logged-in users (isLoggedIn !== false)
+          const loggedInUsers = result.users.filter(u => u.isLoggedIn !== false);
+          const sorted = loggedInUsers.sort((a, b) => {
             if (currentAuthUser) {
               if (a.id === currentAuthUser.id) return -1;
               if (b.id === currentAuthUser.id) return 1;
@@ -99,7 +101,9 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
         }
       } else {
         const stored = JSON.parse(localStorage.getItem('users') || '[]');
-        setUsers(stored);
+        // Filter to only show logged-in users
+        const loggedInUsers = stored.filter(u => u.isLoggedIn !== false);
+        setUsers(loggedInUsers);
       }
     } catch (error) {
       console.error('Error loading users:', error);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import TitleBar from './components/TitleBar';
 import TopNavigation from './components/TopNavigation';
@@ -17,6 +17,7 @@ import Game from './pages/Game';
 import DeveloperOnboarding from './pages/DeveloperOnboarding';
 import Auth from './pages/Auth';
 import AccountSwitcherPage from './pages/AccountSwitcher';
+import GamePromo from './pages/GamePromo';
 import oauthExample from './config/oauth.config.example.js';
 import './components/AccountSwitcher.css';
 
@@ -27,6 +28,17 @@ const AppContent = () => {
   const [updateProgress, setUpdateProgress] = useState(0);
   const [selectedGame, setSelectedGame] = useState('the-finals');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try {
+      const saved = localStorage.getItem('sidebarWidth');
+      return saved ? parseInt(saved, 10) : 260;
+    } catch (_) {
+      return 260;
+    }
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeRef = useRef(null);
+  const sidebarRef = useRef(null);
   const [isAccountSwitching, setIsAccountSwitching] = useState(false);
   const [switchingToUser, setSwitchingToUser] = useState(null);
   const navigate = useNavigate();
@@ -116,6 +128,47 @@ const AppContent = () => {
     setSidebarCollapsed(!sidebarCollapsed);
   };
 
+  const handleResizeStart = (e) => {
+    setIsResizing(true);
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleResize = (e) => {
+      e.preventDefault();
+      const newWidth = e.clientX;
+      const minWidth = 200;
+      const maxWidth = 600;
+      
+      if (newWidth >= minWidth && newWidth <= maxWidth) {
+        setSidebarWidth(newWidth);
+      }
+    };
+
+    const handleResizeEnd = () => {
+      setIsResizing(false);
+      // Save to localStorage only at the end
+      try {
+        localStorage.setItem('sidebarWidth', sidebarWidth.toString());
+      } catch (_) {}
+    };
+
+    document.addEventListener('mousemove', handleResize);
+    document.addEventListener('mouseup', handleResizeEnd);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    return () => {
+      document.removeEventListener('mousemove', handleResize);
+      document.removeEventListener('mouseup', handleResizeEnd);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing, sidebarWidth]);
+
   // Listen for account switching events
   useEffect(() => {
     const handleAccountSwitchStart = (event) => {
@@ -191,12 +244,23 @@ const AppContent = () => {
       )}
       <div className="app-layout">
         {location.pathname !== '/auth' && location.pathname !== '/account-switcher' && location.pathname !== '/game-studio' && location.pathname !== '/game-studio-settings' && (
-          <SideBar 
-            currentGame={selectedGame}
-            onGameSelect={handleGameSelect}
-            navigate={navigate}
-            isCollapsed={sidebarCollapsed}
-          />
+          <>
+            <SideBar 
+              ref={sidebarRef}
+              currentGame={selectedGame}
+              onGameSelect={handleGameSelect}
+              navigate={navigate}
+              isCollapsed={sidebarCollapsed}
+              width={sidebarCollapsed ? 0 : sidebarWidth}
+              isResizing={isResizing}
+            />
+            <div 
+              ref={resizeRef}
+              className={`sidebar-resizer ${isResizing ? 'resizing' : ''}`}
+              onMouseDown={handleResizeStart}
+              style={{ display: sidebarCollapsed ? 'none' : 'block' }}
+            />
+          </>
         )}
         <div className="app-content-wrapper" style={{ width: (location.pathname === '/game-studio' || location.pathname === '/game-studio-settings' || location.pathname === '/auth' || location.pathname === '/account-switcher') ? '100%' : 'auto' }}>
           <div className="main-content">
@@ -207,6 +271,7 @@ const AppContent = () => {
               <Route path="/library" element={<Library />} />
               <Route path="/game-studio" element={<GameStudio navigate={navigate} />} />
               <Route path="/store" element={<Store navigate={navigate} gamesData={{}} />} />
+              <Route path="/store/game/:gameId" element={<GamePromo gamesData={{}} />} />
               <Route path="/friends" element={<Friends />} />
               <Route path="/market" element={<Market />} />
               <Route path="/game/:gameId/market" element={<Market />} />

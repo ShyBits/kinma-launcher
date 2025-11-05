@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Settings, Users, MessageSquare, ShoppingCart, Bell, User, Wallet, Plus, Minus, CreditCard, Coins, Store, Globe, Menu,
+  Settings, Users, MessageSquare, ShoppingCart, Bell, User, Plus, Minus, CreditCard, Coins, Store, Globe, Menu,
   BarChart3, Package, FileText, Upload, TrendingUp, DollarSign, Download, Check, RefreshCw
 } from 'lucide-react';
 import KinmaLogo from './KinmaLogo';
@@ -106,6 +106,7 @@ const TopNavigation = ({
   const quickSwitchMenuRef = useRef(null);
   const quickSwitchButtonRef = useRef(null);
   const quickSwitchHoverTimeoutRef = useRef(null);
+  const [avatarError, setAvatarError] = useState(false);
   
   // Check if we're in Game Studio
   const isGameStudio = location?.pathname === '/game-studio' || location?.pathname === '/game-studio-settings';
@@ -244,10 +245,36 @@ const TopNavigation = ({
   };
 
   const handleLogout = async () => {
-    try { localStorage.removeItem('authUser'); } catch (_) {}
-    try { localStorage.removeItem('developerIntent'); } catch (_) {}
-    setAuthUser(null);
-    try { await (window.electronAPI?.logout?.()); } catch (_) {}
+    try {
+      // Call logout API - it will handle switching to last account or showing auth window
+      await (window.electronAPI?.logout?.());
+      
+      // Wait a moment for the backend to process
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Check if we're still logged in (switched to another account)
+      const updatedAuthUser = (() => {
+        try { const u = localStorage.getItem('authUser'); return u ? JSON.parse(u) : null; } catch (_) { return null; }
+      })();
+      
+      if (updatedAuthUser) {
+        // User was switched to another account
+        setAuthUser(updatedAuthUser);
+        // Dispatch user-changed event to reload user-specific data
+        window.dispatchEvent(new Event('user-changed'));
+      } else {
+        // No other account - user will be logged out and auth window shown
+        setAuthUser(null);
+        try { localStorage.removeItem('authUser'); } catch (_) {}
+        try { localStorage.removeItem('developerIntent'); } catch (_) {}
+      }
+    } catch (error) {
+      console.error('Error during logout:', error);
+      // Fallback: clear local state
+      setAuthUser(null);
+      try { localStorage.removeItem('authUser'); } catch (_) {}
+      try { localStorage.removeItem('developerIntent'); } catch (_) {}
+    }
   };
 
   // Update user level when user changes
@@ -258,6 +285,7 @@ const TopNavigation = ({
       })();
       if (updatedAuthUser) {
         setAuthUser(updatedAuthUser);
+        setAvatarError(false); // Reset avatar error when user changes
         const userStats = getUserData('userStats', null);
         setUserLevel(userStats?.level || 1);
       }
@@ -267,6 +295,7 @@ const TopNavigation = ({
     
     // Also check on mount
     if (authUser) {
+      setAvatarError(false); // Reset avatar error on mount
       const userStats = getUserData('userStats', null);
       if (userStats?.level) {
         setUserLevel(userStats.level);
@@ -288,8 +317,10 @@ const TopNavigation = ({
           if (api?.getUsers) {
             const result = await api.getUsers();
             if (result && result.success && Array.isArray(result.users)) {
+              // Filter to only show logged-in users (isLoggedIn !== false)
+              const loggedInUsers = result.users.filter(u => u.isLoggedIn !== false);
               // Sort: current user first, then by lastLoginTime, then alphabetically
-              const sorted = result.users.sort((a, b) => {
+              const sorted = loggedInUsers.sort((a, b) => {
                 if (a.id === authUser.id) return -1;
                 if (b.id === authUser.id) return 1;
                 if (a.lastLoginTime && b.lastLoginTime) {
@@ -332,8 +363,10 @@ const TopNavigation = ({
           if (api?.getUsers) {
             const result = await api.getUsers();
             if (result && result.success && Array.isArray(result.users)) {
+              // Filter to only show logged-in users (isLoggedIn !== false)
+              const loggedInUsers = result.users.filter(u => u.isLoggedIn !== false);
               // Sort: current user first, then by lastLoginTime, then alphabetically
-              const sorted = result.users.sort((a, b) => {
+              const sorted = loggedInUsers.sort((a, b) => {
                 if (a.id === authUser.id) return -1;
                 if (b.id === authUser.id) return 1;
                 if (a.lastLoginTime && b.lastLoginTime) {
@@ -381,14 +414,32 @@ const TopNavigation = ({
       // Wait a moment for loading screen to render
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      // Step 1: Update last login time for this user
+      // Step 1: Get current user and log them out if they don't have "keep me signed in" enabled
       try {
         const result = await api?.getUsers?.();
         if (result && result.success && Array.isArray(result.users)) {
           const users = result.users;
+          
+          // Get current authenticated user
+          const currentAuthUser = await api?.getAuthUser?.();
+          if (currentAuthUser && currentAuthUser.id && currentAuthUser.id !== user.id) {
+            const currentUserIndex = users.findIndex(u => u.id === currentAuthUser.id);
+            if (currentUserIndex !== -1) {
+              const currentUser = users[currentUserIndex];
+              // If current user doesn't have "keep me signed in" enabled, log them out
+              if (currentUser.stayLoggedIn !== true) {
+                users[currentUserIndex].isLoggedIn = false;
+                console.log('✅ Logged out previous user (stayLoggedIn not enabled)');
+                await api?.saveUsers?.(users);
+              }
+            }
+          }
+          
+          // Step 2: Update last login time for the new user
           const userIndex = users.findIndex(u => u.id === user.id);
           if (userIndex !== -1) {
             users[userIndex].lastLoginTime = new Date().toISOString();
+            users[userIndex].isLoggedIn = true; // Mark as logged in
             await api?.saveUsers?.(users);
           }
         }
@@ -396,7 +447,7 @@ const TopNavigation = ({
         console.error('Error updating last login time:', error);
       }
 
-      // Step 2: Set auth user in localStorage
+      // Step 3: Set auth user in localStorage
       try {
         const authUserData = { 
           id: user.id, 
@@ -409,14 +460,14 @@ const TopNavigation = ({
         console.error('Error setting localStorage:', error);
       }
 
-      // Step 3: Set auth user in Electron store
+      // Step 4: Set auth user in Electron store
       try {
         await api?.setAuthUser?.(user);
       } catch (error) {
         console.error('Error setting Electron store:', error);
       }
 
-      // Step 4: Call authSuccess to properly handle login
+      // Step 5: Call authSuccess to properly handle login
       try {
         await api?.authSuccess?.(user);
         
@@ -426,7 +477,7 @@ const TopNavigation = ({
         console.error('Error calling authSuccess:', error);
       }
 
-      // Step 5: Wait a bit more then hide loading screen
+      // Step 6: Wait a bit more then hide loading screen
       await new Promise(resolve => setTimeout(resolve, 500));
       
       // Dispatch completion event
@@ -447,13 +498,31 @@ const TopNavigation = ({
     setShowProfileMenu(false);
     const api = window.electronAPI || window.electron;
     try {
-      // Update last login time
+      // Get current user and log them out if they don't have "keep me signed in" enabled
       const result = await api?.getUsers?.();
       if (result && result.success && Array.isArray(result.users)) {
         const users = result.users;
+        
+        // Get current authenticated user
+        const currentAuthUser = await api?.getAuthUser?.();
+        if (currentAuthUser && currentAuthUser.id && currentAuthUser.id !== user.id) {
+          const currentUserIndex = users.findIndex(u => u.id === currentAuthUser.id);
+          if (currentUserIndex !== -1) {
+            const currentUser = users[currentUserIndex];
+            // If current user doesn't have "keep me signed in" enabled, log them out
+            if (currentUser.stayLoggedIn !== true) {
+              users[currentUserIndex].isLoggedIn = false;
+              console.log('✅ Logged out previous user (stayLoggedIn not enabled)');
+              await api?.saveUsers?.(users);
+            }
+          }
+        }
+        
+        // Update last login time for the new user
         const userIndex = users.findIndex(u => u.id === user.id);
         if (userIndex !== -1) {
           users[userIndex].lastLoginTime = new Date().toISOString();
+          users[userIndex].isLoggedIn = true; // Mark as logged in
           await api?.saveUsers?.(users);
         }
       }
@@ -683,18 +752,18 @@ const TopNavigation = ({
             <div className="nav-separator" />
             
             {/* Analytics Menu */}
-            <CustomTooltip text={openStudioMenu === 'analytics' ? '' : 'Analytics'}>
-              <div ref={analyticsWrapperRef} className="analytics-wrapper" style={{ position: 'relative' }}>
-                <button 
-                  className={`nav-item ${openStudioMenu === 'analytics' ? 'active' : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowBalanceMenu(false);
-                    setOpenStudioMenu(openStudioMenu === 'analytics' ? null : 'analytics');
-                  }}
-                >
-                  <BarChart3 size={20} />
-                </button>
+            <div ref={analyticsWrapperRef} className="analytics-wrapper" style={{ position: 'relative' }}>
+              <button 
+                className={`nav-item nav-item-with-text ${openStudioMenu === 'analytics' ? 'active' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowBalanceMenu(false);
+                  setOpenStudioMenu(openStudioMenu === 'analytics' ? null : 'analytics');
+                }}
+              >
+                <BarChart3 size={18} />
+                <span>Analytics</span>
+              </button>
                 
                 {openStudioMenu === 'analytics' && (
                   <div className="analytics-menu" style={{
@@ -741,20 +810,19 @@ const TopNavigation = ({
                   </div>
                 )}
               </div>
-            </CustomTooltip>
             
-            <CustomTooltip text={openStudioMenu === 'publishing' ? '' : 'Publishing'}>
-              <div ref={publishingWrapperRef} className="publishing-wrapper" style={{ position: 'relative' }}>
-                <button 
-                  className={`nav-item ${openStudioMenu === 'publishing' ? 'active' : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowBalanceMenu(false);
-                    setOpenStudioMenu(openStudioMenu === 'publishing' ? null : 'publishing');
-                  }}
-                >
-                  <Upload size={20} />
-                </button>
+            <div ref={publishingWrapperRef} className="publishing-wrapper" style={{ position: 'relative' }}>
+              <button 
+                className={`nav-item nav-item-with-text ${openStudioMenu === 'publishing' ? 'active' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowBalanceMenu(false);
+                  setOpenStudioMenu(openStudioMenu === 'publishing' ? null : 'publishing');
+                }}
+              >
+                <Upload size={18} />
+                <span>Publishing</span>
+              </button>
                 
                 {openStudioMenu === 'publishing' && (
                   <div className="publishing-menu" style={{
@@ -788,23 +856,22 @@ const TopNavigation = ({
                   </div>
                 )}
               </div>
-            </CustomTooltip>
             
             <div className="nav-separator" />
             
             {/* Content Menu */}
-            <CustomTooltip text={openStudioMenu === 'content' ? '' : 'Content'}>
-              <div ref={contentWrapperRef} className="content-wrapper" style={{ position: 'relative' }}>
-                <button 
-                  className={`nav-item ${openStudioMenu === 'content' ? 'active' : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowBalanceMenu(false);
-                    setOpenStudioMenu(openStudioMenu === 'content' ? null : 'content');
-                  }}
-                >
-                  <Package size={20} />
-                </button>
+            <div ref={contentWrapperRef} className="content-wrapper" style={{ position: 'relative' }}>
+              <button 
+                className={`nav-item nav-item-with-text ${openStudioMenu === 'content' ? 'active' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowBalanceMenu(false);
+                  setOpenStudioMenu(openStudioMenu === 'content' ? null : 'content');
+                }}
+              >
+                <Package size={18} />
+                <span>Content</span>
+              </button>
                 
                 {openStudioMenu === 'content' && (
                   <div className="content-menu" style={{
@@ -851,21 +918,20 @@ const TopNavigation = ({
                   </div>
                 )}
               </div>
-            </CustomTooltip>
             
             {/* Reports Menu */}
-            <CustomTooltip text={openStudioMenu === 'reports' ? '' : 'Reports'}>
-              <div ref={reportsWrapperRef} className="reports-wrapper" style={{ position: 'relative' }}>
-                <button 
-                  className={`nav-item ${openStudioMenu === 'reports' ? 'active' : ''}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowBalanceMenu(false);
-                    setOpenStudioMenu(openStudioMenu === 'reports' ? null : 'reports');
-                  }}
-                >
-                  <FileText size={20} />
-                </button>
+            <div ref={reportsWrapperRef} className="reports-wrapper" style={{ position: 'relative' }}>
+              <button 
+                className={`nav-item nav-item-with-text ${openStudioMenu === 'reports' ? 'active' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowBalanceMenu(false);
+                  setOpenStudioMenu(openStudioMenu === 'reports' ? null : 'reports');
+                }}
+              >
+                <FileText size={18} />
+                <span>Reports</span>
+              </button>
                 
                 {openStudioMenu === 'reports' && (
                   <div className="reports-menu" style={{
@@ -912,174 +978,173 @@ const TopNavigation = ({
                   </div>
                 )}
               </div>
-            </CustomTooltip>
             
             <div className="nav-separator" />
             
-            <CustomTooltip text="Settings">
-              <button 
-                className={`nav-item ${currentPage === 'settings' ? 'active' : ''}`}
-                onClick={() => handleNavigation('settings')}
-              >
-                <Settings size={20} />
-              </button>
-            </CustomTooltip>
+            <button 
+              className={`nav-item nav-item-with-text ${currentPage === 'settings' ? 'active' : ''}`}
+              onClick={() => handleNavigation('settings')}
+            >
+              <Settings size={18} />
+              <span>Settings</span>
+            </button>
           </>
         ) : (
           /* Regular navigation */
           <>
-            <CustomTooltip text="Store">
-              <button 
-                className={`nav-item ${currentPage === 'store' ? 'active' : ''}`}
-                onClick={() => handleNavigation('store')}
-              >
-                <Store size={20} />
-              </button>
-            </CustomTooltip>
+            <button 
+              className={`nav-item nav-item-with-text ${currentPage === 'store' ? 'active' : ''}`}
+              onClick={() => handleNavigation('store')}
+            >
+              <Store size={18} />
+              <span>Store</span>
+            </button>
             
-            <CustomTooltip text="Market">
-              <button 
-                className={`nav-item ${currentPage === 'market' ? 'active' : ''}`}
-                onClick={() => handleNavigation('market')}
-              >
-                <ShoppingCart size={20} />
-              </button>
-            </CustomTooltip>
+            <button 
+              className={`nav-item nav-item-with-text ${currentPage === 'market' ? 'active' : ''}`}
+              onClick={() => handleNavigation('market')}
+            >
+              <ShoppingCart size={18} />
+              <span>Market</span>
+            </button>
             
-            <CustomTooltip text="Community">
-              <button 
-                className={`nav-item ${currentPage === 'community' ? 'active' : ''}`}
-                onClick={() => handleNavigation('community')}
-              >
-                <Globe size={20} />
-              </button>
-            </CustomTooltip>
+            <button 
+              className={`nav-item nav-item-with-text ${currentPage === 'community' ? 'active' : ''}`}
+              onClick={() => handleNavigation('community')}
+            >
+              <Globe size={18} />
+              <span>Community</span>
+            </button>
             
             <div className="nav-separator" />
             
-            {/* Balance & Profile */}
-            <div className="balance-wrapper">
-              <CustomTooltip text={showBalanceMenu ? '' : 'Balance'}>
-                <div 
-                  className={`nav-balance ${showBalanceMenu ? 'active' : ''}`} 
+            {/* Profile with Balance Inside */}
+            {authUser ? (
+              <div className="profile-with-balance-wrapper" style={{ position: 'relative' }}>
+                <button 
+                  ref={profileButtonRef}
+                  className={`nav-item nav-item-profile ${showProfileMenu ? 'active' : ''}`}
                   onClick={(e) => {
                     e.stopPropagation();
-                    setShowBalanceMenu(!showBalanceMenu);
+                    setShowProfileMenu((v) => !v);
                   }}
                 >
-                  <Wallet size={18} />
-                  <span className="balance-amount">${userBalance.toFixed(2)}</span>
-                </div>
-              </CustomTooltip>
-              
-              {/* Balance Menu */}
-              {showBalanceMenu && (
-                <div ref={balanceMenuRef} className="balance-menu">
-                  <div className="balance-menu-header">
-                    <h2>Add Funds</h2>
+                  <div className="nav-profile-avatar">
+                    {authUser?.avatar && !avatarError ? (
+                      <img 
+                        src={authUser.avatar} 
+                        alt={userName}
+                        onError={() => setAvatarError(true)}
+                      />
+                    ) : (
+                      <span className="nav-profile-avatar-initials">
+                        {getInitials(authUser)}
+                      </span>
+                    )}
                   </div>
-                  
-                  <div className="balance-input-section">
-                    <div className="balance-input-controls">
-                      <button 
-                        className="amount-btn" 
-                        onClick={() => handleAmountChange(-5)}
-                        disabled={topUpAmount === 0}
-                      >
-                        <Minus size={36} />
-                      </button>
-                      <div className="balance-input-display">
-                        <span className="currency">$</span>
-                        <input 
-                          type="text" 
-                          value={topUpAmount} 
-                          onChange={(e) => {
-                            const inputValue = e.target.value;
-                            if (inputValue === '' || inputValue === '0') {
-                              setTopUpAmount(0);
-                            } else if (topUpAmount === 0 && inputValue.length > 1) {
-                              const parsedValue = Math.min(parseInt(inputValue), 1000000);
-                              setTopUpAmount(parsedValue);
-                            } else {
-                              const parsedValue = Math.min(parseFloat(inputValue) || 0, 1000000);
-                              setTopUpAmount(Math.max(0, parsedValue));
-                            }
-                          }}
-                          placeholder="0"
-                          className="balance-amount-input"
-                          inputMode="numeric"
-                        />
+                  <div className="nav-profile-info">
+                    <span className="nav-user-name">{userName}</span>
+                    <span className="nav-balance-inline">${userBalance.toFixed(2)}</span>
+                  </div>
+                </button>
+                
+                {/* Balance Menu */}
+                {showBalanceMenu && (
+                  <div ref={balanceMenuRef} className="balance-menu" style={{
+                    position: 'absolute',
+                    top: '100%',
+                    right: 0,
+                    marginTop: '8px',
+                    zIndex: 1001
+                  }}>
+                    <div className="balance-menu-header">
+                      <h2>Add Funds</h2>
+                    </div>
+                    
+                    <div className="balance-input-section">
+                      <div className="balance-input-controls">
+                        <button 
+                          className="amount-btn" 
+                          onClick={() => handleAmountChange(-5)}
+                          disabled={topUpAmount === 0}
+                        >
+                          <Minus size={36} />
+                        </button>
+                        <div className="balance-input-display">
+                          <span className="currency">$</span>
+                          <input 
+                            type="text" 
+                            value={topUpAmount} 
+                            onChange={(e) => {
+                              const inputValue = e.target.value;
+                              if (inputValue === '' || inputValue === '0') {
+                                setTopUpAmount(0);
+                              } else if (topUpAmount === 0 && inputValue.length > 1) {
+                                const parsedValue = Math.min(parseInt(inputValue), 1000000);
+                                setTopUpAmount(parsedValue);
+                              } else {
+                                const parsedValue = Math.min(parseFloat(inputValue) || 0, 1000000);
+                                setTopUpAmount(Math.max(0, parsedValue));
+                              }
+                            }}
+                            placeholder="0"
+                            className="balance-amount-input"
+                            inputMode="numeric"
+                          />
+                        </div>
+                        <button 
+                          className="amount-btn" 
+                          onClick={() => handleAmountChange(5)}
+                          disabled={topUpAmount >= 1000000}
+                        >
+                          <Plus size={36} />
+                        </button>
                       </div>
+                    </div>
+                    
+                    <div className="balance-presets">
                       <button 
-                        className="amount-btn" 
-                        onClick={() => handleAmountChange(5)}
-                        disabled={topUpAmount >= 1000000}
+                        className="preset-btn" 
+                        onClick={() => handlePresetAmount(10)}
                       >
-                        <Plus size={36} />
+                        $10
+                      </button>
+                      <button 
+                        className="preset-btn" 
+                        onClick={() => handlePresetAmount(25)}
+                      >
+                        $25
+                      </button>
+                      <button 
+                        className="preset-btn" 
+                        onClick={() => handlePresetAmount(50)}
+                      >
+                        $50
+                      </button>
+                      <button 
+                        className="preset-btn" 
+                        onClick={() => handlePresetAmount(100)}
+                      >
+                        $100
                       </button>
                     </div>
+                    
+                    <div className="balance-actions">
+                      <button className="cancel-btn" onClick={() => setShowBalanceMenu(false)}>Cancel</button>
+                      <button 
+                        className="confirm-btn" 
+                        onClick={() => {
+                          if (topUpAmount >= 5) {
+                            // Handle add funds logic here
+                            setShowBalanceMenu(false);
+                          }
+                        }}
+                        disabled={topUpAmount < 5}
+                      >Add Funds</button>
+                    </div>
                   </div>
-                  
-                  <div className="balance-presets">
-                    <button 
-                      className="preset-btn" 
-                      onClick={() => handlePresetAmount(10)}
-                    >
-                      $10
-                    </button>
-                    <button 
-                      className="preset-btn" 
-                      onClick={() => handlePresetAmount(25)}
-                    >
-                      $25
-                    </button>
-                    <button 
-                      className="preset-btn" 
-                      onClick={() => handlePresetAmount(50)}
-                    >
-                      $50
-                    </button>
-                    <button 
-                      className="preset-btn" 
-                      onClick={() => handlePresetAmount(100)}
-                    >
-                      $100
-                    </button>
-                  </div>
-                  
-                  <div className="balance-actions">
-                    <button className="cancel-btn" onClick={() => setShowBalanceMenu(false)}>Cancel</button>
-                    <button 
-                      className="confirm-btn" 
-                      onClick={() => {
-                        if (topUpAmount >= 5) {
-                          // Handle add funds logic here
-                          setShowBalanceMenu(false);
-                        }
-                      }}
-                      disabled={topUpAmount < 5}
-                    >Add Funds</button>
-                  </div>
-                </div>
-              )}
-            </div>
-            
-            {authUser ? (
-              <div style={{ position: 'relative' }}>
-                <CustomTooltip text={`Profile - ${userName}`}>
-                  <button 
-                    ref={profileButtonRef}
-                    className={`nav-item nav-item-with-user-info ${showProfileMenu ? 'active' : ''}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowProfileMenu((v) => !v);
-                    }}
-                  >
-                    <User size={20} />
-                    <span className="nav-user-name">{userName}</span>
-                    <span className="nav-user-level">Lv {userLevel}</span>
-                  </button>
-                </CustomTooltip>
+                )}
+                
                 {showProfileMenu && (
                   <div 
                     ref={profileMenuRef} 
@@ -1113,19 +1178,22 @@ const TopNavigation = ({
                           </div>
                           <p>{authUser?.email || ''}</p>
                         </div>
-                        <div style={{ marginLeft: 'auto' }}>
-                          <button
-                            ref={quickSwitchButtonRef}
-                            className="profile-menu-quick-switch-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowQuickSwitchMenu((prev) => !prev);
-                            }}
-                            title="Quick Switch Account"
-                          >
-                            <RefreshCw size={18} />
-                          </button>
-                        </div>
+                        {availableUsers.length > 1 && (
+                          <div style={{ marginLeft: 'auto' }}>
+                            <button
+                              ref={quickSwitchButtonRef}
+                              className="profile-menu-quick-switch-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowQuickSwitchMenu((prev) => !prev);
+                              }}
+                              title="Quick Switch Account"
+                            >
+                              <span className="profile-menu-quick-switch-count">{availableUsers.length}</span>
+                              <RefreshCw size={45} className="profile-menu-quick-switch-icon" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -1195,6 +1263,17 @@ const TopNavigation = ({
                     <div className="profile-menu-divider"></div>
 
                     <div className="profile-menu-actions">
+                      <button 
+                        className="profile-menu-action-btn"
+                        onClick={(e) => { 
+                          e.stopPropagation();
+                          setShowBalanceMenu(true);
+                          setShowProfileMenu(false);
+                        }}
+                      >
+                        <DollarSign size={16} />
+                        <span>Add Funds</span>
+                      </button>
                       <button 
                         className="profile-menu-action-btn"
                         onClick={() => { handleNavigation('profile'); setShowProfileMenu(false); }}

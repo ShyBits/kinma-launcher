@@ -16,12 +16,17 @@
     position: relative;
     width: 260px;
     background: rgba(255, 255, 255, 0.02);
-    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    border-right: none;
     display: flex;
     flex-direction: column;
     height: 100%;
     transition: width 0.25s ease;
     overflow: hidden;
+    flex-shrink: 0;
+}
+
+.sidebar.resizing {
+    transition: none;
 }
 
 .sidebar.collapsed {
@@ -43,62 +48,80 @@
     padding: 12px 16px;
     background: transparent;
     color: var(--text-secondary);
-    border: none;
-    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0;
     display: flex;
     align-items: center;
     gap: 10px;
     cursor: pointer;
     font-size: 14px;
     font-weight: 500;
-    transition: all 0.2s ease;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar-btn:hover {
-    background: rgba(255, 255, 255, 0.03);
-    color: var(--text-primary);
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+    border-color: rgba(59, 130, 246, 0.4);
+    box-shadow: none;
+    transform: none;
 }
 
 .sidebar-btn.active {
-    background: rgba(59, 130, 246, 0.1);
-    color: var(--accent-primary);
+    background: rgba(59, 130, 246, 0.25);
+    color: #60a5fa;
+    border-color: rgba(59, 130, 246, 0.5);
+    box-shadow: none;
+}
+
+.sidebar-btn svg {
+    color: inherit;
+    transition: color 0.2s ease;
 }
 
 /* Search */
 .sidebar-search {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 8px;
+    gap: 10px;
+    padding: 12px 14px;
+    background: rgba(0, 0, 0, 0.5);
+    border: none;
+    border-radius: 0;
     margin-top: 12px;
-    transition: all 0.2s ease;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .sidebar-search:hover {
-    background: rgba(255, 255, 255, 0.03);
-    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(0, 0, 0, 0.6);
 }
 
 .sidebar-search:focus-within {
-    background: rgba(255, 255, 255, 0.03);
-    border-color: var(--accent-primary);
+    background: rgba(0, 0, 0, 0.7);
+    box-shadow: none;
+    outline: 2px solid rgba(59, 130, 246, 0.4);
+    outline-offset: -2px;
 }
 
 .sidebar-search input {
     background: transparent;
     border: none;
     outline: none;
-    color: var(--text-primary);
+    color: rgba(255, 255, 255, 0.85);
     font-size: 13px;
     flex: 1;
+    font-weight: 400;
+}
+
+.sidebar-search input::placeholder {
+    color: rgba(255, 255, 255, 0.45);
+    font-weight: 400;
 }
 
 .sidebar-search svg {
-    color: var(--text-secondary);
+    color: rgba(255, 255, 255, 0.5);
     transition: color 0.2s ease;
+    flex-shrink: 0;
 }
 
 .sidebar-search:focus-within svg {
@@ -110,8 +133,9 @@
     flex: 1;
     overflow-y: auto;
     padding: 12px 20px;
+    padding-bottom: 12px;
     position: relative;
-    min-height: 200px; /* Ensure minimum clickable area */
+    min-height: 0;
     cursor: context-menu; /* Show context menu cursor */
 }
 
@@ -142,7 +166,7 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    border-radius: 6px;
+    border-radius: 0;
     cursor: pointer;
     transition: all 0.2s ease;
     margin-top: 0px;
@@ -180,7 +204,7 @@
     flex-direction: column;
     gap: 2px;
     position: relative;
-    border-radius: 8px;
+    border-radius: 0;
     padding: 0;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -320,7 +344,7 @@
     padding: 8px 12px;
     color: rgba(255, 255, 255, 0.9);
     transition: all 0.2s ease;
-    border-radius: 8px;
+    border-radius: 0;
     min-height: 40px; /* lock row height */
 }
 
@@ -345,10 +369,10 @@
     align-items: center;
     justify-content: center;
     color: var(--accent-primary);
-    border-radius: 3px;
+    border-radius: 0;
     background: rgba(59, 130, 246, 0.08);
     flex-shrink: 0;
-    overflow: hidden; /* guarantee rounded logos */
+    overflow: hidden;
 }
 
 .game-icon img {
@@ -375,7 +399,7 @@
     align-items: center;
     justify-content: center;
     padding: 6px;
-    border-radius: 6px;
+    border-radius: 0;
     transition: all 0.2s ease;
 }
 
@@ -453,7 +477,7 @@ svg[data-pause="true"] {
     width: 100%;
     height: 3px;
     background: rgba(255, 167, 38, 0.3);
-    border-radius: 0 0 8px 8px;
+    border-radius: 0;
     overflow: hidden;
     animation: progress 3s ease-in-out forwards;
     box-shadow: 0 0 10px rgba(255, 167, 38, 0.3);
@@ -619,7 +643,7 @@ svg[data-pause="true"] {
     left: 0;
     height: 100%;
     background: var(--accent-primary);
-    border-radius: 8px;
+    border-radius: 0;
     transition: width 0.1s linear;
     z-index: 0;
     opacity: 0.2;
@@ -854,7 +878,7 @@ svg[data-pause="true"] {
     gap: 8px;
     background: rgba(255, 255, 255, 0.05);
     border: 1.5px solid rgba(255, 255, 255, 0.15);
-    border-radius: 6px;
+    border-radius: 0;
     padding: 10px 12px;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     backdrop-filter: blur(4px);
@@ -899,7 +923,7 @@ svg[data-pause="true"] {
     color: rgba(255, 255, 255, 0.6);
     cursor: pointer;
     padding: 6px;
-    border-radius: 4px;
+    border-radius: 0;
     transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
     width: 24px;
     height: 24px;

@@ -85,39 +85,80 @@ const Auth = ({ navigate }) => {
       
       // Skip auto-login if this is an "add account" scenario
       if (!isAddAccount) {
-        // Check for existing auth user
+        // Check for existing auth user - if authenticated, redirect to library
         try {
           const saved = await api?.getAuthUser?.();
-          if (saved && !forceAuth) {
+          if (saved && saved.id && !forceAuth) {
             navigate('/library');
             return;
           }
         } catch (_) {}
         
-        // If no auth user, try to get last logged-in user and auto-login
+        // Check for users with "stay logged in" enabled
         if (!forceAuth) {
           try {
-            const result = await api?.getLastLoggedInUser?.();
-            if (result && result.success && result.user) {
-              const lastUser = result.user;
-              // Auto-login to last logged-in user
-              await api?.setAuthUser?.({
-                id: lastUser.id,
-                email: lastUser.email,
-                name: lastUser.name || lastUser.username || lastUser.email?.split('@')[0] || 'User'
-              });
-              await api?.authSuccess?.(lastUser);
+            const usersResult = await api?.getUsers?.();
+            if (usersResult && usersResult.success && Array.isArray(usersResult.users)) {
+              // Find users with stayLoggedIn: true who haven't explicitly logged out
+              // (isLoggedIn can be true or undefined, but not false)
+              const stayLoggedInUsers = usersResult.users.filter(u => 
+                u.stayLoggedIn === true && 
+                u.isLoggedIn !== false
+              );
               
-              // Dispatch user-changed event so all components reload user-specific data
-              window.dispatchEvent(new Event('user-changed'));
-              
-              navigate('/library');
-              return;
+              if (stayLoggedInUsers.length > 0) {
+                // Sort by lastLoginTime (most recent first)
+                stayLoggedInUsers.sort((a, b) => {
+                  const timeA = a.lastLoginTime ? new Date(a.lastLoginTime).getTime() : 0;
+                  const timeB = b.lastLoginTime ? new Date(b.lastLoginTime).getTime() : 0;
+                  return timeB - timeA; // Descending order (most recent first)
+                });
+                
+                // Auto-login with the most recently logged in user
+                const autoLoginUser = stayLoggedInUsers[0];
+                const authUserData = {
+                  id: autoLoginUser.id,
+                  email: autoLoginUser.email,
+                  name: autoLoginUser.name || autoLoginUser.username || autoLoginUser.email?.split('@')[0] || 'User'
+                };
+                
+                // Set auth user and navigate to library
+                try {
+                  await api?.setAuthUser?.(authUserData);
+                  await api?.authSuccess?.(authUserData);
+                  
+                  // Update last login time
+                  const userIndex = usersResult.users.findIndex(u => u.id === autoLoginUser.id);
+                  if (userIndex !== -1) {
+                    usersResult.users[userIndex].lastLoginTime = new Date().toISOString();
+                    usersResult.users[userIndex].isLoggedIn = true;
+                    await api?.saveUsers?.(usersResult.users);
+                  }
+                  
+                  // Set localStorage
+                  try { 
+                    localStorage.setItem('authUser', JSON.stringify(authUserData)); 
+                  } catch (_) {}
+                  
+                  // Dispatch user-changed event
+                  window.dispatchEvent(new Event('user-changed'));
+                  
+                  // Navigate to library
+                  navigate('/library');
+                  return;
+                } catch (error) {
+                  console.error('Error during auto-login:', error);
+                  // Fall through to show auth window if auto-login fails
+                }
+              }
             }
           } catch (error) {
-            console.error('Error getting last logged-in user:', error);
+            console.error('Error checking for stay logged in users:', error);
+            // Fall through to show auth window on error
           }
         }
+        
+        // If no auth user and no stay logged in users, show auth window
       }
       
       // Auth window should ALWAYS be 600px wide and use default height

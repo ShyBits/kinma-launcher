@@ -87,14 +87,32 @@ const AccountSwitcherPage = ({ navigate }) => {
       // Wait a moment for loading screen to fully render and be visible
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Step 1: Update last login time for this user
+      // Step 1: Get current user and log them out if they don't have "keep me signed in" enabled
       try {
         const result = await api?.getUsers?.();
         if (result && result.success && Array.isArray(result.users)) {
           const users = result.users;
+          
+          // Get current authenticated user
+          const currentAuthUser = await api?.getAuthUser?.();
+          if (currentAuthUser && currentAuthUser.id && currentAuthUser.id !== user.id) {
+            const currentUserIndex = users.findIndex(u => u.id === currentAuthUser.id);
+            if (currentUserIndex !== -1) {
+              const currentUser = users[currentUserIndex];
+              // If current user doesn't have "keep me signed in" enabled, log them out
+              if (currentUser.stayLoggedIn !== true) {
+                users[currentUserIndex].isLoggedIn = false;
+                console.log('✅ Logged out previous user (stayLoggedIn not enabled)');
+                await api?.saveUsers?.(users);
+              }
+            }
+          }
+          
+          // Step 2: Update last login time for the new user
           const userIndex = users.findIndex(u => u.id === user.id);
           if (userIndex !== -1) {
             users[userIndex].lastLoginTime = new Date().toISOString();
+            users[userIndex].isLoggedIn = true; // Mark as logged in
             await api?.saveUsers?.(users);
             console.log('✅ Updated last login time');
           }
@@ -103,7 +121,7 @@ const AccountSwitcherPage = ({ navigate }) => {
         console.error('Error updating last login time:', error);
       }
       
-      // Step 2: Set auth user in localStorage for immediate access
+      // Step 3: Set auth user in localStorage for immediate access
       try {
         const authUserData = { 
           id: user.id, 
@@ -116,7 +134,7 @@ const AccountSwitcherPage = ({ navigate }) => {
         console.error('Error setting localStorage:', error);
       }
       
-      // Step 3: Set auth user in Electron store
+      // Step 4: Set auth user in Electron store
       try {
         await api?.setAuthUser?.(user);
         console.log('✅ Set auth user in Electron store');
@@ -124,7 +142,7 @@ const AccountSwitcherPage = ({ navigate }) => {
         console.error('Error setting Electron store:', error);
       }
       
-      // Step 4: Call authSuccess to properly handle login and window management
+      // Step 5: Call authSuccess to properly handle login and window management
       try {
         await api?.authSuccess?.(user);
         console.log('✅ Called authSuccess');
@@ -136,7 +154,7 @@ const AccountSwitcherPage = ({ navigate }) => {
         throw error;
       }
       
-      // Step 5: Verify main window is ready and fully loaded before closing account switcher
+      // Step 6: Verify main window is ready and fully loaded before closing account switcher
       let checkCount = 0;
       const maxChecks = 75;
       let consecutiveReadyChecks = 0;

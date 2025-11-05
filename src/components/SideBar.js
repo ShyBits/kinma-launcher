@@ -21,7 +21,7 @@ import { subscribe as subscribeDownloadSpeed, setSpeed as setGlobalDownloadSpeed
 import { getUserData, saveUserData, getUserScopedKey } from "../utils/UserDataManager";
 import "./SideBar.css";
 
-const SideBar = ({ currentGame, onGameSelect, navigate, isCollapsed }) => {
+const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isCollapsed, width = 260, isResizing = false }, ref) => {
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [expanded, setExpanded] = useState(() => {
@@ -753,7 +753,11 @@ const SideBar = ({ currentGame, onGameSelect, navigate, isCollapsed }) => {
   };
 
   return (
-    <aside className={`sidebar ${isCollapsed ? "collapsed" : ""}`}>
+    <aside 
+      ref={ref}
+      className={`sidebar ${isCollapsed ? "collapsed" : ""} ${isResizing ? "resizing" : ""}`}
+      style={{ width: isCollapsed ? 0 : width }}
+    >
       {!isCollapsed && (
         <div className="sidebar-top">
           <button
@@ -983,9 +987,6 @@ const SideBar = ({ currentGame, onGameSelect, navigate, isCollapsed }) => {
               </div>
             </div>
           )}
-          
-          {/* Empty spacer to ensure context menu works even in empty areas */}
-          <div style={{ flex: 1, minHeight: '100px' }} />
         </div>
       )}
 
@@ -1305,6 +1306,6 @@ const SideBar = ({ currentGame, onGameSelect, navigate, isCollapsed }) => {
       })()}
     </aside>
   );
-};
+});
 
 export default SideBar;

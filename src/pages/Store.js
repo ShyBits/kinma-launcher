@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Star, Download, Play, Users, TrendingUp, TrendingDown, Share2, Bookmark, MessageSquare, Bell, Search, X, Filter, ChevronDown, DollarSign, Settings, Save } from 'lucide-react';
-import { getUserData, getUserScopedKey, getAllUsersData, saveUserData } from '../utils/UserDataManager';
+import { Star, Download, Play, Users, TrendingUp, TrendingDown, Share2, Bookmark, MessageSquare, Bell, Search, X, Filter, ChevronDown, DollarSign, Settings, Save, Volume2, VolumeX, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { getUserData, getUserScopedKey, getAllUsersData, saveUserData, getCurrentUserId } from '../utils/UserDataManager';
+import CustomVideoPlayer from '../components/CustomVideoPlayer';
 import './Store.css';
 
 const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navigate }) => {
   const [favoriteGames, setFavoriteGames] = useState(new Set());
   const [bookmarkedGames, setBookmarkedGames] = useState(new Set());
   const [customGames, setCustomGames] = useState([]);
+  const [myCustomGames, setMyCustomGames] = useState([]); // Games owned by current user
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const [isBannerHovered, setIsBannerHovered] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -14,6 +16,12 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
   const [showFilterMenu, setShowFilterMenu] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState('all');
   const filterMenuRef = useRef(null);
+  
+  // Media slideshow state
+  const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
+  const [isMediaSlideshowHovered, setIsMediaSlideshowHovered] = useState(false);
+  const [isMediaMuted, setIsMediaMuted] = useState(true);
+  const mediaVideoRefs = useRef({});
 
   // Close filter menu when clicking outside
   useEffect(() => {
@@ -58,6 +66,16 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
     };
   };
 
+  const getColorForRating = (rating) => {
+    // Red to Gold gradient (same as Game.js)
+    if (rating >= 4.5) return '#FFD700'; // Gold
+    if (rating >= 3.5) return '#FFB800'; // Yellow-orange
+    if (rating >= 2.5) return '#FF9500'; // Orange
+    if (rating >= 1.5) return '#FF6B00'; // Dark orange
+    if (rating >= 0.5) return '#FF4444'; // Red-orange
+    return 'rgba(255,255,255,0.3)'; // Gray for very low or no rating
+  };
+
   // Build featured games list from real data (gamesData + customGames), weighted by activity
   const toNumber = (value) => {
     if (value == null) return 0;
@@ -74,52 +92,112 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
     return Math.round(num);
   };
 
+  // Helper function to extract stats consistently from game data
+  const getGameStats = (game) => {
+    if (!game) return { rating: 0, players: '0', trending: '+0%' };
+    
+    // Try to get from original game object first
+    const original = game.original || game;
+    
+    // Rating: check multiple possible locations including localStorage ratings
+    let rating = original?.rating ?? 
+                 original?.fullFormData?.rating ?? 
+                 original?.metadata?.rating ?? 
+                 gamesData?.[original?.gameId || original?.id]?.rating ?? 
+                 0;
+    
+    // If rating is 0 or not found, try to load from localStorage ratings
+    if (!rating || rating === 0) {
+      try {
+        const gameId = original?.gameId || original?.id;
+        if (gameId) {
+          const savedRatings = localStorage.getItem(`gameRatings_${gameId}`);
+          if (savedRatings) {
+            const ratings = JSON.parse(savedRatings);
+            if (ratings && ratings.length > 0) {
+              const sum = ratings.reduce((acc, r) => acc + r.rating, 0);
+              rating = Math.round((sum / ratings.length) * 10) / 10;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+    
+    // Players: check multiple possible locations
+    const players = original?.playerCount ?? 
+                    original?.players ?? 
+                    original?.fullFormData?.playerCount ?? 
+                    original?.fullFormData?.players ?? 
+                    gamesData?.[original?.gameId || original?.id]?.playerCount ?? 
+                    gamesData?.[original?.gameId || original?.id]?.players ?? 
+                    '0';
+    
+    // Trending: check multiple possible locations
+    const trending = original?.trending ?? 
+                     original?.fullFormData?.trending ?? 
+                     original?.metadata?.trending ?? 
+                     gamesData?.[original?.gameId || original?.id]?.trending ?? 
+                     '+0%';
+    
+    return {
+      rating: rating || 0,
+      players: players || '0',
+      trending: trending || '+0%'
+    };
+  };
+
   const featuredGames = React.useMemo(() => {
     const disableBuiltIns = (()=>{ try { return localStorage.getItem('disableBuiltinGames') !== 'false'; } catch(_) { return true; } })();
     // Collect candidates from gamesData prop
-    const fromGamesDataRaw = Object.entries(gamesData || {}).map(([id, g]) => ({
-      id,
-      name: g.name || id,
-      developer: g.developer || '',
-      price: (() => {
-        const raw = g.price ?? g.Price ?? g.priceUSD ?? g.cost ?? g.amount ?? g.pricing;
-        if (raw == null || raw === '') return 0;
-        const cleaned = String(raw).trim().replace(/[^0-9.,-]/g, '').replace(/,(?=\d{3}(\D|$))/g, '').replace(/,/g, '');
-        const n = parseFloat(cleaned);
-        return Number.isFinite(n) && n > 0 ? n : 0;
-      })(),
-      rating: g.rating || 0,
-      players: g.playerCount || g.players || '0',
-      currentPlaying: g.currentPlaying || '0',
-      trending: g.trending || '+0%',
-      description: g.description || '',
-      tags: g.tags || [],
-      image: g.banner || g.image || g.cardImage || null,
-      original: g,
-    }));
+    const fromGamesDataRaw = Object.entries(gamesData || {}).map(([id, g]) => {
+      const stats = getGameStats({ original: g });
+      return {
+        id,
+        name: g.name || id,
+        developer: g.developer || '',
+        price: (() => {
+          const raw = g.price ?? g.Price ?? g.priceUSD ?? g.cost ?? g.amount ?? g.pricing;
+          if (raw == null || raw === '') return 0;
+          const cleaned = String(raw).trim().replace(/[^0-9.,-]/g, '').replace(/,(?=\d{3}(\D|$))/g, '').replace(/,/g, '');
+          const n = parseFloat(cleaned);
+          return Number.isFinite(n) && n > 0 ? n : 0;
+        })(),
+        rating: stats.rating,
+        players: stats.players,
+        currentPlaying: g.currentPlaying || '0',
+        trending: stats.trending,
+        description: g.description || '',
+        tags: g.tags || [],
+        image: g.banner || g.image || g.cardImage || null,
+        original: g,
+      };
+    });
     const fromGamesData = disableBuiltIns ? [] : fromGamesDataRaw;
 
     // Collect candidates from customGames (localStorage)
-    const fromCustom = customGames.map((g, i) => ({
-      id: g.gameId || g.id || `custom-${i}`,
-      name: g.name || g.gameName || g.fullFormData?.gameName || 'Untitled Game',
-      developer: g.developer || g.fullFormData?.developer || '',
-      price: (() => {
-        const raw = g.price ?? g.fullFormData?.price ?? g.metadata?.price;
-        if (raw == null || raw === '') return 0;
-        const cleaned = String(raw).trim().replace(/[^0-9.,-]/g, '').replace(/,(?=\d{3}(\D|$))/g, '').replace(/,/g, '');
-        const n = parseFloat(cleaned);
-        return Number.isFinite(n) && n > 0 ? n : 0;
-      })(),
-      rating: 0,
-      players: g.playerCount || '0',
-      currentPlaying: g.currentPlaying || '0',
-      trending: g.trending || '+0%',
-      description: g.description || g.fullFormData?.description || '',
-      tags: Array.isArray(g.tags) ? g.tags : (g.tags ? String(g.tags).split(/[,;\s]+/).filter(Boolean) : []),
-      image: g.banner || g.bannerImage || g.cardImage || g.fullFormData?.bannerImage || g.card || null,
-      original: g,
-    }));
+    const fromCustom = customGames.map((g, i) => {
+      const stats = getGameStats({ original: g });
+      return {
+        id: g.gameId || g.id || `custom-${i}`,
+        name: g.name || g.gameName || g.fullFormData?.gameName || 'Untitled Game',
+        developer: g.developer || g.fullFormData?.developer || '',
+        price: (() => {
+          const raw = g.price ?? g.fullFormData?.price ?? g.metadata?.price;
+          if (raw == null || raw === '') return 0;
+          const cleaned = String(raw).trim().replace(/[^0-9.,-]/g, '').replace(/,(?=\d{3}(\D|$))/g, '').replace(/,/g, '');
+          const n = parseFloat(cleaned);
+          return Number.isFinite(n) && n > 0 ? n : 0;
+        })(),
+        rating: stats.rating,
+        players: stats.players,
+        currentPlaying: g.currentPlaying || '0',
+        trending: stats.trending,
+        description: g.description || g.fullFormData?.description || '',
+        tags: Array.isArray(g.tags) ? g.tags : (g.tags ? String(g.tags).split(/[,;\s]+/).filter(Boolean) : []),
+        image: g.banner || g.bannerImage || g.cardImage || g.fullFormData?.bannerImage || g.card || null,
+        original: g,
+      };
+    });
 
     const candidates = [...fromGamesData, ...fromCustom].filter(g => g && (g.image || isPreview));
     if (candidates.length === 0) return [];
@@ -155,9 +233,9 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
         name: previewGameData.name,
         developer: previewGameData.developer,
         price: previewGameData.price,
-        rating: 0,
-        players: '0',
-        trending: '+0%',
+        rating: previewGameData.rating || 0,
+        players: previewGameData.players || '0',
+        trending: previewGameData.trending || '+0%',
         description: previewGameData.description,
         tags: previewGameData.genre ? [previewGameData.genre] : [],
         image: previewGameData.bannerImage ? URL.createObjectURL(previewGameData.bannerImage) : null
@@ -177,6 +255,29 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
     image: null,
   };
 
+  // Helper to get image/media URL
+  const getImageUrl = (image) => {
+    if (!image) return null;
+    if (typeof image === 'string') {
+      if (image.startsWith('data:') || image.startsWith('http://') || image.startsWith('https://')) {
+        return image;
+      }
+      return image;
+    }
+    if (image instanceof File || image instanceof Blob) {
+      return URL.createObjectURL(image);
+    }
+    return null;
+  };
+
+  // Get screenshots/media from game
+  const getGameMedia = (game) => {
+    if (!game) return [];
+    const original = game.original || game;
+    const screenshots = original?.screenshots || original?.fullFormData?.screenshots || [];
+    return screenshots.filter(Boolean);
+  };
+
   // Auto-switch zwischen Top 5 Games alle 5 Sekunden
   useEffect(() => {
     if (isPreview || isBannerHovered) return; // Disabled in preview mode or when hovered
@@ -186,6 +287,54 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
     }, 5000);
     return () => clearInterval(interval);
   }, [isPreview, isBannerHovered, featuredGames.length]);
+
+  // Get media from current featured game
+  const currentMedia = getGameMedia(safeFeaturedGame);
+  
+  // Reset media index when game changes
+  useEffect(() => {
+    setCurrentMediaIndex(0);
+  }, [safeFeaturedGame.id]);
+
+  // Auto-switch media slideshow
+  useEffect(() => {
+    if (!currentMedia.length || currentMedia.length <= 1 || isMediaSlideshowHovered) return;
+    const interval = setInterval(() => {
+      setCurrentMediaIndex((prev) => (prev + 1) % currentMedia.length);
+    }, 4000); // Switch every 4 seconds
+    return () => clearInterval(interval);
+  }, [currentMedia.length, isMediaSlideshowHovered]);
+
+  // Handle video playback when media changes
+  useEffect(() => {
+    if (!currentMedia.length) return;
+    
+    // Pause all videos first
+    Object.values(mediaVideoRefs.current).forEach(videoRef => {
+      if (videoRef && !videoRef.paused) {
+        videoRef.pause();
+      }
+    });
+    
+    const currentMediaItem = currentMedia[currentMediaIndex];
+    if (!currentMediaItem) return;
+    
+    const isVideo = (typeof currentMediaItem === 'object' && currentMediaItem.type?.startsWith('video/')) ||
+                    (typeof currentMediaItem === 'string' && /\.(mp4|webm|mov)$/i.test(currentMediaItem));
+    
+    if (isVideo) {
+      // Play video when it becomes active
+      const videoKey = `${safeFeaturedGame.id}-${currentMediaIndex}`;
+      const videoRef = mediaVideoRefs.current[videoKey];
+      if (videoRef) {
+        videoRef.muted = isMediaMuted;
+        videoRef.currentTime = 0; // Reset to start
+        videoRef.play().catch(() => {
+          // Auto-play may be blocked, that's okay
+        });
+      }
+    }
+  }, [currentMediaIndex, safeFeaturedGame.id, currentMedia.length, isMediaMuted]);
 
   const nextBanner = () => {
     if (isPreview) return; // Disabled in preview mode
@@ -211,8 +360,13 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
           return status === 'public' || status === 'published';
         });
         setCustomGames(publishedGames);
+        
+        // Load current user's games to check ownership
+        const myGames = getUserData('customGames', []);
+        setMyCustomGames(myGames);
       } catch (_) {
         setCustomGames([]);
+        setMyCustomGames([]);
       }
     };
     load();
@@ -232,10 +386,17 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('user-changed', load);
     
+    // Listen for rating updates
+    const handleRatingUpdate = () => {
+      load(); // Reload to get updated ratings
+    };
+    window.addEventListener('gameRatingUpdated', handleRatingUpdate);
+    
     return () => {
       window.removeEventListener('customGameUpdate', handler);
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('user-changed', load);
+      window.removeEventListener('gameRatingUpdated', handleRatingUpdate);
     };
   }, []);
 
@@ -254,6 +415,19 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
       saveUserData('bookmarkedGames', Array.from(bookmarkedGames));
     } catch (_) {}
   }, [bookmarkedGames]);
+
+  // Helper to check if current user owns a game
+  const isGameOwnedByMe = (game) => {
+    if (!game) return false;
+    const gameId = game.gameId || game.id || game.original?.gameId || game.original?.id;
+    if (!gameId) return false;
+    
+    // Check if this game exists in current user's games
+    return myCustomGames.some(myGame => {
+      const myGameId = myGame.gameId || myGame.id;
+      return myGameId === gameId;
+    });
+  };
 
   const toggleBookmark = (gameId) => {
     setBookmarkedGames(prev => {
@@ -420,6 +594,47 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
     game?.releaseDate || game?.released || game?.date || ''
   );
 
+  // Check if game is new (released within the last month)
+  const isNewRelease = (game) => {
+    const releaseDateStr = getReleaseDate(game);
+    if (!releaseDateStr) return false;
+    
+    try {
+      let releaseDate;
+      
+      // Try to parse different date formats
+      // Format: "Dec 2023", "Jan 2025", etc. - set to first day of month
+      if (/^[A-Za-z]{3}\s+\d{4}$/.test(releaseDateStr.trim())) {
+        releaseDate = new Date(releaseDateStr.trim() + ' 1');
+      }
+      // Format: ISO date string or date with slashes
+      else if (releaseDateStr.includes('-') || releaseDateStr.includes('/')) {
+        releaseDate = new Date(releaseDateStr);
+      }
+      // Format: timestamp
+      else if (/^\d+$/.test(releaseDateStr)) {
+        releaseDate = new Date(parseInt(releaseDateStr));
+      }
+      else {
+        releaseDate = new Date(releaseDateStr);
+      }
+      
+      // Check if date is valid
+      if (isNaN(releaseDate.getTime())) return false;
+      
+      // Calculate difference in milliseconds
+      const now = new Date();
+      const diffTime = now.getTime() - releaseDate.getTime();
+      const diffDays = diffTime / (1000 * 60 * 60 * 24);
+      
+      // Consider it "new" if released within the last 30 days
+      return diffDays >= 0 && diffDays <= 30;
+    } catch (error) {
+      console.error('Error checking if game is new:', error);
+      return false;
+    }
+  };
+
   const parseTags = (game) => {
     const t = game?.tags;
     if (!t) return [];
@@ -427,19 +642,25 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
     return String(t).split(/[,;\s]+/).filter(Boolean).slice(0, 6);
   };
 
-  const normalizeGame = (game, idx) => ({
-    id: getId(game, idx),
-    name: getName(game),
-    developer: getDeveloper(game),
-    version: getVersion(game),
-    genre: getGenre(game),
-    description: getDescription(game),
-    releaseDate: getReleaseDate(game),
-    tags: parseTags(game),
-    banner: getBannerSrc(game),
-    price: getPriceValue(game),
-    original: game,
-  });
+  const normalizeGame = (game, idx) => {
+    const stats = getGameStats({ original: game });
+    return {
+      id: getId(game, idx),
+      name: getName(game),
+      developer: getDeveloper(game),
+      version: getVersion(game),
+      genre: getGenre(game),
+      description: getDescription(game),
+      releaseDate: getReleaseDate(game),
+      tags: parseTags(game),
+      banner: getBannerSrc(game),
+      price: getPriceValue(game),
+      rating: stats.rating,
+      players: stats.players,
+      trending: stats.trending,
+      original: game,
+    };
+  };
 
   const goToBanner = (index) => {
     if (isPreview) return; // Disabled in preview mode
@@ -481,6 +702,12 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
           className="featured-banner"
           onMouseEnter={() => setIsBannerHovered(true)}
           onMouseLeave={() => setIsBannerHovered(false)}
+          onClick={() => {
+            if (safeFeaturedGame.id && safeFeaturedGame.id !== 'none') {
+              navigate(`/store/game/${safeFeaturedGame.id}`);
+            }
+          }}
+          style={{ cursor: safeFeaturedGame.id && safeFeaturedGame.id !== 'none' ? 'pointer' : 'default' }}
         >
           <div className="featured-background">
             <div 
@@ -502,21 +729,38 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
         {/* Inline bookmark will be rendered next to CTA below */}
 
         <div className="featured-content">
-            <div className="featured-badge">FEATURED</div>
+          <div className="featured-content-left">
+            <div className="featured-badges">
+              <div className="featured-badge">FEATURED</div>
+              {isNewRelease(safeFeaturedGame) && (
+                <div className="featured-badge featured-badge-new">NEW</div>
+              )}
+              {isGameOwnedByMe(safeFeaturedGame) && (
+                <div className="featured-badge featured-badge-owned" title="You own this game">
+                  <CheckCircle2 size={14} />
+                  <span>OWNED</span>
+                </div>
+              )}
+            </div>
             <div className="featured-title-section">
               <h1 className="featured-title">{safeFeaturedGame.name}</h1>
               <div className="featured-stats">
-                <div className="stat">
-                  <Star size={16} />
-                  <span>{safeFeaturedGame.rating}</span>
+                <div 
+                  className="stat stat-rating"
+                  style={{ 
+                    color: getColorForRating(getGameStats(safeFeaturedGame).rating),
+                  }}
+                >
+                  <Star size={18} fill={getColorForRating(getGameStats(safeFeaturedGame).rating)} color={getColorForRating(getGameStats(safeFeaturedGame).rating)} />
+                  <span>{getGameStats(safeFeaturedGame).rating || '0'}</span>
                 </div>
                 <div className="stat">
-                  <Users size={16} />
-                  <span>{safeFeaturedGame.players}</span>
+                  <Users size={18} />
+                  <span>{getGameStats(safeFeaturedGame).players || '0'}</span>
                 </div>
-                <div className={`stat trending ${!getTrendingDisplay(safeFeaturedGame.trending).isPositive ? 'negative' : ''}`}>
-                  {React.createElement(getTrendingIcon(safeFeaturedGame.trending), { size: 16 })}
-                  <span>{getTrendingDisplay(safeFeaturedGame.trending).value}</span>
+                <div className={`stat trending ${!getTrendingDisplay(getGameStats(safeFeaturedGame).trending).isPositive ? 'negative' : ''}`}>
+                  {React.createElement(getTrendingIcon(getGameStats(safeFeaturedGame).trending), { size: 18 })}
+                  <span>{getTrendingDisplay(getGameStats(safeFeaturedGame).trending).value}</span>
                 </div>
               </div>
             </div>
@@ -531,10 +775,17 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
               )}
             </div>
             <div className="featured-actions">
-              <button className={`play-btn ${safeFeaturedGame.price > 0 ? 'buy' : 'install'}`}>
-                <Play size={20} />
-                {safeFeaturedGame.price === 0 ? 'Play Free' : `Buy for $${safeFeaturedGame.price}`}
-              </button>
+              {isGameOwnedByMe(safeFeaturedGame) ? (
+                <button className="play-btn install">
+                  <Play size={20} />
+                  Play Now
+                </button>
+              ) : (
+                <button className={`play-btn ${safeFeaturedGame.price > 0 ? 'buy' : 'install'}`}>
+                  <Play size={20} />
+                  {safeFeaturedGame.price === 0 ? 'Play Free' : `Buy for $${safeFeaturedGame.price}`}
+                </button>
+              )}
               <button
                 className={`banner-bookmark inline ${bookmarkedGames.has(safeFeaturedGame.id) ? 'bookmarked' : ''}`}
                 title={bookmarkedGames.has(safeFeaturedGame.id) ? 'Saved' : 'Save'}
@@ -542,12 +793,110 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                 aria-label={bookmarkedGames.has(safeFeaturedGame.id) ? 'Remove bookmark' : 'Add bookmark'}
                 aria-pressed={bookmarkedGames.has(safeFeaturedGame.id)}
               >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill={bookmarkedGames.has(safeFeaturedGame.id) ? 'currentColor' : 'none'} xmlns="http://www.w3.org/2000/svg">
-                  <path d="M6 3h12v18l-6-4-6 4V3z" stroke="currentColor" stroke-width="2" stroke-linejoin="miter" stroke-linecap="butt"/>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill={bookmarkedGames.has(safeFeaturedGame.id) ? 'currentColor' : 'none'} xmlns="http://www.w3.org/2000/svg">
+                  <path d="M6 3h12v18l-6-4-6 4V3z" stroke="currentColor" strokeWidth="2" strokeLinejoin="miter" strokeLinecap="butt"/>
                 </svg>
               </button>
             </div>
           </div>
+          
+          {/* Media Slideshow */}
+          {currentMedia.length > 0 && (
+            <div className="featured-content-right">
+              <div 
+                className="featured-media-slideshow"
+                onMouseEnter={() => setIsMediaSlideshowHovered(true)}
+                onMouseLeave={() => setIsMediaSlideshowHovered(false)}
+              >
+                <div className="media-slideshow-container">
+                  {currentMedia.map((mediaItem, index) => {
+                    const mediaUrl = getImageUrl(mediaItem);
+                    if (!mediaUrl) return null;
+                    
+                    const isVideo = (typeof mediaItem === 'object' && mediaItem.type?.startsWith('video/')) ||
+                                    (typeof mediaItem === 'string' && /\.(mp4|webm|mov)$/i.test(mediaItem));
+                    
+                    const isActive = index === currentMediaIndex;
+                    const videoKey = `${safeFeaturedGame.id}-${index}`;
+                    
+                    return (
+                      <div
+                        key={index}
+                        className={`media-slide ${isActive ? 'active' : ''}`}
+                        style={{ display: isActive ? 'block' : 'none' }}
+                      >
+                        {isVideo ? (
+                          <video
+                            ref={(el) => {
+                              if (el) mediaVideoRefs.current[videoKey] = el;
+                            }}
+                            src={mediaUrl}
+                            muted={isMediaMuted}
+                            loop
+                            playsInline
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              borderRadius: '16px'
+                            }}
+                          />
+                        ) : (
+                          <img
+                            src={mediaUrl}
+                            alt={`Media ${index + 1}`}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              objectFit: 'cover',
+                              borderRadius: '16px'
+                            }}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                  
+                  {/* Sound toggle button (only show for videos) */}
+                  {currentMedia.length > 0 && currentMedia[currentMediaIndex] && (
+                    (() => {
+                      const currentMediaItem = currentMedia[currentMediaIndex];
+                      const isVideo = (typeof currentMediaItem === 'object' && currentMediaItem.type?.startsWith('video/')) ||
+                                      (typeof currentMediaItem === 'string' && /\.(mp4|webm|mov)$/i.test(currentMediaItem));
+                      
+                      return isVideo ? (
+                        <button
+                          className="media-sound-toggle"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsMediaMuted(!isMediaMuted);
+                          }}
+                          title={isMediaMuted ? 'Unmute' : 'Mute'}
+                        >
+                          {isMediaMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                        </button>
+                      ) : null;
+                    })()
+                  )}
+                </div>
+                
+                {/* Media indicators */}
+                {currentMedia.length > 1 && (
+                  <div className="media-indicators">
+                    {currentMedia.map((_, index) => (
+                      <button
+                        key={index}
+                        className={`media-indicator ${index === currentMediaIndex ? 'active' : ''}`}
+                        onClick={() => setCurrentMediaIndex(index)}
+                        aria-label={`Go to media ${index + 1}`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
           
           {/* Navigation Buttons */}
           <button 
@@ -555,14 +904,14 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
             onClick={prevBanner}
             disabled={isPreview}
           >
-            ←
+            <ChevronLeft size={28} strokeWidth={2.5} />
           </button>
           <button 
             className={`banner-nav next ${isPreview ? 'disabled' : ''}`} 
             onClick={nextBanner}
             disabled={isPreview}
           >
-            →
+            <ChevronRight size={28} strokeWidth={2.5} />
           </button>
           
           {/* Banner Indicators */}
@@ -732,11 +1081,29 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                     <div className="card-info-header">
                       <h3 title={g.name || 'Untitled Game'}>{g.name || 'Untitled Game'}</h3>
                       {g.version && <p className="card-info-version">Version {g.version}</p>}
+                      {isGameOwnedByMe(g) && (
+                        <div className="card-owned-badge" title="You own this game">
+                          <CheckCircle2 size={14} />
+                        </div>
+                      )}
+                    </div>
+                    <div 
+                      className="card-info-rating"
+                      style={{
+                        color: getColorForRating(getGameStats(g).rating),
+                      }}
+                    >
+                      <Star size={14} fill={getColorForRating(getGameStats(g).rating)} color={getColorForRating(getGameStats(g).rating)} />
+                      <span>{getGameStats(g).rating || '0'}</span>
                     </div>
                     <div className="card-info-desc">{g.description || 'No description provided.'}</div>
                     <div className={`card-info-price ${!(getPriceValue(g) > 0) ? 'is-free' : ''}`}>{displayPrice(g)}</div>
                     <div className="card-info-actions">
-                      <button className={`card-info-primary ${getPriceValue(g) > 0 ? 'buy' : 'install'}`}>{getPriceValue(g) > 0 ? 'Buy Now' : 'Install Now'}</button>
+                      {isGameOwnedByMe(g) ? (
+                        <button className="card-info-primary install">Play Now</button>
+                      ) : (
+                        <button className={`card-info-primary ${getPriceValue(g) > 0 ? 'buy' : 'install'}`}>{getPriceValue(g) > 0 ? 'Buy Now' : 'Install Now'}</button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -783,6 +1150,20 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                     <div className="card-info-header">
                       <h3 title={g.name || 'Untitled Game'}>{g.name || 'Untitled Game'}</h3>
                       {g.version && <p className="card-info-version">Version {g.version}</p>}
+                      {isGameOwnedByMe(g) && (
+                        <div className="card-owned-badge" title="You own this game">
+                          <CheckCircle2 size={14} />
+                        </div>
+                      )}
+                    </div>
+                    <div 
+                      className="card-info-rating"
+                      style={{
+                        color: getColorForRating(getGameStats(g).rating),
+                      }}
+                    >
+                      <Star size={14} fill={getColorForRating(getGameStats(g).rating)} color={getColorForRating(getGameStats(g).rating)} />
+                      <span>{getGameStats(g).rating || '0'}</span>
                     </div>
                     <div className="card-info-desc">
                       {g.description || 'No description provided.'}
@@ -791,7 +1172,11 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                       {displayPrice(g)}
                     </div>
                     <div className="card-info-actions">
-                      <button className={`card-info-primary ${getPriceValue(g) > 0 ? 'buy' : 'install'}`}>{getPriceValue(g) > 0 ? 'Buy Now' : 'Install Now'}</button>
+                      {isGameOwnedByMe(g) ? (
+                        <button className="card-info-primary install">Play Now</button>
+                      ) : (
+                        <button className={`card-info-primary ${getPriceValue(g) > 0 ? 'buy' : 'install'}`}>{getPriceValue(g) > 0 ? 'Buy Now' : 'Install Now'}</button>
+                      )}
                     </div>
                   </div>
                 </div>

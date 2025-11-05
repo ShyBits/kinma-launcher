@@ -18,6 +18,7 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
   const [gender, setGender] = useState('none');
   const [customGender, setCustomGender] = useState('');
   const [acceptTerms, setAcceptTerms] = useState(false);
+  const [stayLoggedIn, setStayLoggedIn] = useState(true); // Default to true for convenience
   const [isExistingUser, setIsExistingUser] = useState(null); // null = not checked yet, true = exists, false = new
   const [authMode, setAuthMode] = useState('login'); // 'login' or 'register' - explicit mode switch
   const [showOptionalFields, setShowOptionalFields] = useState(false); // Toggle for optional fields visibility
@@ -30,6 +31,7 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
   const [qrPending, setQrPending] = useState(false);
   const bodyRef = useRef(null);
   const footerRef = useRef(null);
+  const maxHeightRef = useRef(null); // Track maximum height for consistent window size
 
   // Reset additional fields when switching auth mode
   useEffect(() => {
@@ -48,6 +50,7 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
       setAcceptTerms(false);
       setShowOptionalFields(false);
       setIsExistingUser(null);
+      // Don't reset stayLoggedIn - keep user preference across mode switches
     }
     setError(null);
     
@@ -406,6 +409,13 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
   // Show additional fields in register mode OR if auto-detected as new user
   const showAdditionalFields = authMode === 'register' || (isExistingUser === false && isIdentifierComplete(identifier));
 
+  // Reset max height when modal opens to allow fresh measurement
+  useEffect(() => {
+    if (isOpen && variant === 'page') {
+      maxHeightRef.current = null;
+    }
+  }, [isOpen, variant]);
+
   // Update window height when fields change
   useEffect(() => {
     if (!isOpen || variant !== 'page' || !bodyRef.current || !containerRef.current) return;
@@ -435,17 +445,23 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
       // Calculate the actual needed height based on content
       const calculatedHeight = titleBarHeight + headerHeight + bodyHeight + footerHeight + extraPadding;
       
-      // Use the calculated height directly - no minimum enforced
-      // This ensures the window fits the content exactly, matching startup behavior
+      // Track maximum height to ensure consistent window size for both login and register
+      if (!maxHeightRef.current || calculatedHeight > maxHeightRef.current) {
+        maxHeightRef.current = calculatedHeight;
+      }
+      
+      // Use the maximum height seen so far for both modes to keep window size consistent
       const maxHeight = 1200; // Maximum height to prevent it from getting too large
-      const windowHeight = Math.min(maxHeight, calculatedHeight);
+      const windowHeight = Math.min(maxHeight, maxHeightRef.current);
       
       console.log('📐 Window height calculation:', {
         bodyHeight,
         containerHeight,
         calculatedHeight,
+        maxHeightTracked: maxHeightRef.current,
         windowHeight,
-        showAdditionalFields
+        showAdditionalFields,
+        authMode
       });
       
       onHeightChange(windowHeight);
@@ -499,6 +515,21 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
       setSubmitting(false);
       return;
     }
+    
+    // Validate username length early for register mode
+    if (authMode === 'register') {
+      const trimmedIdentifier = identifier.trim();
+      if (trimmedIdentifier.length < 1) {
+        setError('Username must be at least 1 character long.');
+        setSubmitting(false);
+        return;
+      }
+      if (trimmedIdentifier.length > 20) {
+        setError('Username must be 20 characters or less.');
+        setSubmitting(false);
+        return;
+      }
+    }
 
     setSubmitting(true);
     await new Promise((r) => setTimeout(r, 250));
@@ -532,11 +563,32 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
         phone: existing.phone,
         name: existing.name || existing.email?.split('@')[0] || existing.username || 'User'
       };
+      
+      // Update stayLoggedIn preference if user is logging in (reuse users array already loaded)
+      const userIndex = users.findIndex(u => u.id === user.id);
+      if (userIndex !== -1) {
+        users[userIndex].stayLoggedIn = stayLoggedIn;
+        await persistUsers(users);
+      }
     }
     
     // If not an existing user (or in register mode), create new account
     if (!user) {
       // New user - register
+      // Validate username length
+      const trimmedIdentifier = identifier.trim();
+      if (trimmedIdentifier.length < 1) {
+        setError('Username must be at least 1 character long.');
+        setSubmitting(false);
+        return;
+      }
+      
+      if (trimmedIdentifier.length > 20) {
+        setError('Username must be 20 characters or less.');
+        setSubmitting(false);
+        return;
+      }
+      
       // Validate that additional required fields are filled correctly
       if (password !== confirmPassword) {
         setError('Passwords do not match. Please try again.');
@@ -581,7 +633,7 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
       user = { 
         id: Date.now().toString(), 
         // Required fields
-        username: identifier.trim(),
+        username: trimmedIdentifier,
         email: email.trim(),
         password,
         name: name,
@@ -597,9 +649,11 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
         // Checkbox fields
         acceptTerms: acceptTerms,
         devIntent: devIntent,
+        stayLoggedIn: stayLoggedIn,
         // Metadata
         createdAt: new Date().toISOString(),
-        lastLoginTime: new Date().toISOString() // Set login time on registration
+        lastLoginTime: new Date().toISOString(), // Set login time on registration
+        isLoggedIn: true // Mark as logged in
       };
       
       users.push(user);
@@ -607,12 +661,13 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
       setIsExistingUser(true); // Mark as existing after creation
     }
     
-    // Update last login time for this user
+    // Update last login time and stayLoggedIn preference for this user (reuse users array already loaded)
     try {
-      const users = await loadUsers();
       const userIndex = users.findIndex(u => u.id === user.id);
       if (userIndex !== -1) {
         users[userIndex].lastLoginTime = new Date().toISOString();
+        users[userIndex].isLoggedIn = true; // Mark as logged in
+        users[userIndex].stayLoggedIn = stayLoggedIn; // Update stay logged in preference
         await persistUsers(users);
       }
     } catch (error) {
@@ -683,19 +738,23 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
       if (!res || !res.success) return;
       const user = res.user;
       
-      // Update last login time for this user
+      // Update last login time and stayLoggedIn preference for this user
       try {
         const users = await loadUsers();
         const userIndex = users.findIndex(u => u.id === user.id || u.email === user.email);
         if (userIndex !== -1) {
           users[userIndex].lastLoginTime = new Date().toISOString();
+          users[userIndex].isLoggedIn = true; // Mark as logged in
+          users[userIndex].stayLoggedIn = stayLoggedIn; // Update stay logged in preference
           await persistUsers(users);
         } else {
           // If user doesn't exist in our system, add them
           const newUser = {
             ...user,
             lastLoginTime: new Date().toISOString(),
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            isLoggedIn: true, // Mark as logged in
+            stayLoggedIn: stayLoggedIn
           };
           users.push(newUser);
           await persistUsers(users);
@@ -831,6 +890,15 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
                 />
               </div>
 
+              <label className="auth-checkbox">
+                <input 
+                  type="checkbox" 
+                  checked={stayLoggedIn} 
+                  onChange={(e) => setStayLoggedIn(e.target.checked)} 
+                />
+                <span>Keep me signed in</span>
+              </label>
+
               {/* Debug info - only show in login mode when identifier is complete */}
               {isIdentifierComplete(identifier) && (
                 <div style={{ fontSize: '11px', color: '#888', marginTop: '-8px', marginBottom: '4px' }}>
@@ -893,8 +961,14 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
                   value={identifier} 
                   onChange={(e) => setIdentifier(e.target.value)} 
                   placeholder="Choose a username" 
-                  autoComplete="username" 
+                  autoComplete="username"
+                  maxLength={20}
                 />
+                {identifier.length > 0 && (
+                  <div style={{ fontSize: '11px', color: '#888', marginTop: '4px' }}>
+                    {identifier.length}/20 characters
+                  </div>
+                )}
               </div>
 
               <div className="auth-field">
@@ -1123,6 +1197,15 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
                 <label className="auth-checkbox">
                   <input type="checkbox" checked={devIntent} onChange={(e) => setDevIntent(e.target.checked)} />
                   <span>Request developer access</span>
+                </label>
+
+                <label className="auth-checkbox">
+                  <input 
+                    type="checkbox" 
+                    checked={stayLoggedIn} 
+                    onChange={(e) => setStayLoggedIn(e.target.checked)} 
+                  />
+                  <span>Keep me signed in</span>
                 </label>
               </div>
 
