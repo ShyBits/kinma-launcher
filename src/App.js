@@ -227,7 +227,7 @@ const AppContent = () => {
         </div>
       ) : (
         <>
-          <TitleBar onToggleSidebar={toggleSidebar} />
+          <TitleBar onToggleSidebar={toggleSidebar} navigate={navigate} />
           {location.pathname !== '/auth' && location.pathname !== '/account-switcher' && (
         <TopNavigation 
           currentPage={currentPageId}
