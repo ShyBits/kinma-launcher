@@ -45,6 +45,49 @@ const Market = () => {
   const [petitionSearchQuery, setPetitionSearchQuery] = useState('');
   const [selectedPetitionGame, setSelectedPetitionGame] = useState(null);
   
+  // Right sidebar resizing state
+  const [marketRightSidebarWidth, setMarketRightSidebarWidth] = useState(() => {
+    try {
+      const saved = localStorage.getItem('marketRightSidebarWidth');
+      return saved ? parseInt(saved, 10) : 260;
+    } catch (_) {
+      return 260;
+    }
+  });
+  
+  // Content width for smart resizing (similar to Store)
+  const [contentWidth, setContentWidth] = useState(() => {
+    // Default to 1020px (1280px min app width - 260px sidebar)
+    return typeof window !== 'undefined' ? Math.max(1020, window.innerWidth - 260) : 1020;
+  });
+  
+  useEffect(() => {
+    const updateContentWidth = () => {
+      // Calculate available content width (window width - left sidebar - right sidebar)
+      // Try to get left sidebar width from localStorage, fallback to 260
+      let leftSidebarWidth = 260;
+      try {
+        const saved = localStorage.getItem('sidebarWidth');
+        if (saved) leftSidebarWidth = parseInt(saved, 10);
+      } catch (_) {}
+      
+      const rightSidebarWidth = marketRightSidebarWidth || 260;
+      const newContentWidth = Math.max(1020, window.innerWidth - leftSidebarWidth - rightSidebarWidth);
+      setContentWidth(newContentWidth);
+    };
+    
+    updateContentWidth();
+    window.addEventListener('resize', updateContentWidth);
+    // Listen for sidebar resize events
+    window.addEventListener('sidebar-resize', updateContentWidth);
+    return () => {
+      window.removeEventListener('resize', updateContentWidth);
+      window.removeEventListener('sidebar-resize', updateContentWidth);
+    };
+  }, [marketRightSidebarWidth]);
+  const [isRightSidebarResizing, setIsRightSidebarResizing] = useState(false);
+  const rightSidebarResizeRef = useRef(null);
+  
   // Investments data loaded from account-separated storage
   const [investments] = useState(() => {
     try {
@@ -480,6 +523,71 @@ const Market = () => {
     setSelectedPetitionGame(null);
     setPetitionSearchQuery('');
   };
+
+  // Right sidebar resize handlers
+  const handleRightSidebarResizeStart = (e) => {
+    setIsRightSidebarResizing(true);
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  useEffect(() => {
+    if (!isRightSidebarResizing) return;
+
+    const handleResize = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const windowWidth = window.innerWidth;
+      const clientX = e.clientX !== undefined ? e.clientX : windowWidth;
+      const newWidth = windowWidth - clientX;
+      const minWidth = 180;
+      const maxWidth = 400;
+      
+      // Clamp to boundaries
+      const clampedWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
+      setMarketRightSidebarWidth(clampedWidth);
+    };
+
+    const handleResizeEnd = (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      setIsRightSidebarResizing(false);
+      // Save to localStorage only at the end
+      try {
+        localStorage.setItem('marketRightSidebarWidth', marketRightSidebarWidth.toString());
+      } catch (_) {}
+    };
+
+    const handleMouseLeave = () => {
+      // When mouse leaves window, clamp to boundaries
+      const minWidth = 180;
+      const maxWidth = 400;
+      const currentWidth = marketRightSidebarWidth;
+      const clampedWidth = Math.max(minWidth, Math.min(maxWidth, currentWidth));
+      if (clampedWidth !== currentWidth) {
+        setMarketRightSidebarWidth(clampedWidth);
+      }
+    };
+
+    // Use capture phase to ensure we catch events even outside the window
+    document.addEventListener('mousemove', handleResize, true);
+    document.addEventListener('mouseup', handleResizeEnd, true);
+    window.addEventListener('mouseup', handleResizeEnd, true);
+    window.addEventListener('mouseleave', handleMouseLeave);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    return () => {
+      document.removeEventListener('mousemove', handleResize, true);
+      document.removeEventListener('mouseup', handleResizeEnd, true);
+      window.removeEventListener('mouseup', handleResizeEnd, true);
+      window.removeEventListener('mouseleave', handleMouseLeave);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isRightSidebarResizing, marketRightSidebarWidth]);
 
   // Get all games for petition creation (only games without markets)
   const allGamesForPetition = React.useMemo(() => {
@@ -1291,8 +1399,18 @@ const Market = () => {
           )}
         </div>
 
+        {/* Right Sidebar Resizer */}
+        <div 
+          ref={rightSidebarResizeRef}
+          className={`sidebar-resizer ${isRightSidebarResizing ? 'resizing' : ''}`}
+          onMouseDown={handleRightSidebarResizeStart}
+        />
+
         {/* Right Sidebar Navigation */}
-        <aside className="marketplace-sidebar">
+        <aside 
+          className={`marketplace-sidebar ${isRightSidebarResizing ? 'resizing' : ''}`}
+          style={{ width: marketRightSidebarWidth }}
+        >
           <div className="sidebar-title">Market</div>
           <nav className="sidebar-nav">
             {/* Main Section - Browse */}
@@ -1513,7 +1631,7 @@ const Market = () => {
         </div>
 
         {/* Items Grid Controls */}
-        <div className="items-grid-controls">
+        <div className="items-grid-controls" style={{ '--content-width': `${contentWidth}px` }}>
           <div className="items-grid-controls-left">
             <div className="items-count">{sortedItems.length} {sortedItems.length === 1 ? 'item' : 'items'}</div>
           </div>

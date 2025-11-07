@@ -4,7 +4,7 @@ import { getUserData, getUserScopedKey, getAllUsersData, saveUserData, getCurren
 import CustomVideoPlayer from '../components/CustomVideoPlayer';
 import './Store.css';
 
-const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navigate }) => {
+const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navigate, sidebarWidth = 260 }) => {
   const [favoriteGames, setFavoriteGames] = useState(new Set());
   const [bookmarkedGames, setBookmarkedGames] = useState(new Set());
   const [customGames, setCustomGames] = useState([]);
@@ -717,10 +717,36 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
     setSearchResults(results);
   }, [searchQuery, gamesData]);
 
+  // Calculate content area width (window width minus sidebar)
+  // Minimum app size: 1280px width - 260px sidebar = 1020px content width
+  const [contentWidth, setContentWidth] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth - sidebarWidth;
+    }
+    return 1020; // Default: 1280 (min width) - 260 (sidebar)
+  });
+
+  useEffect(() => {
+    const updateContentWidth = () => {
+      setContentWidth(window.innerWidth - sidebarWidth);
+    };
+
+    window.addEventListener('resize', updateContentWidth);
+    updateContentWidth(); // Initial calculation
+
+    return () => {
+      window.removeEventListener('resize', updateContentWidth);
+    };
+  }, [sidebarWidth]);
+
+  // Calculate banner height based on content width (maintain aspect ratio)
+  // Use 20% of content width, clamped between 250px and 600px
+  const bannerHeight = Math.max(250, Math.min(600, contentWidth * 0.20));
+
   return (
-    <div className="store">
+    <div className="store" style={{ '--content-width': `${contentWidth}px` }}>
       {/* Featured Game Banner */}
-      <div className="featured-section">
+      <div className="featured-section" style={{ height: `${bannerHeight}px` }}>
         <div 
           className="featured-banner"
           onMouseEnter={() => setIsBannerHovered(true)}
@@ -730,7 +756,11 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
               navigate(`/store/game/${safeFeaturedGame.id}`);
             }
           }}
-          style={{ cursor: safeFeaturedGame.id && safeFeaturedGame.id !== 'none' ? 'pointer' : 'default' }}
+          style={{ 
+            cursor: safeFeaturedGame.id && safeFeaturedGame.id !== 'none' ? 'pointer' : 'default',
+            '--content-width': `${contentWidth}px`,
+            '--banner-height': `${bannerHeight}px`
+          }}
         >
           <div className="featured-background">
             <div 
@@ -824,104 +854,120 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
           </div>
           
           {/* Media Slideshow */}
-          {currentMedia.length > 0 && (
-            <div className="featured-content-right">
-              <div 
-                className="featured-media-slideshow"
-                onMouseEnter={() => setIsMediaSlideshowHovered(true)}
-                onMouseLeave={() => setIsMediaSlideshowHovered(false)}
-              >
-                <div className="media-slideshow-container">
-                  {currentMedia.map((mediaItem, index) => {
-                    const mediaUrl = getImageUrl(mediaItem);
-                    if (!mediaUrl) return null;
-                    
-                    const isVideo = (typeof mediaItem === 'object' && mediaItem.type?.startsWith('video/')) ||
-                                    (typeof mediaItem === 'string' && /\.(mp4|webm|mov)$/i.test(mediaItem));
-                    
-                    const isActive = index === currentMediaIndex;
-                    const videoKey = `${safeFeaturedGame.id}-${index}`;
-                    
-                    return (
-                      <div
-                        key={index}
-                        className={`media-slide ${isActive ? 'active' : ''}`}
-                        style={{ display: isActive ? 'block' : 'none' }}
-                      >
-                        {isVideo ? (
-                          <video
-                            ref={(el) => {
-                              if (el) mediaVideoRefs.current[videoKey] = el;
-                            }}
-                            src={mediaUrl}
-                            muted={isMediaMuted}
-                            loop
-                            playsInline
-                            style={{
-                              width: '100%',
-                              height: '100%',
-                              objectFit: 'cover',
-                              borderRadius: '16px'
-                            }}
-                          />
-                        ) : (
-                          <img
-                            src={mediaUrl}
-                            alt={`Media ${index + 1}`}
-                            style={{
-                              width: '100%',
-                              height: '100%',
-                              objectFit: 'cover',
-                              borderRadius: '16px'
-                            }}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                  
-                  {/* Sound toggle button (only show for videos) */}
-                  {currentMedia.length > 0 && currentMedia[currentMediaIndex] && (
-                    (() => {
-                      const currentMediaItem = currentMedia[currentMediaIndex];
-                      const isVideo = (typeof currentMediaItem === 'object' && currentMediaItem.type?.startsWith('video/')) ||
-                                      (typeof currentMediaItem === 'string' && /\.(mp4|webm|mov)$/i.test(currentMediaItem));
+          <div className="featured-content-right">
+            <div 
+              className="featured-media-slideshow"
+              onMouseEnter={() => setIsMediaSlideshowHovered(true)}
+              onMouseLeave={() => setIsMediaSlideshowHovered(false)}
+            >
+              <div className="media-slideshow-container">
+                {currentMedia.length > 0 ? (
+                  <>
+                    {currentMedia.map((mediaItem, index) => {
+                      const mediaUrl = getImageUrl(mediaItem);
+                      if (!mediaUrl) return null;
                       
-                      return isVideo ? (
-                        <button
-                          className="media-sound-toggle"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setIsMediaMuted(!isMediaMuted);
-                          }}
-                          title={isMediaMuted ? 'Unmute' : 'Mute'}
+                      const isVideo = (typeof mediaItem === 'object' && mediaItem.type?.startsWith('video/')) ||
+                                      (typeof mediaItem === 'string' && /\.(mp4|webm|mov)$/i.test(mediaItem));
+                      
+                      const isActive = index === currentMediaIndex;
+                      const videoKey = `${safeFeaturedGame.id}-${index}`;
+                      
+                      return (
+                        <div
+                          key={index}
+                          className={`media-slide ${isActive ? 'active' : ''}`}
+                          style={{ display: isActive ? 'block' : 'none' }}
                         >
-                          {isMediaMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
-                        </button>
-                      ) : null;
-                    })()
-                  )}
-                </div>
-                
-                {/* Media indicators */}
-                {currentMedia.length > 1 && (
-                  <div className="media-indicators">
-                    {currentMedia.map((_, index) => (
-                      <button
-                        key={index}
-                        className={`media-indicator ${index === currentMediaIndex ? 'active' : ''}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setCurrentMediaIndex(index);
-                        }}
-                        aria-label={`Go to media ${index + 1}`}
-                      />
-                    ))}
+                          {isVideo ? (
+                            <video
+                              ref={(el) => {
+                                if (el) mediaVideoRefs.current[videoKey] = el;
+                              }}
+                              src={mediaUrl}
+                              muted={isMediaMuted}
+                              loop
+                              playsInline
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                                borderRadius: '16px'
+                              }}
+                            />
+                          ) : (
+                            <img
+                              src={mediaUrl}
+                              alt={`Media ${index + 1}`}
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                                borderRadius: '16px'
+                              }}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                    
+                    {/* Sound toggle button (only show for videos) */}
+                    {currentMedia[currentMediaIndex] && (
+                      (() => {
+                        const currentMediaItem = currentMedia[currentMediaIndex];
+                        const isVideo = (typeof currentMediaItem === 'object' && currentMediaItem.type?.startsWith('video/')) ||
+                                        (typeof currentMediaItem === 'string' && /\.(mp4|webm|mov)$/i.test(currentMediaItem));
+                        
+                        return isVideo ? (
+                          <button
+                            className="media-sound-toggle"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsMediaMuted(!isMediaMuted);
+                            }}
+                            title={isMediaMuted ? 'Unmute' : 'Mute'}
+                          >
+                            {isMediaMuted ? <VolumeX size={20} /> : <Volume2 size={20} />}
+                          </button>
+                        ) : null;
+                      })()
+                    )}
+                  </>
+                ) : (
+                  <div style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(0, 0, 0, 0.3)',
+                    borderRadius: '16px',
+                    color: 'rgba(255, 255, 255, 0.5)',
+                    fontSize: '14px'
+                  }}>
+                    No media available
                   </div>
                 )}
               </div>
+              
+              {/* Media indicators */}
+              {currentMedia.length > 1 && (
+                <div className="media-indicators">
+                  {currentMedia.map((_, index) => (
+                    <button
+                      key={index}
+                      className={`media-indicator ${index === currentMediaIndex ? 'active' : ''}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCurrentMediaIndex(index);
+                      }}
+                      aria-label={`Go to media ${index + 1}`}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
           
           {/* Navigation Buttons */}
@@ -954,7 +1000,7 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
         </div>
         
         {/* Taskbar */}
-        <div className="store-taskbar">
+        <div className="store-taskbar" style={{ '--content-width': `${contentWidth}px` }}>
           <div className="taskbar-content">
             {/* Left Section - Empty/Spacer */}
             <div className="taskbar-left">
@@ -1064,16 +1110,21 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                     <div className="banner-cta">
                       <div className="banner-free-text">{displayPrice(g)}</div>
                     </div>
+                    <div className="banner-hover-hint">
+                      <ChevronRight size={14} />
+                    </div>
                   </div>
                   <div className="featured-card-info">
                     <div className="card-info-header">
-                      <h3 title={g.name || 'Untitled Game'}>{g.name || 'Untitled Game'}</h3>
+                      <div className="card-info-header-row">
+                        <h3 title={g.name || 'Untitled Game'}>{g.name || 'Untitled Game'}</h3>
+                        {isGameOwnedByMe(g) && (
+                          <div className="card-owned-badge" title="You own this game">
+                            <CheckCircle2 size={14} />
+                          </div>
+                        )}
+                      </div>
                       {g.version && <p className="card-info-version">Version {g.version}</p>}
-                      {isGameOwnedByMe(g) && (
-                        <div className="card-owned-badge" title="You own this game">
-                          <CheckCircle2 size={14} />
-                        </div>
-                      )}
                     </div>
                     <div 
                       className="card-info-rating"
@@ -1141,17 +1192,22 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                     <div className="banner-cta">
                       <div className="banner-free-text">{displayPrice(g)}</div>
                     </div>
+                    <div className="banner-hover-hint">
+                      <ChevronRight size={14} />
+                    </div>
 
                   </div>
                   <div className="featured-card-info">
                     <div className="card-info-header">
-                      <h3 title={g.name || 'Untitled Game'}>{g.name || 'Untitled Game'}</h3>
+                      <div className="card-info-header-row">
+                        <h3 title={g.name || 'Untitled Game'}>{g.name || 'Untitled Game'}</h3>
+                        {isGameOwnedByMe(g) && (
+                          <div className="card-owned-badge" title="You own this game">
+                            <CheckCircle2 size={14} />
+                          </div>
+                        )}
+                      </div>
                       {g.version && <p className="card-info-version">Version {g.version}</p>}
-                      {isGameOwnedByMe(g) && (
-                        <div className="card-owned-badge" title="You own this game">
-                          <CheckCircle2 size={14} />
-                        </div>
-                      )}
                     </div>
                     <div 
                       className="card-info-rating"

@@ -9,7 +9,8 @@
 /* Marketplace Sidebar Navigation */
 .marketplace-sidebar {
   width: 260px;
-  min-width: 260px;
+  min-width: 180px;
+  max-width: 400px;
   background: rgba(15, 17, 21, 0.95);
   border-left: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
@@ -19,6 +20,12 @@
   top: 0;
   height: 100vh;
   backdrop-filter: blur(20px);
+  flex-shrink: 0;
+  transition: width 0s;
+}
+
+.marketplace-sidebar.resizing {
+  transition: none;
 }
 
 .marketplace-sidebar::-webkit-scrollbar {
@@ -2841,13 +2848,19 @@
 }
 
 /* Items Grid Controls */
+/* Items Grid Controls - Smart Resizing */
 .items-grid-controls {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 24px;
+  /* Smart height scaling: scales smoothly between 50px (min) and 70px (max) based on content width */
+  --controls-height: clamp(50px, calc(50px + (var(--content-width, 1090px) - 1020px) * 0.04), 70px);
+  height: var(--controls-height);
+  padding: clamp(8px, calc(var(--content-width, 1090px) * 0.015), 16px) clamp(20px, calc(var(--content-width, 1090px) * 0.03), 24px);
   background: rgba(255, 255, 255, 0.02);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  /* Smooth height and padding transitions */
+  transition: height 0.2s ease, padding 0.2s ease;
 }
 
 .items-grid-controls-left {
@@ -2857,10 +2870,13 @@
 }
 
 .items-count {
-  font-size: 13px;
+  /* Smart font size: Scales proportionally with controls height */
+  font-size: clamp(12px, calc(var(--controls-height, 60px) * 0.22), 14px);
   color: rgba(255, 255, 255, 0.5);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
+  /* Smooth font size transition */
+  transition: font-size 0.2s ease;
 }
 
 .items-grid-controls-right {
@@ -2876,19 +2892,23 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0;
   padding: 2px;
+  height: 100%; /* Ensure full height for button sizing */
 }
 
 .view-mode-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  aspect-ratio: 1;
+  /* Always 75% of controls height - calculate directly from controls height variable */
+  height: calc(var(--controls-height, 60px) * 0.75);
+  width: calc(var(--controls-height, 60px) * 0.75);
   background: transparent;
   border: none;
   color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
-  transition: all 0.15s ease;
+  /* Smooth resizing and repositioning - includes height/width for smooth scaling */
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease, height 0.2s ease, width 0.2s ease;
   border-radius: 0;
 }
 

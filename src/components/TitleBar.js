@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Minus, Maximize, X, Menu, ChevronLeft, ChevronRight } from 'lucide-react';
+import KinmaLogo from './KinmaLogo';
 import './TitleBar.css';
 
 const TitleBar = ({ onToggleSidebar }) => {
@@ -95,37 +96,32 @@ const TitleBar = ({ onToggleSidebar }) => {
         <div className="title-bar-left">
           {!isAuth && !isAccountSwitcher && (
             <>
+              <div className="title-bar-logo-wrapper">
+                <div className="title-bar-logo">
+                  <KinmaLogo />
+                </div>
+                <span className="title-bar-logo-text">KINMA</span>
+              </div>
               {!isGameStudio && (
-                <button 
-                  className="title-bar-button sidebar-menu" 
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (onToggleSidebar) {
-                      onToggleSidebar();
-                    }
-                  }}
-                  title="Toggle Sidebar"
-                >
-                  <Menu size={14} />
-                </button>
+                <>
+                  <button 
+                    className={`title-bar-button nav-arrow ${!canGoBack ? 'disabled' : ''}`}
+                    onClick={handleGoBack}
+                    disabled={!canGoBack}
+                    title="Back"
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  <button 
+                    className={`title-bar-button nav-arrow ${!canGoForward ? 'disabled' : ''}`}
+                    onClick={handleGoForward}
+                    disabled={!canGoForward}
+                    title="Forward"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </>
               )}
-              <button 
-                className={`title-bar-button nav-arrow ${!canGoBack ? 'disabled' : ''}`}
-                onClick={handleGoBack}
-                disabled={!canGoBack}
-                title="Back"
-              >
-                <ChevronLeft size={14} />
-              </button>
-              <button 
-                className={`title-bar-button nav-arrow ${!canGoForward ? 'disabled' : ''}`}
-                onClick={handleGoForward}
-                disabled={!canGoForward}
-                title="Forward"
-              >
-                <ChevronRight size={14} />
-              </button>
             </>
           )}
         </div>

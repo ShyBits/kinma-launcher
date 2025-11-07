@@ -22,9 +22,61 @@
 .title-bar-left {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 8px;
   -webkit-app-region: no-drag;
   padding-left: 8px;
+}
+
+.title-bar-logo-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background 0.2s ease;
+  -webkit-app-region: no-drag;
+}
+
+.title-bar-logo-wrapper:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.title-bar-logo {
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  color: #ffffff;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 18px;
+  flex-shrink: 0;
+  overflow: visible;
+  position: relative;
+}
+
+.title-bar-logo > * {
+  transform: scale(0.053); /* Scale down from 450px to ~24px */
+}
+
+.title-bar-logo-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.25px;
+  opacity: 0;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: opacity 0.2s ease, max-width 0.2s ease;
+}
+
+.title-bar-logo-wrapper:hover .title-bar-logo-text {
+  opacity: 1;
+  max-width: 100px;
 }
 
 .app-logo {

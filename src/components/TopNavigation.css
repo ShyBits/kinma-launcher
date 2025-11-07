@@ -83,6 +83,35 @@
   gap: 0;
 }
 
+/* Menu Toggle Button - Fixed Position on Far Left */
+.nav-menu-toggle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--nav-height); /* Square button - width matches height */
+  height: var(--nav-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 0;
+  transition: all 0.2s ease;
+  z-index: 51;
+  flex-shrink: 0;
+}
+
+.nav-menu-toggle:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+}
+
+.nav-menu-toggle:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
 /* Left Section - Home Button */
 .nav-left {
   display: flex;
@@ -98,7 +127,8 @@
   align-items: center;
   gap: 4px;
   position: absolute;
-  left: var(--sidebar-width, 260px); /* Dynamically follows sidebar resize - aligns with main content area */
+  /* When sidebar is closed (0px), use nav-height to account for sandwich menu. When open, use sidebar width */
+  left: max(var(--nav-height), var(--sidebar-width, 260px)); /* Dynamically follows sidebar resize - aligns with main content area */
   top: 50%;
   transform: translateY(-50%);
   transition: left 0.1s ease;
@@ -143,7 +173,7 @@
 .home-btn {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 0;
   background: transparent;
   border: none;
   padding: 8px 12px;
@@ -154,6 +184,7 @@
   font-size: 15px;
   font-weight: 700;
   position: relative;
+  margin-left: var(--nav-height); /* Space for fixed menu toggle button */
 }
 
 .home-btn > span {
@@ -180,25 +211,6 @@
   background: transparent;
 }
 
-.home-logo {
-  width: 28px;
-  height: 28px;
-  background: transparent;
-  color: #ffffff;
-  border-radius: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: 18px;
-  flex-shrink: 0;
-  overflow: visible;
-  position: relative;
-}
-
-.home-logo > * {
-  transform: scale(0.071); /* Scale down from 450px to ~28px */
-}
 
 
 
@@ -858,9 +870,10 @@
 }
 
 .profile-menu-quick-switch-btn:hover {
-  background: rgba(74, 158, 255, 0.16);
+  background: rgba(74, 158, 255, 0.12);
   color: #4a9eff;
-  box-shadow: 0 0 0 3px rgba(74, 158, 255, 0.12);
+  box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2), 0 4px 12px rgba(74, 158, 255, 0.15);
+  transform: scale(1.05);
 }
 
 .profile-menu-quick-switch-count {
@@ -884,11 +897,14 @@
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   opacity: 0.3;
   z-index: 1;
+  /* Thinner stroke for the icon */
+  stroke-width: 1.5;
 }
 
 .profile-menu-quick-switch-btn:hover .profile-menu-quick-switch-icon,
 .profile-menu-quick-switch-btn:active .profile-menu-quick-switch-icon {
   transform: translate(-50%, -50%) rotate(180deg);
+  opacity: 0.5;
 }
 
 .profile-menu-quick-switch-btn:focus-visible {

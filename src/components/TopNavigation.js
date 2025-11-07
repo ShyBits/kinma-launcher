@@ -3,7 +3,6 @@ import {
   Settings, Users, MessageSquare, ShoppingCart, Bell, User, Plus, Minus, CreditCard, Coins, Store, Globe, Menu,
   BarChart3, Package, FileText, Upload, TrendingUp, DollarSign, Download, Check, RefreshCw, AlertCircle, Info, Gift, X, ShoppingBag, Award
 } from 'lucide-react';
-import KinmaLogo from './KinmaLogo';
 import AuthModal from './AuthModal';
 import { getUserData } from '../utils/UserDataManager';
 import { loadNotifications, saveNotifications, subscribeToNotifications, markNotificationAsRead as markRead, markAllNotificationsAsRead as markAllRead, deleteNotification as deleteNotif } from '../utils/NotificationManager';
@@ -1022,22 +1021,31 @@ const TopNavigation = ({
       className="top-navigation"
       style={{ '--sidebar-width': `${sidebarWidth}px` }}
     >
+      {/* Left Section - Menu Toggle Button (Fixed Position) */}
+      {!isGameStudio && (
+        <button 
+          className="nav-menu-toggle"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (onToggleSidebar) {
+              onToggleSidebar();
+            }
+          }}
+          title="Toggle Sidebar"
+        >
+          <Menu size={18} />
+        </button>
+      )}
+      
       {/* Left Section - Home Button */}
       <div className="nav-left">
         <button 
           className="home-btn"
           onClick={() => handleNavigation('home')}
         >
-          <div className="home-logo">
-            <KinmaLogo />
-          </div>
-          {isGameStudio ? (
-            <span>
-              <span className="kinma-main">KINMA</span>
-              <span className="kinma-subtitle"> studio view</span>
-            </span>
-          ) : (
-            <span>KINMA</span>
+          {isGameStudio && (
+            <span className="kinma-subtitle">studio view</span>
           )}
         </button>
         
@@ -1706,7 +1714,7 @@ const TopNavigation = ({
                               title="Quick Switch Account"
                             >
                               <span className="profile-menu-quick-switch-count">{availableUsers.length}</span>
-                              <RefreshCw size={45} className="profile-menu-quick-switch-icon" />
+                              <RefreshCw size={36} className="profile-menu-quick-switch-icon" />
                             </button>
                           </div>
                         )}

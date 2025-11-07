@@ -273,7 +273,7 @@ const AppContent = () => {
               <Route path="/account-switcher" element={<AccountSwitcherPage navigate={navigate} />} />
               <Route path="/library" element={<Library />} />
               <Route path="/game-studio" element={<GameStudio navigate={navigate} />} />
-              <Route path="/store" element={<Store navigate={navigate} gamesData={{}} />} />
+              <Route path="/store" element={<Store navigate={navigate} gamesData={{}} sidebarWidth={sidebarCollapsed ? 0 : sidebarWidth} />} />
               <Route path="/store/game/:gameId" element={<GamePromo gamesData={{}} />} />
               <Route path="/friends" element={<Friends />} />
               <Route path="/market" element={<Market />} />

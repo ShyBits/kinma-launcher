@@ -54,6 +54,19 @@ const Profile = ({ navigate }) => {
       return 700;
     }
   });
+
+  // Right sidebar resizing state
+  const [profileRightSidebarWidth, setProfileRightSidebarWidth] = useState(() => {
+    try {
+      const saved = localStorage.getItem('profileRightSidebarWidth');
+      return saved ? parseInt(saved, 10) : 260;
+    } catch (_) {
+      return 260;
+    }
+  });
+  const [isRightSidebarResizing, setIsRightSidebarResizing] = useState(false);
+  const rightSidebarResizeRef = useRef(null);
+
   const [showPreviewLabels, setShowPreviewLabels] = useState(() => {
     try {
       const saved = getUserData('profilePreviewLabels', null);
@@ -265,6 +278,71 @@ const Profile = ({ navigate }) => {
       document.addEventListener('mouseup', handleMouseUp, { passive: false });
     }
   };
+
+  // Right sidebar resize handlers
+  const handleRightSidebarResizeStart = (e) => {
+    setIsRightSidebarResizing(true);
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  useEffect(() => {
+    if (!isRightSidebarResizing) return;
+
+    const handleResize = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const windowWidth = window.innerWidth;
+      const clientX = e.clientX !== undefined ? e.clientX : windowWidth;
+      const newWidth = windowWidth - clientX;
+      const minWidth = 180;
+      const maxWidth = 400;
+      
+      // Clamp to boundaries
+      const clampedWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
+      setProfileRightSidebarWidth(clampedWidth);
+    };
+
+    const handleResizeEnd = (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      setIsRightSidebarResizing(false);
+      // Save to localStorage only at the end
+      try {
+        localStorage.setItem('profileRightSidebarWidth', profileRightSidebarWidth.toString());
+      } catch (_) {}
+    };
+
+    const handleMouseLeave = () => {
+      // When mouse leaves window, clamp to boundaries
+      const minWidth = 180;
+      const maxWidth = 400;
+      const currentWidth = profileRightSidebarWidth;
+      const clampedWidth = Math.max(minWidth, Math.min(maxWidth, currentWidth));
+      if (clampedWidth !== currentWidth) {
+        setProfileRightSidebarWidth(clampedWidth);
+      }
+    };
+
+    // Use capture phase to ensure we catch events even outside the window
+    document.addEventListener('mousemove', handleResize, true);
+    document.addEventListener('mouseup', handleResizeEnd, true);
+    window.addEventListener('mouseup', handleResizeEnd, true);
+    window.addEventListener('mouseleave', handleMouseLeave);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    return () => {
+      document.removeEventListener('mousemove', handleResize, true);
+      document.removeEventListener('mouseup', handleResizeEnd, true);
+      window.removeEventListener('mouseup', handleResizeEnd, true);
+      window.removeEventListener('mouseleave', handleMouseLeave);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isRightSidebarResizing, profileRightSidebarWidth]);
 
   // Get prebuilt items definition
   const getPrebuiltItems = () => ({
@@ -611,8 +689,18 @@ const Profile = ({ navigate }) => {
             )}
           </div>
 
+            {/* Right Sidebar Resizer */}
+            <div 
+              ref={rightSidebarResizeRef}
+              className={`sidebar-resizer ${isRightSidebarResizing ? 'resizing' : ''}`}
+              onMouseDown={handleRightSidebarResizeStart}
+            />
+
             {/* Right Sidebar Navigation */}
-            <aside className="marketplace-sidebar">
+            <aside 
+              className={`marketplace-sidebar ${isRightSidebarResizing ? 'resizing' : ''}`}
+              style={{ width: profileRightSidebarWidth }}
+            >
               <div className="sidebar-title">Profile</div>
               <nav className="sidebar-nav">
                 {/* Main Section */}

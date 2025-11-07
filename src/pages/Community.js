@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import WorkshopSection from '../components/WorkshopSection';
 import { MessageSquare, Package, Users, Bookmark, TrendingUp, Heart, Globe, Sparkles, Plus, Search, Filter, Bell, BellOff } from 'lucide-react';
@@ -41,6 +41,18 @@ const Community = () => {
   const [selectedThreadId, setSelectedThreadId] = React.useState(null);
   const [threadSearchQuery, setThreadSearchQuery] = React.useState('');
   const [postContent, setPostContent] = React.useState('');
+
+  // Right sidebar resizing state
+  const [communityRightSidebarWidth, setCommunityRightSidebarWidth] = React.useState(() => {
+    try {
+      const saved = localStorage.getItem('communityRightSidebarWidth');
+      return saved ? parseInt(saved, 10) : 260;
+    } catch (_) {
+      return 260;
+    }
+  });
+  const [isRightSidebarResizing, setIsRightSidebarResizing] = React.useState(false);
+  const rightSidebarResizeRef = useRef(null);
 
   // Game notification preferences - structure: { gameId: { posts: boolean, threads: boolean, workshop: boolean } }
   const [gameNotifications, setGameNotifications] = React.useState(() => {
@@ -305,6 +317,71 @@ const Community = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [pickerOpen]);
+
+  // Right sidebar resize handlers
+  const handleRightSidebarResizeStart = (e) => {
+    setIsRightSidebarResizing(true);
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  React.useEffect(() => {
+    if (!isRightSidebarResizing) return;
+
+    const handleResize = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const windowWidth = window.innerWidth;
+      const clientX = e.clientX !== undefined ? e.clientX : windowWidth;
+      const newWidth = windowWidth - clientX;
+      const minWidth = 180;
+      const maxWidth = 400;
+      
+      // Clamp to boundaries
+      const clampedWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
+      setCommunityRightSidebarWidth(clampedWidth);
+    };
+
+    const handleResizeEnd = (e) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      setIsRightSidebarResizing(false);
+      // Save to localStorage only at the end
+      try {
+        localStorage.setItem('communityRightSidebarWidth', communityRightSidebarWidth.toString());
+      } catch (_) {}
+    };
+
+    const handleMouseLeave = () => {
+      // When mouse leaves window, clamp to boundaries
+      const minWidth = 180;
+      const maxWidth = 400;
+      const currentWidth = communityRightSidebarWidth;
+      const clampedWidth = Math.max(minWidth, Math.min(maxWidth, currentWidth));
+      if (clampedWidth !== currentWidth) {
+        setCommunityRightSidebarWidth(clampedWidth);
+      }
+    };
+
+    // Use capture phase to ensure we catch events even outside the window
+    document.addEventListener('mousemove', handleResize, true);
+    document.addEventListener('mouseup', handleResizeEnd, true);
+    window.addEventListener('mouseup', handleResizeEnd, true);
+    window.addEventListener('mouseleave', handleMouseLeave);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    return () => {
+      document.removeEventListener('mousemove', handleResize, true);
+      document.removeEventListener('mouseup', handleResizeEnd, true);
+      window.removeEventListener('mouseup', handleResizeEnd, true);
+      window.removeEventListener('mouseleave', handleMouseLeave);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isRightSidebarResizing, communityRightSidebarWidth]);
 
   return (
     <div className="community">
@@ -693,8 +770,18 @@ const Community = () => {
           )}
         </main>
 
+        {/* Right Sidebar Resizer */}
+        <div 
+          ref={rightSidebarResizeRef}
+          className={`sidebar-resizer ${isRightSidebarResizing ? 'resizing' : ''}`}
+          onMouseDown={handleRightSidebarResizeStart}
+        />
+
         {/* Right: Navigation Sidebar */}
-        <aside className="community-right marketplace-sidebar">
+        <aside 
+          className={`community-right marketplace-sidebar ${isRightSidebarResizing ? 'resizing' : ''}`}
+          style={{ width: communityRightSidebarWidth }}
+        >
           <div className="sidebar-title">Community</div>
           <nav className="sidebar-nav">
             <div className="sidebar-nav-section">

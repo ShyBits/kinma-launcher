@@ -46,8 +46,8 @@ function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1350,
     height: 800,
-    minWidth: 1240,
-    minHeight: 900,
+    minWidth: 1280,
+    minHeight: 720,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -82,6 +82,11 @@ function createMainWindow() {
       }
     }
   });
+
+  // Set 16:9 aspect ratio for minimum size constraint
+  try {
+    mainWindow.setAspectRatio(16/9);
+  } catch (_) {}
 
   // Zoom functionality removed
 
