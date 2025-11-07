@@ -15,6 +15,7 @@
 .sidebar {
     position: relative;
     width: 260px;
+    min-width: 240px;
     background: rgba(255, 255, 255, 0.02);
     border-right: none;
     display: flex;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ShoppingCart, Plus, ShoppingBag, Eye, EyeOff, Grid, List, ArrowLeft, Crown } from 'lucide-react';
+import { ShoppingCart, Plus, ShoppingBag, Eye, EyeOff, Grid, List, ArrowLeft, Crown, TrendingUp, TrendingDown, Zap, Clock, Star, Users, Flame, ArrowRight, Sparkles, BarChart3, DollarSign, TrendingUp as TrendingUpIcon, PieChart, Target, Award, Activity, ArrowUpRight, ArrowDownRight, FileText, CheckCircle2, UserPlus, Search } from 'lucide-react';
 import { getUserData, saveUserData, getAllUsersData } from '../utils/UserDataManager';
 import './Market.css';
 
@@ -30,7 +30,7 @@ const Market = () => {
   const [inventorySearch, setInventorySearch] = useState('');
   const [inventoryFilter, setInventoryFilter] = useState('all');
   const [itemPrices, setItemPrices] = useState({});
-  const [marketView, setMarketView] = useState('browse'); // browse, petitions, featured, trending, favorites
+  const [marketView, setMarketView] = useState('browse'); // browse, petitions, featured, trending, favorites, stats
   const [customGames, setCustomGames] = useState([]);
   const [watchedGames, setWatchedGames] = useState(new Set());
   const [expandedCards, setExpandedCards] = useState(new Set());
@@ -41,6 +41,9 @@ const Market = () => {
       return {};
     }
   });
+  const [showCreatePetitionForm, setShowCreatePetitionForm] = useState(false);
+  const [petitionSearchQuery, setPetitionSearchQuery] = useState('');
+  const [selectedPetitionGame, setSelectedPetitionGame] = useState(null);
   
   // Investments data loaded from account-separated storage
   const [investments] = useState(() => {
@@ -93,28 +96,101 @@ const Market = () => {
     };
   }, []);
 
+  // State to store market data loaded from metadata.json
+  const [marketDataCache, setMarketDataCache] = useState({});
+
+  // Load market data from metadata.json files
+  useEffect(() => {
+    const loadMarketData = async () => {
+      const cache = {};
+      for (const game of customGames) {
+        const gameId = game.gameId || game.id;
+        if (!gameId) continue;
+        
+        try {
+          if (window.electronAPI && window.electronAPI.getGameMetadata) {
+            const result = await window.electronAPI.getGameMetadata(gameId);
+            if (result.success && result.metadata) {
+              cache[gameId] = {
+                marketRank: result.metadata.marketRank || null,
+                totalVolume: result.metadata.totalVolume || '$0',
+                marketTrend: result.metadata.marketTrend || '+0%'
+              };
+            }
+          }
+        } catch (error) {
+          console.error(`Error loading market data for ${gameId}:`, error);
+          // Fallback to localStorage
+          try {
+            const marketKey = `market_${gameId}`;
+            const localData = getUserData(marketKey, {});
+            if (localData.marketRank || localData.totalVolume || localData.marketTrend) {
+              cache[gameId] = localData;
+            }
+          } catch (_) {}
+        }
+      }
+      setMarketDataCache(cache);
+    };
+
+    if (customGames.length > 0) {
+      loadMarketData();
+    }
+  }, [customGames]);
+
+  // Function to save market data to metadata.json
+  const saveMarketDataToMetadata = async (gameId, marketData) => {
+    try {
+      if (window.electronAPI && window.electronAPI.getGameMetadata && window.electronAPI.saveGameMetadata) {
+        // Get existing metadata
+        const result = await window.electronAPI.getGameMetadata(gameId);
+        if (result.success) {
+          const metadata = result.metadata;
+          // Update market data fields
+          metadata.marketRank = marketData.marketRank ?? metadata.marketRank;
+          metadata.totalVolume = marketData.totalVolume ?? metadata.totalVolume;
+          metadata.marketTrend = marketData.marketTrend ?? metadata.marketTrend;
+          // Save updated metadata
+          await window.electronAPI.saveGameMetadata(gameId, metadata);
+          // Update cache
+          setMarketDataCache(prev => ({
+            ...prev,
+            [gameId]: {
+              marketRank: metadata.marketRank,
+              totalVolume: metadata.totalVolume,
+              marketTrend: metadata.marketTrend
+            }
+          }));
+        }
+      }
+    } catch (error) {
+      console.error(`Error saving market data for ${gameId}:`, error);
+    }
+  };
+
   // Get all games with market settings (already filtered by published and marketEnabled)
   const allGamesData = React.useMemo(() => {
     // Custom games are already filtered to published + marketEnabled
     const customGamesData = customGames.map((game) => {
       const hasMarket = game.fullFormData?.marketEnabled !== false; // Default to true
-      // Load market data from user-specific storage or API
-      let marketData = {};
-      try {
-        const marketKey = `market_${game.gameId || game.id}`;
-        marketData = getUserData(marketKey, {});
-      } catch (_) {}
+      const gameId = game.gameId || game.id || `custom-${Date.now()}`;
+      
+      // Get market data from cache (loaded from metadata.json)
+      const marketData = marketDataCache[gameId] || {};
+      
+      // Get petition data from petitions state
+      const petitionData = petitions[gameId] || {};
       
       return {
-        id: game.gameId || game.id || `custom-${Date.now()}`,
+        id: gameId,
         name: game.name || game.gameName || 'Untitled Game',
         icon: (game.name || game.gameName || 'G')?.charAt(0)?.toUpperCase() || 'G',
         image: game.banner || game.bannerImage || game.cardImage,
         logo: game.logo || game.gameLogo,
         installed: true,
         hasMarket,
-        signatures: marketData.signatures || 0,
-        myToken: marketData.myToken || null,
+        signatures: petitionData.signatures || marketData.signatures || 0,
+        myToken: petitionData.myToken || marketData.myToken || null,
         isCustom: true,
         cardImage: game.card || game.cardImage || game.banner,
         marketRank: marketData.marketRank || null,
@@ -124,11 +200,35 @@ const Market = () => {
     });
 
     return [...customGamesData];
-  }, [customGames]);
+  }, [customGames, petitions, marketDataCache]);
 
   // Get games with markets and games without markets
   const gamesWithMarkets = allGamesData.filter(g => g.hasMarket !== false);
   const gamesWithoutMarkets = allGamesData.filter(g => g.hasMarket === false);
+
+  // Sort games by 24h trend for trending view
+  const trendingGames = React.useMemo(() => {
+    return [...gamesWithMarkets].sort((a, b) => {
+      const parseTrend = (trend) => {
+        if (!trend || trend === '+0%') return 0;
+        const match = trend.match(/[+-]?(\d+\.?\d*)/);
+        return match ? parseFloat(match[0]) : 0;
+      };
+      return parseTrend(b.marketTrend) - parseTrend(a.marketTrend);
+    });
+  }, [gamesWithMarkets]);
+
+  // Sort games by volume for top markets view
+  const topMarketsGames = React.useMemo(() => {
+    return [...gamesWithMarkets].sort((a, b) => {
+      const parseVolume = (volume) => {
+        if (!volume || volume === '$0') return 0;
+        const numStr = volume.replace(/[^0-9.]/g, '');
+        return parseFloat(numStr) || 0;
+      };
+      return parseVolume(b.totalVolume) - parseVolume(a.totalVolume);
+    });
+  }, [gamesWithMarkets]);
 
   // Auto-select game based on URL parameter
   useEffect(() => {
@@ -313,8 +413,7 @@ const Market = () => {
 
   const handlePetitionSign = (gameId) => {
     setPetitions(prev => {
-      const game = prev[gameId];
-      if (!game) return prev;
+      const game = prev[gameId] || {};
       
       if (game.myToken) {
         // User already signed, show message
@@ -355,11 +454,944 @@ const Market = () => {
     saveUserData('watchedGames', Array.from(newWatched));
   };
 
+  const handleCreatePetition = () => {
+    if (!selectedPetitionGame) return;
+    
+    setPetitions(prev => {
+      const updated = {
+        ...prev,
+        [selectedPetitionGame.id]: {
+          signatures: 1,
+          myToken: true,
+          createdAt: Date.now()
+        }
+      };
+      
+      try {
+        saveUserData('marketPetitions', updated);
+      } catch (e) {
+        console.error('Error saving petitions:', e);
+      }
+      
+      return updated;
+    });
+    
+    setShowCreatePetitionForm(false);
+    setSelectedPetitionGame(null);
+    setPetitionSearchQuery('');
+  };
+
+  // Get all games for petition creation (only games without markets)
+  const allGamesForPetition = React.useMemo(() => {
+    return customGames.filter(game => {
+      const hasMarket = game.fullFormData?.marketEnabled !== false;
+      if (hasMarket) return false; // Only show games without markets
+      
+      const name = (game.name || game.gameName || '').toLowerCase();
+      const query = petitionSearchQuery.toLowerCase();
+      const gameId = game.gameId || game.id;
+      // Don't show games that already have petitions
+      const hasPetition = petitions[gameId];
+      return (query === '' || name.includes(query)) && !hasPetition;
+    }).map(game => ({
+      ...game,
+      id: game.gameId || game.id
+    }));
+  }, [customGames, petitionSearchQuery, petitions]);
+
   // If no game is selected, show game selection
   if (!selectedGame) {
     return (
       <div className="market">
-        {/* Market Statistics Bar - Always Visible at Top */}
+        {/* Main Content Area */}
+        <div className="marketplace-content">
+          {/* Live Activity Ticker - Always at top (except browse) */}
+          {marketView !== 'browse' && (
+            <div className="marketplace-ticker">
+              <div className="ticker-label">
+                <Zap size={14} />
+                <span>Live Activity</span>
+            </div>
+              <div className="ticker-content">
+                <div className="ticker-item">
+                  <span className="ticker-user">Player123</span>
+                  <span className="ticker-action">bought</span>
+                  <span className="ticker-item-name">Legendary Sword</span>
+                  <span className="ticker-price">for $45.99</span>
+            </div>
+                <div className="ticker-item">
+                  <span className="ticker-user">TraderPro</span>
+                  <span className="ticker-action">listed</span>
+                  <span className="ticker-item-name">Rare Armor Set</span>
+                  <span className="ticker-price">at $89.50</span>
+            </div>
+                <div className="ticker-item">
+                  <span className="ticker-user">Collector2024</span>
+                  <span className="ticker-action">sold</span>
+                  <span className="ticker-item-name">Epic Shield</span>
+                  <span className="ticker-price">for $120.00</span>
+            </div>
+          </div>
+            </div>
+          )}
+
+          {/* Stats View */}
+          {marketView === 'stats' && (
+          <div className="marketplace-stats-view">
+            <div className="stats-view-header">
+              <h2 className="stats-view-title">Analytics</h2>
+              <p className="stats-view-subtitle">Trading performance overview</p>
+            </div>
+            
+            {/* Performance Overview */}
+            <div className="stats-overview-section">
+              <h3 className="stats-section-title">Performance</h3>
+              <div className="stats-overview-grid">
+                <div className="stat-overview-item">
+                  <div className="stat-overview-label">Total Profit</div>
+                  <div className={`stat-overview-value ${marketStats.totalProfit >= 0 ? 'positive' : 'negative'}`}>
+                    {marketStats.totalProfit >= 0 ? '+' : ''}${marketStats.totalProfit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+                  <div className="stat-overview-meta">
+                    {marketStats.totalTraded > 0 ? `${((Math.abs(marketStats.totalProfit) / marketStats.totalTraded) * 100).toFixed(1)}%` : '0%'} of total traded
+            </div>
+          </div>
+
+                <div className="stat-overview-item">
+                  <div className="stat-overview-label">Net Worth</div>
+                  <div className="stat-overview-value">
+                    ${marketStats.netWorth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+                  <div className="stat-overview-meta">
+                    {marketStats.totalInvested > 0 ? (
+                      <>
+                        {marketStats.netWorth >= marketStats.totalInvested ? '+' : ''}
+                        {((marketStats.netWorth / marketStats.totalInvested - 1) * 100).toFixed(1)}% from investments
+                      </>
+                    ) : (
+                      'No investments'
+                    )}
+            </div>
+                </div>
+
+                <div className="stat-overview-item">
+                  <div className="stat-overview-label">ROI</div>
+                  <div className={`stat-overview-value ${marketStats.roi >= 0 ? 'positive' : 'negative'}`}>
+                {marketStats.roi >= 0 ? '+' : ''}{marketStats.roi.toFixed(1)}%
+            </div>
+                  <div className="stat-overview-meta">
+                    {marketStats.totalInvested > 0 ? (
+                      <>${marketStats.investmentReturns.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} returns</>
+                    ) : (
+                      'No investments'
+                    )}
+                  </div>
+                </div>
+
+                <div className="stat-overview-item">
+                  <div className="stat-overview-label">Success Rate</div>
+                  <div className={`stat-overview-value ${marketStats.successRate >= 50 ? 'positive' : ''}`}>
+                    {marketStats.successRate.toFixed(1)}%
+                  </div>
+                  <div className="stat-overview-meta">
+                    {marketStats.transactions} transaction{marketStats.transactions !== 1 ? 's' : ''}
+                  </div>
+            </div>
+          </div>
+        </div>
+
+            {/* Trading Activity */}
+            <div className="stats-overview-section">
+              <h3 className="stats-section-title">Trading Activity</h3>
+              <div className="stats-details-grid">
+                <div className="stat-detail-item">
+                  <div className="stat-detail-label">Total Traded</div>
+                  <div className="stat-detail-value">${marketStats.totalTraded.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          </div>
+
+                <div className="stat-detail-item">
+                  <div className="stat-detail-label">Transactions</div>
+                  <div className="stat-detail-value">{marketStats.transactions.toLocaleString()}</div>
+        </div>
+
+                <div className="stat-detail-item">
+                  <div className="stat-detail-label">Average Price</div>
+                  <div className="stat-detail-value">${marketStats.avgPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                </div>
+
+                <div className="stat-detail-item">
+                  <div className="stat-detail-label">Best Trade</div>
+                  <div className={`stat-detail-value ${marketStats.bestTrade >= 0 ? 'positive' : 'negative'}`}>
+                    {marketStats.bestTrade >= 0 ? '+' : ''}{marketStats.bestTrade.toFixed(1)}%
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Investments */}
+            <div className="stats-overview-section">
+              <h3 className="stats-section-title">Investments</h3>
+              <div className="stats-details-grid">
+                <div className="stat-detail-item">
+                  <div className="stat-detail-label">Total Invested</div>
+                  <div className="stat-detail-value">${marketStats.totalInvested.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                </div>
+
+                <div className="stat-detail-item">
+                  <div className="stat-detail-label">Active Investments</div>
+                  <div className="stat-detail-value">{marketStats.activeInvestments}</div>
+                </div>
+
+                <div className="stat-detail-item">
+                  <div className="stat-detail-label">Investment Returns</div>
+                  <div className={`stat-detail-value ${marketStats.investmentReturns >= 0 ? 'positive' : 'negative'}`}>
+                    {marketStats.investmentReturns >= 0 ? '+' : ''}${marketStats.investmentReturns.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+
+                <div className="stat-detail-item">
+                  <div className="stat-detail-label">Average Return</div>
+                  <div className={`stat-detail-value ${marketStats.avgReturn >= 0 ? 'positive' : 'negative'}`}>
+                    {marketStats.avgReturn >= 0 ? '+' : ''}{marketStats.avgReturn.toFixed(1)}%
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Watchlist Section */}
+        {marketView === 'favorites' && watchedGames.size > 0 ? (
+          <div className="watchlist-container">
+            <div className="watchlist-header">
+              <div className="watchlist-header-content">
+                <div className="watchlist-header-left">
+                  <h2 className="watchlist-title">Watchlist</h2>
+                  <p className="watchlist-subtitle">{watchedGames.size} {watchedGames.size === 1 ? 'game' : 'games'} being tracked</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="watchlist-grid">
+              {[...watchedGames].map(gameId => {
+                const game = gamesWithMarkets.find(g => g.id === gameId);
+                if (!game) return null;
+                const isExpanded = expandedCards.has(game.id);
+                return (
+                  <div 
+                    key={game.id} 
+                    className={`watchlist-card ${isExpanded ? 'expanded' : ''}`}
+                  >
+                    <div className="watchlist-card-header" onClick={() => {
+                      const newExpanded = new Set(expandedCards);
+                      if (newExpanded.has(game.id)) {
+                        newExpanded.delete(game.id);
+                      } else {
+                        newExpanded.add(game.id);
+                      }
+                      setExpandedCards(newExpanded);
+                    }}>
+                      <div className="watchlist-card-image">
+                        <img 
+                          src={game.image || game.cardImage || game.banner} 
+                          alt={game.name}
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            e.target.nextSibling.style.display = 'flex';
+                          }}
+                        />
+                        <div className="watchlist-card-image-placeholder" style={{ display: game.image || game.cardImage || game.banner ? 'none' : 'flex' }}>
+                          <div className="watchlist-card-icon">{game.icon}</div>
+                        </div>
+                      </div>
+                      <div className="watchlist-card-info">
+                        <h3 className="watchlist-card-title">{game.name}</h3>
+                        <div className="watchlist-card-meta">
+                          <span className="watchlist-rank">#{game.marketRank || 1}</span>
+                          <span className="watchlist-divider">•</span>
+                          <span className="watchlist-volume">{game.totalVolume || '$0'}</span>
+                          <span className="watchlist-divider">•</span>
+                          <span className={`watchlist-trend ${game.marketTrend?.startsWith('+') ? 'positive' : 'negative'}`}>
+                            {game.marketTrend || '+0%'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="watchlist-card-actions">
+                        {investments[game.id] && (
+                          <span className="watchlist-investment-badge" title={`Invested: $${investments[game.id].amount}`}>
+                            <DollarSign size={14} />
+                          </span>
+                        )}
+                        <button 
+                          className="watchlist-remove-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleWatchGame(game.id, e);
+                          }}
+                          title="Remove from watchlist"
+                        >
+                          <Eye size={16} strokeWidth={2} />
+                        </button>
+                        <div className={`watchlist-expand-icon ${isExpanded ? 'expanded' : ''}`}>
+                          <ArrowDownRight size={16} />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className={`watchlist-card-content ${isExpanded ? 'expanded' : ''}`}>
+                      <div className="watchlist-chart-section">
+                        <div className="watchlist-chart-header">
+                          <div className="watchlist-chart-header-left">
+                            <span className="watchlist-chart-title">7-Day Price Trend</span>
+                            <div className="watchlist-chart-price-info">
+                              <span className="watchlist-chart-current-price">$45.23</span>
+                              <span className="watchlist-chart-change positive">+2.34%</span>
+                            </div>
+                          </div>
+                          <div className="watchlist-chart-header-right">
+                            <div className="watchlist-chart-stats">
+                              <div className="watchlist-chart-stat">
+                                <span className="watchlist-chart-stat-label">High</span>
+                                <span className="watchlist-chart-stat-value">$48.50</span>
+                              </div>
+                              <div className="watchlist-chart-stat">
+                                <span className="watchlist-chart-stat-label">Low</span>
+                                <span className="watchlist-chart-stat-value">$42.10</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="watchlist-chart-container">
+                          <div className="watchlist-chart-y-axis">
+                            <span className="watchlist-chart-y-label">$50</span>
+                            <span className="watchlist-chart-y-label">$45</span>
+                            <span className="watchlist-chart-y-label">$40</span>
+                            <span className="watchlist-chart-y-label">$35</span>
+                          </div>
+                          <div className="watchlist-chart-main">
+                            <svg className="watchlist-line-chart" viewBox="0 0 400 120" preserveAspectRatio="xMidYMid meet">
+                              <defs>
+                                <linearGradient id={`watchlist-gradient-${game.id}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                                  <stop offset="0%" style={{ stopColor: '#4a9eff', stopOpacity: 0.2 }} />
+                                  <stop offset="100%" style={{ stopColor: '#4a9eff', stopOpacity: 0 }} />
+                                </linearGradient>
+                                <filter id={`watchlist-glow-${game.id}`}>
+                                  <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
+                                  <feMerge>
+                                    <feMergeNode in="coloredBlur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                  </feMerge>
+                                </filter>
+                              </defs>
+                              {/* Grid lines */}
+                              <line x1="0" y1="20" x2="400" y2="20" stroke="rgba(255, 255, 255, 0.05)" strokeWidth="1" />
+                              <line x1="0" y1="40" x2="400" y2="40" stroke="rgba(255, 255, 255, 0.05)" strokeWidth="1" />
+                              <line x1="0" y1="60" x2="400" y2="60" stroke="rgba(255, 255, 255, 0.05)" strokeWidth="1" />
+                              <line x1="0" y1="80" x2="400" y2="80" stroke="rgba(255, 255, 255, 0.05)" strokeWidth="1" />
+                              <line x1="0" y1="100" x2="400" y2="100" stroke="rgba(255, 255, 255, 0.05)" strokeWidth="1" />
+                              {/* Vertical grid lines */}
+                              <line x1="100" y1="0" x2="100" y2="120" stroke="rgba(255, 255, 255, 0.03)" strokeWidth="1" />
+                              <line x1="200" y1="0" x2="200" y2="120" stroke="rgba(255, 255, 255, 0.03)" strokeWidth="1" />
+                              <line x1="300" y1="0" x2="300" y2="120" stroke="rgba(255, 255, 255, 0.03)" strokeWidth="1" />
+                              {/* Filled area under the line */}
+                              <path
+                                d="M 0 120 L 0 85 Q 50 70, 100 55 T 200 60 T 300 55 T 400 45 L 400 120 Z"
+                                fill={`url(#watchlist-gradient-${game.id})`}
+                              />
+                              {/* Main price line */}
+                              <path
+                                d="M 0 85 Q 50 70, 100 55 T 200 60 T 300 55 T 400 45"
+                                fill="none"
+                                stroke="#4a9eff"
+                                strokeWidth="2.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                filter={`url(#watchlist-glow-${game.id})`}
+                              />
+                              {/* Current price indicator */}
+                              <circle cx="400" cy="45" r="4" fill="#4a9eff" />
+                              <circle cx="400" cy="45" r="6" fill="#4a9eff" opacity="0.3" />
+                            </svg>
+                          </div>
+                          <div className="watchlist-chart-x-axis">
+                            <span className="watchlist-chart-x-label">Mon</span>
+                            <span className="watchlist-chart-x-label">Tue</span>
+                            <span className="watchlist-chart-x-label">Wed</span>
+                            <span className="watchlist-chart-x-label">Thu</span>
+                            <span className="watchlist-chart-x-label">Fri</span>
+                            <span className="watchlist-chart-x-label">Sat</span>
+                            <span className="watchlist-chart-x-label">Sun</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="watchlist-stats-grid">
+                        <div className="watchlist-stat-item">
+                          <span className="watchlist-stat-label">Volume</span>
+                          <div className="watchlist-stat-bar">
+                            <div className="watchlist-stat-bar-fill" style={{ width: '72%' }}></div>
+                          </div>
+                          <span className="watchlist-stat-value">$2.1M</span>
+                        </div>
+                        <div className="watchlist-stat-item">
+                          <span className="watchlist-stat-label">Listings</span>
+                          <div className="watchlist-stat-bar">
+                            <div className="watchlist-stat-bar-fill" style={{ width: '45%' }}></div>
+                          </div>
+                          <span className="watchlist-stat-value">1,234</span>
+                        </div>
+                        <div className="watchlist-stat-item">
+                          <span className="watchlist-stat-label">Price Range</span>
+                          <span className="watchlist-stat-value">$3.25 - $89.99</span>
+                        </div>
+                        <div className="watchlist-stat-item">
+                          <span className="watchlist-stat-label">Avg. Price</span>
+                          <span className="watchlist-stat-value">$45.23</span>
+                        </div>
+                        <div className="watchlist-stat-item">
+                          <span className="watchlist-stat-label">Active Listings</span>
+                          <span className="watchlist-stat-value">1,234</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : marketView === 'favorites' && watchedGames.size === 0 ? (
+          <div className="watchlist-empty">
+            <div className="watchlist-empty-icon">
+              <Eye size={48} />
+            </div>
+            <h3 className="watchlist-empty-title">No watched games</h3>
+            <p className="watchlist-empty-text">Add games to your watchlist to track market trends and analytics</p>
+          </div>
+        ) : (
+            <>
+              {/* Petitions View */}
+              {marketView === 'petitions' && (
+                <div className="petitions-view-container">
+                  {/* Petitions Hero Section */}
+                  <div className="petitions-hero">
+                    <div className="petitions-hero-content">
+                      <div className="petitions-hero-left">
+                        <div className="petitions-hero-badge">
+                          <FileText size={16} />
+                          <span>Community Petitions</span>
+                        </div>
+                        <h1 className="petitions-hero-title">Support Marketplace Access</h1>
+                        <p className="petitions-hero-subtitle">Games without marketplace support need your voice. Sign petitions to show developers that you want trading features enabled for these games.</p>
+                        <div className="petitions-hero-stats">
+                          <div className="hero-stat">
+                            <div className="hero-stat-value">{gamesWithoutMarkets.length}</div>
+                            <div className="hero-stat-label">Active Petitions</div>
+                          </div>
+                          <div className="hero-stat">
+                            <div className="hero-stat-value">
+                              {gamesWithoutMarkets.reduce((sum, game) => sum + (petitions[game.id]?.signatures || 0), 0).toLocaleString()}
+                            </div>
+                            <div className="hero-stat-label">Total Signatures</div>
+                          </div>
+                          <div className="hero-stat">
+                            <div className="hero-stat-value">
+                              {gamesWithoutMarkets.filter(game => petitions[game.id]?.myToken).length}
+                            </div>
+                            <div className="hero-stat-label">You've Signed</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="petitions-hero-action">
+                        <button 
+                          className="create-petition-btn"
+                          onClick={() => setShowCreatePetitionForm(!showCreatePetitionForm)}
+                        >
+                          <Plus size={18} />
+                          <span>{showCreatePetitionForm ? 'Cancel' : 'Create Petition'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Create Petition Form - Centered */}
+                  {showCreatePetitionForm && (
+                    <div className="create-petition-form-container">
+                      <div className="create-petition-form">
+                        <div className="create-petition-form-header">
+                          <h2>Create New Petition</h2>
+                          <p className="create-petition-description">Select a game to create a petition for marketplace support</p>
+                        </div>
+                        
+                        {/* Search */}
+                        <div className="petition-search">
+                          <Search size={18} />
+                          <input
+                            type="text"
+                            placeholder="Search for a game..."
+                            value={petitionSearchQuery}
+                            onChange={(e) => setPetitionSearchQuery(e.target.value)}
+                            className="petition-search-input"
+                          />
+                        </div>
+
+                        {/* Game List */}
+                        <div className="petition-games-list">
+                          {allGamesForPetition.length > 0 ? (
+                            allGamesForPetition.map(game => {
+                              const gameId = game.gameId || game.id;
+                              const isSelected = selectedPetitionGame?.id === gameId;
+                              const hasPetition = petitions[gameId];
+                              
+                              return (
+                                <div
+                                  key={gameId}
+                                  className={`petition-game-item ${isSelected ? 'selected' : ''} ${hasPetition ? 'has-petition' : ''}`}
+                                  onClick={() => !hasPetition && setSelectedPetitionGame({
+                                    id: gameId,
+                                    name: game.name || game.gameName || 'Untitled Game',
+                                    icon: (game.name || game.gameName || 'G')?.charAt(0)?.toUpperCase() || 'G',
+                                    image: game.banner || game.bannerImage || game.cardImage
+                                  })}
+                                >
+                                  <div className="petition-game-image">
+                                    {game.banner || game.bannerImage || game.cardImage ? (
+                                      <img 
+                                        src={game.banner || game.bannerImage || game.cardImage} 
+                                        alt={game.name || game.gameName}
+                                        onError={(e) => {
+                                          e.target.style.display = 'none';
+                                          e.target.nextSibling.style.display = 'flex';
+                                        }}
+                                      />
+                                    ) : null}
+                                    <div className="petition-game-image-placeholder" style={{ display: game.banner || game.bannerImage || game.cardImage ? 'none' : 'flex' }}>
+                                      <div className="petition-game-icon">{(game.name || game.gameName || 'G')?.charAt(0)?.toUpperCase() || 'G'}</div>
+                                    </div>
+                                  </div>
+                                  <div className="petition-game-info">
+                                    <h3>{game.name || game.gameName || 'Untitled Game'}</h3>
+                                    {hasPetition && (
+                                      <span className="petition-game-status">Petition exists</span>
+                                    )}
+                                  </div>
+                                  {isSelected && !hasPetition && (
+                                    <div className="petition-game-check">
+                                      <CheckCircle2 size={20} />
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div className="petition-games-empty">
+                              <p>No games found</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="create-petition-actions">
+                          <button
+                            className="create-petition-cancel-btn"
+                            onClick={() => {
+                              setShowCreatePetitionForm(false);
+                              setSelectedPetitionGame(null);
+                              setPetitionSearchQuery('');
+                            }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            className="create-petition-submit-btn"
+                            onClick={handleCreatePetition}
+                            disabled={!selectedPetitionGame || petitions[selectedPetitionGame.id]}
+                          >
+                            Create Petition
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Petitions Grid */}
+                  {gamesWithoutMarkets.length > 0 ? (
+                    <div className="petitions-grid">
+                      {gamesWithoutMarkets.map(game => {
+                        const petitionData = petitions[game.id] || {};
+                        const signatures = petitionData.signatures || 0;
+                        const hasSigned = petitionData.myToken || false;
+                        const goal = 100; // Signature goal
+                        const progress = Math.min((signatures / goal) * 100, 100);
+                        
+                        return (
+                          <div
+                            key={game.id}
+                            className={`petition-card ${hasSigned ? 'signed' : ''}`}
+                            onClick={() => !hasSigned && handlePetitionSign(game.id)}
+                          >
+                            {/* Game Image */}
+                            <div className="petition-card-image">
+                              {game.image || game.cardImage ? (
+                                <img 
+                                  src={game.image || game.cardImage} 
+                                  alt={game.name}
+                                  onError={(e) => {
+                                    e.target.style.display = 'none';
+                                    e.target.nextSibling.style.display = 'flex';
+                                  }}
+                                />
+                              ) : null}
+                              <div className="petition-card-image-placeholder" style={{ display: game.image || game.cardImage ? 'none' : 'flex' }}>
+                                <div className="petition-card-icon">{game.icon}</div>
+                              </div>
+                              {hasSigned && (
+                                <div className="petition-signed-badge">
+                                  <CheckCircle2 size={20} />
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Petition Content */}
+                            <div className="petition-card-content">
+                              <h3 className="petition-card-title">{game.name}</h3>
+                              <p className="petition-card-description">Request marketplace trading features for this game</p>
+                              
+                              {/* Progress Bar */}
+                              <div className="petition-progress">
+                                <div className="petition-progress-bar">
+                                  <div 
+                                    className="petition-progress-fill"
+                                    style={{ width: `${progress}%` }}
+                                  ></div>
+                                </div>
+                                <div className="petition-progress-text">
+                                  <span className="petition-signatures">{signatures.toLocaleString()}</span>
+                                  <span className="petition-goal">/ {goal.toLocaleString()} signatures</span>
+                                </div>
+                              </div>
+
+                              {/* Sign Button */}
+                              <button 
+                                className={`petition-sign-btn ${hasSigned ? 'signed' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!hasSigned) {
+                                    handlePetitionSign(game.id);
+                                  }
+                                }}
+                              >
+                                {hasSigned ? (
+                                  <>
+                                    <CheckCircle2 size={18} />
+                                    <span>Signed</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <UserPlus size={18} />
+                                    <span>Sign Petition</span>
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="petitions-empty">
+                      <FileText size={48} style={{ opacity: 0.3, marginBottom: '16px' }} />
+                      <h3>No active petitions</h3>
+                      <p>All games currently have marketplace support enabled</p>
+                    </div>
+                  )}
+
+                </div>
+              )}
+
+              {/* Browse/Top Markets/Trending View */}
+              {(marketView === 'browse' || marketView === 'featured' || marketView === 'trending') && (
+                <>
+                  {marketView === 'browse' && (
+                    <>
+                      {/* Marketplace Hero Section */}
+                      <div className="marketplace-hero">
+                        <div className="marketplace-hero-content">
+                          <div className="marketplace-hero-left">
+                            <div className="marketplace-hero-badge">
+                              <Sparkles size={16} />
+                              <span>Live Marketplace</span>
+                            </div>
+                            <h1 className="marketplace-hero-title">Discover & Trade</h1>
+                            <p className="marketplace-hero-subtitle">Browse thousands of items across all games. Buy, sell, and invest in the biggest gaming marketplace.</p>
+                            <div className="marketplace-hero-stats">
+                              <div className="hero-stat">
+                                <div className="hero-stat-value">{gamesWithMarkets.length}+</div>
+                                <div className="hero-stat-label">Active Markets</div>
+                              </div>
+                              <div className="hero-stat">
+                                <div className="hero-stat-value">${marketStats.totalTraded.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+                                <div className="hero-stat-label">Total Volume</div>
+                              </div>
+                              <div className="hero-stat">
+                                <div className="hero-stat-value">{marketStats.transactions}</div>
+                                <div className="hero-stat-label">Transactions</div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="marketplace-hero-right">
+                            <div className="marketplace-featured-deal">
+                              <div className="featured-deal-badge">
+                                <Flame size={14} />
+                                <span>Hot Deal</span>
+                              </div>
+                              <div className="featured-deal-content">
+                                <div className="featured-deal-title">Limited Time Offer</div>
+                                <div className="featured-deal-discount">Up to 50% OFF</div>
+                                <div className="featured-deal-desc">Premium items & exclusive bundles</div>
+                                <button className="featured-deal-btn">
+                                  Shop Now
+                                  <ArrowRight size={16} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Live Activity Ticker - Browse view */}
+                      {marketView === 'browse' && (
+                        <div className="marketplace-ticker">
+                          <div className="ticker-label">
+                            <Zap size={14} />
+                            <span>Live Activity</span>
+                          </div>
+                          <div className="ticker-content">
+                            <div className="ticker-item">
+                              <span className="ticker-user">Player123</span>
+                              <span className="ticker-action">bought</span>
+                              <span className="ticker-item-name">Legendary Sword</span>
+                              <span className="ticker-price">for $45.99</span>
+                            </div>
+                            <div className="ticker-item">
+                              <span className="ticker-user">TraderPro</span>
+                              <span className="ticker-action">listed</span>
+                              <span className="ticker-item-name">Rare Armor Set</span>
+                              <span className="ticker-price">at $89.50</span>
+                            </div>
+                            <div className="ticker-item">
+                              <span className="ticker-user">Collector2024</span>
+                              <span className="ticker-action">sold</span>
+                              <span className="ticker-item-name">Epic Shield</span>
+                              <span className="ticker-price">for $120.00</span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {marketView === 'featured' && (
+                    <div className="marketplace-hero">
+                      <div className="marketplace-hero-content">
+                        <div className="marketplace-hero-left">
+                          <div className="marketplace-hero-badge">
+                            <BarChart3 size={16} />
+                            <span>Top Markets</span>
+                          </div>
+                          <h1 className="marketplace-hero-title">Highest Volume Markets</h1>
+                          <p className="marketplace-hero-subtitle">Discover the most active marketplaces ranked by total trading volume.</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {marketView === 'trending' && (
+                    <div className="marketplace-hero">
+                      <div className="marketplace-hero-content">
+                        <div className="marketplace-hero-left">
+                          <div className="marketplace-hero-badge">
+                            <TrendingUp size={16} />
+                            <span>Trending Now</span>
+                          </div>
+                          <h1 className="marketplace-hero-title">24h Market Trends</h1>
+                          <p className="marketplace-hero-subtitle">Markets with the biggest price movements in the last 24 hours.</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Games Grid */}
+                  <div className="games-selection-grid">
+                    {(marketView === 'trending' ? trendingGames : 
+                      marketView === 'featured' ? topMarketsGames : 
+                      gamesWithMarkets).map(game => {
+                      const rankClass = game.marketRank <= 3 ? `rank-${game.marketRank}` : '';
+                      const isWatched = watchedGames.has(game.id);
+                      return (
+                        <div
+                          key={game.id}
+                          className={`game-select-card ${rankClass}`}
+                          onClick={() => navigate(`/game/${game.id}/market`)}
+            >
+              {/* Banner Section */}
+              <div className="game-select-banner">
+                <button 
+                  className={`game-select-watch-btn ${isWatched ? 'watched' : ''}`}
+                  onClick={(e) => handleWatchGame(game.id, e)}
+                  title={isWatched ? 'Remove from watchlist' : 'Add to watchlist'}
+                >
+                  {isWatched ? <Eye size={20} strokeWidth={3} /> : <EyeOff size={20} strokeWidth={3} />}
+                </button>
+                {game.image || game.cardImage ? (
+                  <img 
+                    src={game.image || game.cardImage} 
+                    alt={game.name}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'flex';
+                    }}
+                  />
+                ) : null}
+                <div className="game-select-banner-placeholder" style={{ display: game.image || game.cardImage ? 'none' : 'flex' }}>
+                  <div className="game-select-icon">{game.icon}</div>
+                </div>
+                <div style={{ position: 'absolute', bottom: '12px', left: '12px', right: '12px', zIndex: 2 }}>
+                  <div className="game-select-name">{game.name}</div>
+                  <div className="game-select-action">
+                                {game.installed ? 'Open Marketplace' : 'Install & Browse'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Market Info Bar */}
+                <div className="game-select-market-bar">
+                  <div className="game-select-market-stat">
+                    <div className="game-select-market-stat-value">
+                      #{game.marketRank || 1}
+                      {game.marketRank === 1 && <Crown size={16} style={{ marginLeft: '4px', color: '#FFD700' }} />}
+                    </div>
+                    <div className="game-select-market-stat-label">RANK</div>
+                  </div>
+                  <div className="game-select-market-stat">
+                    <div className="game-select-market-stat-value">{game.totalVolume || '$0'}</div>
+                    <div className="game-select-market-stat-label">volume</div>
+                  </div>
+                  <div className="game-select-market-stat">
+                    <div className="game-select-market-stat-value">{game.marketTrend || '+0%'}</div>
+                    <div className="game-select-market-stat-label">24H TREND</div>
+                  </div>
+                </div>
+            </div>
+          );
+                    })}
+          </div>
+                </>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Right Sidebar Navigation */}
+        <aside className="marketplace-sidebar">
+          <div className="sidebar-title">Market</div>
+          <nav className="sidebar-nav">
+            {/* Main Section - Browse */}
+            <div className="sidebar-nav-section sidebar-nav-main">
+              <button 
+                className={`sidebar-nav-item sidebar-nav-main-item ${marketView === 'browse' ? 'active' : ''}`}
+                onClick={() => setMarketView('browse')}
+              >
+                <ShoppingBag size={20} />
+                <span>Browse</span>
+              </button>
+            </div>
+            
+            <div className="sidebar-nav-section">
+              <h3 className="sidebar-section-title">Marketplace</h3>
+              <button 
+                className={`sidebar-nav-item ${marketView === 'featured' ? 'active' : ''}`}
+                onClick={() => setMarketView('featured')}
+              >
+                <BarChart3 size={18} />
+                <span>Top Markets</span>
+              </button>
+              <button 
+                className={`sidebar-nav-item ${marketView === 'trending' ? 'active' : ''}`}
+                onClick={() => setMarketView('trending')}
+              >
+                <TrendingUp size={18} />
+                <span>Trending</span>
+              </button>
+            </div>
+            
+            <div className="sidebar-nav-section">
+              <h3 className="sidebar-section-title">My Activity</h3>
+              <button 
+                className={`sidebar-nav-item ${marketView === 'favorites' ? 'active' : ''}`}
+                onClick={() => setMarketView('favorites')}
+              >
+                <Eye size={18} />
+                <span>Watchlist</span>
+                {watchedGames.size > 0 && (
+                  <span className="sidebar-badge">{watchedGames.size}</span>
+                )}
+              </button>
+              <button 
+                className={`sidebar-nav-item ${marketView === 'stats' ? 'active' : ''}`}
+                onClick={() => setMarketView('stats')}
+              >
+                <BarChart3 size={18} />
+                <span>Analytics</span>
+              </button>
+            </div>
+            
+            <div className="sidebar-nav-section">
+              <h3 className="sidebar-section-title">Community</h3>
+              <button 
+                className={`sidebar-nav-item ${marketView === 'petitions' ? 'active' : ''}`}
+                onClick={() => setMarketView('petitions')}
+              >
+                <Users size={18} />
+                <span>Petitions</span>
+                {gamesWithoutMarkets.length > 0 && (
+                  <span className="sidebar-badge">{gamesWithoutMarkets.length}</span>
+                )}
+              </button>
+            </div>
+          </nav>
+        </aside>
+
+      </div>
+    );
+  }
+
+
+  const getRarityColor = (rarity) => {
+    switch (rarity) {
+      case 'Legendary': return '#ff6b35';
+      case 'Epic': return '#9d4edd';
+      case 'Rare': return '#0077b6';
+      case 'Common': return '#6c757d';
+      default: return '#6c757d';
+    }
+  };
+
+  const filteredItems = marketItems.filter(item => 
+    rarityFilter === 'all' || item.rarity.toLowerCase() === rarityFilter.toLowerCase()
+  );
+
+  const sortedItems = [...filteredItems].sort((a, b) => {
+    switch (sortBy) {
+      case 'price-low': return a.price - b.price;
+      case 'price-high': return b.price - a.price;
+      default: return 0;
+    }
+  });
+
+  return (
+    <div className="market">
+      {/* Market Statistics Bar - Only show when NOT viewing a marketplace */}
+      {!selectedGame && (
         <div className="watch-stats-overview">
           <div className="watch-stat-group">
             <div className="watch-stat-item">
@@ -428,446 +1460,97 @@ const Market = () => {
             </div>
           </div>
         </div>
+      )}
 
-        {/* Market Navigation */}
-        <div className="market-navigation">
-          <div className="market-nav-tabs">
-            <button 
-              className={`market-nav-tab ${marketView === 'browse' ? 'active' : ''}`}
-              onClick={() => setMarketView('browse')}
-            >
-              Market
+      {/* Marketplace Section */}
+      <div className="marketplace-section">
+        {/* Game Banner */}
+        <div className="market-banner" style={{backgroundImage: `url(${selectedGame.image})`}}>
+          <div className="banner-overlay"></div>
+          <div className="banner-content">
+            <button className="back-btn" onClick={handleBackToGames} title="Back to Games">
+              <ArrowLeft size={18} />
             </button>
-            <button 
-              className={`market-nav-tab ${marketView === 'petitions' ? 'active' : ''}`}
-              onClick={() => setMarketView('petitions')}
-            >
-              Petitions
-            </button>
-            <button 
-              className={`market-nav-tab ${marketView === 'featured' ? 'active' : ''}`}
-              onClick={() => setMarketView('featured')}
-            >
-              Featured
-            </button>
-            <button 
-              className={`market-nav-tab ${marketView === 'trending' ? 'active' : ''}`}
-              onClick={() => setMarketView('trending')}
-            >
-              Trending
-            </button>
-            <button 
-              className={`market-nav-tab ${marketView === 'favorites' ? 'active' : ''}`}
-              onClick={() => setMarketView('favorites')}
-            >
-              Watch
-            </button>
+            <div className="banner-center">
+              <div className="banner-logo-container">
+                <img 
+                  src={selectedGame.logo} 
+                  alt={selectedGame.name}
+                  className="game-logo-banner"
+                  onError={(e) => { e.target.style.display = 'none' }}
+                />
+              </div>
+              <div className="banner-text">
+                <h1 className="banner-title">{selectedGame.name}</h1>
+                <span className="banner-subtitle">Marketplace</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Watch Analytics Dashboard */}
-        {marketView === 'favorites' && watchedGames.size > 0 ? (
-          <div className="watch-dashboard">
-            <h2 className="watch-dashboard-title">Watch Analytics</h2>
-            <div className="watch-analytics-grid">
-              {[...watchedGames].map(gameId => {
-                const game = gamesWithMarkets.find(g => g.id === gameId);
-                if (!game) return null;
-                const isExpanded = expandedCards.has(game.id);
-                return (
-                  <div 
-                    key={game.id} 
-                    className={`watch-analytics-card ${isExpanded ? 'expanded' : ''}`}
-                    onClick={() => {
-                      const newExpanded = new Set(expandedCards);
-                      if (newExpanded.has(game.id)) {
-                        newExpanded.delete(game.id);
-                      } else {
-                        newExpanded.add(game.id);
-                      }
-                      setExpandedCards(newExpanded);
-                    }}
-                  >
-                    <div className="watch-card-left">
-                      <img 
-                        src={game.image || game.cardImage || game.banner} 
-                        alt={game.name}
-                        className="watch-game-banner"
-                        onError={(e) => {
-                          e.target.style.display = 'none';
-                          e.target.nextSibling.style.display = 'flex';
-                        }}
-                      />
-                      <div className="watch-game-banner-placeholder" style={{ display: 'none' }}>
-                        <div className="watch-game-icon">{game.icon}</div>
-                      </div>
-                    </div>
-                    <div className="watch-card-right">
-                      <div className="watch-card-header">
-                        <div className="watch-card-header-left">
-                          <h3>{game.name}</h3>
-                          {investments[game.id] && (
-                            <span className="watch-investment-badge" title={`Invested: $${investments[game.id].amount}`}>
-                              💰 Invested
-                            </span>
-                          )}
-                        </div>
-                        <div className="watch-card-actions">
-                          <button 
-                            className="watch-remove-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleWatchGame(game.id, e);
-                            }}
-                            title="Remove from watchlist"
-                          >
-                            <Eye size={16} strokeWidth={2} />
-                          </button>
-                          <span className="watch-expand-arrow">{isExpanded ? '▼' : '▶'}</span>
-                        </div>
-                      </div>
-                      <div className="watch-charts-section">
-                        <div className="watch-chart-container">
-                          <div className="watch-chart-header">
-                            <span className="watch-chart-title">Price Trend (7D)</span>
-                            <span className="watch-chart-subtitle">Average $45.23</span>
-                          </div>
-                          <svg className="watch-line-chart" viewBox="0 0 400 180">
-                            <defs>
-                              <linearGradient id={`gradient-${game.id}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                                <stop offset="0%" style={{ stopColor: '#4a9eff', stopOpacity: 0.4 }} />
-                                <stop offset="100%" style={{ stopColor: '#4a9eff', stopOpacity: 0 }} />
-                              </linearGradient>
-                            </defs>
-                            <path
-                              d="M 0 160 Q 50 100, 100 60 T 200 70 T 300 65 T 400 50"
-                              fill={`url(#gradient-${game.id})`}
-                            />
-                            <polyline
-                              points="0,160 50,100 100,60 150,70 200,80 250,65 300,70 350,55 400,50"
-                              fill="none"
-                              stroke="#4a9eff"
-                              strokeWidth="2.5"
-                            />
-                          </svg>
-                        </div>
-                        <div className="watch-mini-charts">
-                          <div className="watch-mini-chart">
-                            <span className="watch-mini-label">Volume</span>
-                            <div className="watch-bar-chart">
-                              <div className="watch-bar" style={{ width: '72%' }}></div>
-                            </div>
-                            <span className="watch-mini-value">$2.1M</span>
-                          </div>
-                          <div className="watch-mini-chart">
-                            <span className="watch-mini-label">Listings</span>
-                            <div className="watch-bar-chart">
-                              <div className="watch-bar" style={{ width: '45%' }}></div>
-                            </div>
-                            <span className="watch-mini-value">1,234</span>
-                          </div>
-                        </div>
-                      </div>
-                      {isExpanded && (
-                        <div className="watch-stats-grid">
-                          <div className="watch-stat">
-                            <span className="watch-stat-label">Market Rank</span>
-                            <span className="watch-stat-value">#{game.marketRank || 1}</span>
-                          </div>
-                          <div className="watch-stat">
-                            <span className="watch-stat-label">Total Volume</span>
-                            <span className="watch-stat-value">{game.totalVolume || '$0'}</span>
-                          </div>
-                          <div className="watch-stat">
-                            <span className="watch-stat-label">24H Trend</span>
-                            <span className="watch-stat-value">{game.marketTrend || '+0%'}</span>
-                          </div>
-                          <div className="watch-stat">
-                            <span className="watch-stat-label">Active Listings</span>
-                            <span className="watch-stat-value">1,234</span>
-                          </div>
-                          <div className="watch-stat">
-                            <span className="watch-stat-label">Price Range</span>
-                            <span className="watch-stat-value">$3.25 - $89.99</span>
-                          </div>
-                          <div className="watch-stat">
-                            <span className="watch-stat-label">Avg. Price</span>
-                            <span className="watch-stat-value">$45.23</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+        {/* Market Content Container */}
+        <div className="marketplace-content-wrapper">
+        {/* Market Stats Bar */}
+        <div className="market-stats-bar">
+          <div className="stats-wrapper">
+            <div className="stat-box">
+              <div className="stat-value">$12,450</div>
+              <div className="stat-label">24H VOLUME</div>
+            </div>
+            <div className="stat-box">
+              <div className="stat-value">1,234</div>
+              <div className="stat-label">ACTIVE LISTINGS</div>
+            </div>
+            <div className="stat-box">
+              <div className="stat-value">$3.25 - $89.99</div>
+              <div className="stat-label">PRICE RANGE</div>
+            </div>
+            <div className="stat-box">
+              <div className="stat-value positive">+5.2%</div>
+              <div className="stat-label">MARKET TREND</div>
             </div>
           </div>
-        ) : marketView === 'favorites' && watchedGames.size === 0 ? (
-          <div className="watch-empty-state">
-            <Eye size={48} style={{ opacity: 0.3, marginBottom: '16px' }} />
-            <h3>No watched games</h3>
-            <p>Add games to your watchlist to see analytics and trends</p>
+        </div>
+
+        {/* Items Grid Controls */}
+        <div className="items-grid-controls">
+          <div className="items-grid-controls-left">
+            <div className="items-count">{sortedItems.length} {sortedItems.length === 1 ? 'item' : 'items'}</div>
+          </div>
+          <div className="items-grid-controls-right">
+            <div className="view-mode-controls">
+              <button 
+                className={`view-mode-btn ${viewMode === 'grid' ? 'active' : ''}`}
+                onClick={() => setViewMode('grid')}
+                title="Grid view"
+              >
+                <Grid size={16} />
+              </button>
+              <button 
+                className={`view-mode-btn ${viewMode === 'row' ? 'active' : ''}`}
+                onClick={() => setViewMode('row')}
+                title="List view"
+              >
+                <List size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        {/* Items Grid */}
+        <div className={`items-grid ${viewMode === 'grid' ? 'grid-view' : 'row-view'}`}>
+        {sortedItems.length === 0 ? (
+          <div className="marketplace-empty-state">
+            <div className="empty-state-icon">📦</div>
+            <h3 className="empty-state-title">No items listed</h3>
+            <p className="empty-state-description">Be the first to list an item for {selectedGame.name}</p>
+            <button className="empty-state-action-btn" onClick={handleSellItem}>
+              <Plus size={16} />
+              <span>List Item</span>
+            </button>
           </div>
         ) : (
-          <div className="games-selection-grid">
-            {(() => {
-              let gamesToShow = marketView === 'petitions' ? gamesWithoutMarkets : gamesWithMarkets;
-            
-              return gamesToShow.map(game => {
-            const rankClass = game.marketRank <= 3 ? `rank-${game.marketRank}` : '';
-            const isWatched = watchedGames.has(game.id);
-            return (
-            <div
-              key={game.id}
-              className={`game-select-card ${rankClass}`}
-              onClick={() => {
-                if (marketView === 'petitions') {
-                  // Handle petition signing
-                  handlePetitionSign(game.id);
-                } else {
-                  if (gameId) {
-                    navigate(`/game/${game.id}/market`);
-                  } else {
-                    navigate(`/game/${game.id}/market`);
-                  }
-                }
-              }}
-            >
-              {/* Banner Section */}
-              <div className="game-select-banner">
-                <button 
-                  className={`game-select-watch-btn ${isWatched ? 'watched' : ''}`}
-                  onClick={(e) => handleWatchGame(game.id, e)}
-                  title={isWatched ? 'Remove from watchlist' : 'Add to watchlist'}
-                >
-                  {isWatched ? <Eye size={20} strokeWidth={3} /> : <EyeOff size={20} strokeWidth={3} />}
-                </button>
-                {game.image || game.cardImage ? (
-                  <img 
-                    src={game.image || game.cardImage} 
-                    alt={game.name}
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                      e.target.nextSibling.style.display = 'flex';
-                    }}
-                  />
-                ) : null}
-                <div className="game-select-banner-placeholder" style={{ display: game.image || game.cardImage ? 'none' : 'flex' }}>
-                  <div className="game-select-icon">{game.icon}</div>
-                </div>
-                <div style={{ position: 'absolute', bottom: '12px', left: '12px', right: '12px', zIndex: 2 }}>
-                  <div className="game-select-name">{game.name}</div>
-                  <div className="game-select-action">
-                    {marketView === 'petitions' ? (game.myToken ? 'Signed ✓' : 'Sign Petition') : (game.installed ? 'Open Marketplace' : 'Install & Browse')}
-                  </div>
-                </div>
-              </div>
-
-              {/* Market Info Bar */}
-              {marketView === 'petitions' ? (
-                <div className="game-select-market-bar">
-                  <div className="game-select-market-stat">
-                    <div className="game-select-market-stat-value">{game.signatures?.toLocaleString() || '0'}</div>
-                    <div className="game-select-market-stat-label">SIGNATURES</div>
-                  </div>
-                  <div className="game-select-market-stat">
-                    <div className="game-select-market-stat-value">{game.myToken ? '1' : '0'}</div>
-                    <div className="game-select-market-stat-label">YOUR TOKEN</div>
-                  </div>
-                  <div className="game-select-market-stat">
-                    <div className="game-select-market-stat-value">{game.myToken ? '✓' : '○'}</div>
-                    <div className="game-select-market-stat-label">STATUS</div>
-                  </div>
-                </div>
-              ) : (
-                <div className="game-select-market-bar">
-                  <div className="game-select-market-stat">
-                    <div className="game-select-market-stat-value">
-                      #{game.marketRank || 1}
-                      {game.marketRank === 1 && <Crown size={16} style={{ marginLeft: '4px', color: '#FFD700' }} />}
-                    </div>
-                    <div className="game-select-market-stat-label">RANK</div>
-                  </div>
-                  <div className="game-select-market-stat">
-                    <div className="game-select-market-stat-value">{game.totalVolume || '$0'}</div>
-                    <div className="game-select-market-stat-label">volume</div>
-                  </div>
-                  <div className="game-select-market-stat">
-                    <div className="game-select-market-stat-value">{game.marketTrend || '+0%'}</div>
-                    <div className="game-select-market-stat-label">24H TREND</div>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-            })
-            })()}
-          </div>
-        )
-      }
-      </div>
-    );
-  }
-
-
-  const getRarityColor = (rarity) => {
-    switch (rarity) {
-      case 'Legendary': return '#ff6b35';
-      case 'Epic': return '#9d4edd';
-      case 'Rare': return '#0077b6';
-      case 'Common': return '#6c757d';
-      default: return '#6c757d';
-    }
-  };
-
-  const filteredItems = marketItems.filter(item => 
-    rarityFilter === 'all' || item.rarity.toLowerCase() === rarityFilter.toLowerCase()
-  );
-
-  const sortedItems = [...filteredItems].sort((a, b) => {
-    switch (sortBy) {
-      case 'price-low': return a.price - b.price;
-      case 'price-high': return b.price - a.price;
-      default: return 0;
-    }
-  });
-
-  return (
-    <div className="market">
-      {/* Market Statistics Bar - Always Visible at Top */}
-      <div className="watch-stats-overview">
-        <div className="watch-stat-group">
-          <div className="watch-stat-item">
-            <span className="watch-stat-item-label">Total Profit</span>
-            <span className={`watch-stat-item-value ${marketStats.totalProfit >= 0 ? 'positive' : ''}`}>
-              {marketStats.totalProfit >= 0 ? '+' : ''}${marketStats.totalProfit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-          </div>
-          <div className="watch-stat-item">
-            <span className="watch-stat-item-label">Total Traded</span>
-            <span className="watch-stat-item-value">${marketStats.totalTraded.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          </div>
-          <div className="watch-stat-item">
-            <span className="watch-stat-item-label">Transactions</span>
-            <span className="watch-stat-item-value">{marketStats.transactions}</span>
-          </div>
-          <div className="watch-stat-item">
-            <span className="watch-stat-item-label">Avg. Price</span>
-            <span className="watch-stat-item-value">${marketStats.avgPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          </div>
-        </div>
-        <div className="watch-stat-group">
-          <div className="watch-stat-item">
-            <span className="watch-stat-item-label">Active Investments</span>
-            <span className="watch-stat-item-value">{marketStats.activeInvestments}</span>
-          </div>
-          <div className="watch-stat-item">
-            <span className="watch-stat-item-label">Investment Returns</span>
-            <span className={`watch-stat-item-value ${marketStats.investmentReturns >= 0 ? 'positive' : ''}`}>
-              {marketStats.investmentReturns >= 0 ? '+' : ''}${marketStats.investmentReturns.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </span>
-          </div>
-          <div className="watch-stat-item">
-            <span className="watch-stat-item-label">Total Invested</span>
-            <span className="watch-stat-item-value">${marketStats.totalInvested.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          </div>
-          <div className="watch-stat-item">
-            <span className="watch-stat-item-label">Avg. Return</span>
-            <span className={`watch-stat-item-value ${marketStats.avgReturn >= 0 ? 'positive' : ''}`}>
-              {marketStats.avgReturn >= 0 ? '+' : ''}{marketStats.avgReturn.toFixed(1)}%
-            </span>
-          </div>
-        </div>
-        <div className="watch-stat-group">
-          <div className="watch-stat-item">
-            <span className="watch-stat-item-label">Success Rate</span>
-            <span className={`watch-stat-item-value ${marketStats.successRate >= 50 ? 'positive' : ''}`}>
-              {marketStats.successRate.toFixed(0)}%
-            </span>
-          </div>
-          <div className="watch-stat-item">
-            <span className="watch-stat-item-label">Net Worth</span>
-            <span className="watch-stat-item-value">${marketStats.netWorth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-          </div>
-          <div className="watch-stat-item">
-            <span className="watch-stat-item-label">ROI</span>
-            <span className={`watch-stat-item-value ${marketStats.roi >= 0 ? 'positive' : ''}`}>
-              {marketStats.roi >= 0 ? '+' : ''}{marketStats.roi.toFixed(1)}%
-            </span>
-          </div>
-          <div className="watch-stat-item">
-            <span className="watch-stat-item-label">Best Trade</span>
-            <span className={`watch-stat-item-value ${marketStats.bestTrade >= 0 ? 'positive' : ''}`}>
-              {marketStats.bestTrade >= 0 ? '+' : ''}{marketStats.bestTrade.toFixed(0)}%
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Game Banner */}
-      <div className="market-banner" style={{backgroundImage: `url(${selectedGame.image})`}}>
-        <div className="banner-overlay"></div>
-        <div className="banner-content">
-          <button className="back-btn" onClick={handleBackToGames} title="Back to Games">
-            <ArrowLeft size={20} />
-          </button>
-          <div className="banner-info">
-            <img 
-              src={selectedGame.logo} 
-              alt={selectedGame.name}
-              className="game-logo-banner"
-              onError={(e) => { e.target.style.display = 'none' }}
-            />
-            <div className="banner-text-content">
-              <h1 className="banner-title">{selectedGame.name} Marketplace</h1>
-              <p className="banner-subtitle">Browse and trade items for {selectedGame.name}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Market Stats Bar */}
-      <div className="market-stats-bar">
-        <div className="stats-wrapper">
-          <div className="stat-box">
-            <div className="stat-value">$12,450</div>
-            <div className="stat-label">24H VOLUME</div>
-          </div>
-          <div className="stat-box">
-            <div className="stat-value">1,234</div>
-            <div className="stat-label">ACTIVE LISTINGS</div>
-          </div>
-          <div className="stat-box">
-            <div className="stat-value">$3.25 - $89.99</div>
-            <div className="stat-label">PRICE RANGE</div>
-          </div>
-          <div className="stat-box">
-            <div className="stat-value">+5.2%</div>
-            <div className="stat-label">MARKET TREND</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Items Grid */}
-      <div className="items-grid-controls">
-        <div className="view-mode-controls">
-          <button 
-            className={`view-mode-btn ${viewMode === 'grid' ? 'active' : ''}`}
-            onClick={() => setViewMode('grid')}
-          >
-            <Grid size={16} />
-          </button>
-          <button 
-            className={`view-mode-btn ${viewMode === 'row' ? 'active' : ''}`}
-            onClick={() => setViewMode('row')}
-          >
-            <List size={16} />
-          </button>
-        </div>
-      </div>
-      
-      <div className={`items-grid ${viewMode === 'grid' ? 'grid-view' : 'row-view'}`}>
-        {sortedItems.map(item => (
+          sortedItems.map(item => (
           <div key={item.id} className="market-item-card">
             <div className="item-image-container">
               <img 
@@ -912,15 +1595,18 @@ const Market = () => {
               </div>
             </div>
           </div>
-        ))}
-      </div>
+          ))
+        )}
+        </div>
 
-      {/* Sell Item Button */}
-      <div className="sell-button-wrapper">
-        <button className="sell-item-btn" onClick={handleSellItem}>
-          <Plus size={20} />
-          Sell Item
-        </button>
+        {/* Sell Item Button */}
+        <div className="sell-button-wrapper">
+          <button className="sell-item-btn" onClick={handleSellItem}>
+            <Plus size={18} />
+            <span>Sell Item</span>
+          </button>
+        </div>
+      </div>
       </div>
 
       {/* Sell Modal */}

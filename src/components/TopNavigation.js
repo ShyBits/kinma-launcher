@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Settings, Users, MessageSquare, ShoppingCart, Bell, User, Plus, Minus, CreditCard, Coins, Store, Globe, Menu,
-  BarChart3, Package, FileText, Upload, TrendingUp, DollarSign, Download, Check, RefreshCw
+  BarChart3, Package, FileText, Upload, TrendingUp, DollarSign, Download, Check, RefreshCw, AlertCircle, Info, Gift, X, ShoppingBag, Award
 } from 'lucide-react';
 import KinmaLogo from './KinmaLogo';
 import AuthModal from './AuthModal';
 import { getUserData } from '../utils/UserDataManager';
+import { loadNotifications, saveNotifications, subscribeToNotifications, markNotificationAsRead as markRead, markAllNotificationsAsRead as markAllRead, deleteNotification as deleteNotif } from '../utils/NotificationManager';
 import './TopNavigation.css';
 
 const CustomTooltip = ({ text, children }) => {
@@ -52,7 +53,9 @@ const TopNavigation = ({
   onPlayGame, 
   onUpdateGame,
   onToggleSidebar,
-  location 
+  location,
+  sidebarWidth = 260,
+  isResizing = false
 }) => {
   const [showBalanceMenu, setShowBalanceMenu] = useState(false);
   const [showTransactionMenu, setShowTransactionMenu] = useState(false);
@@ -107,6 +110,134 @@ const TopNavigation = ({
   const quickSwitchButtonRef = useRef(null);
   const quickSwitchHoverTimeoutRef = useRef(null);
   const [avatarError, setAvatarError] = useState(false);
+  const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
+  const notificationDropdownRef = useRef(null);
+  const notificationButtonRef = useRef(null);
+  
+  // Get preview icon component
+  const getPreviewIcon = (iconType) => {
+    const previewIconMap = {
+      award: Award,
+      package: Package,
+      shoppingBag: ShoppingBag
+    };
+    return previewIconMap[iconType] || null;
+  };
+
+  // Icon mapping
+  const iconMap = {
+    gift: Gift,
+    users: Users,
+    alertCircle: AlertCircle,
+    messageSquare: MessageSquare,
+    info: Info,
+    bell: Bell,
+    shoppingBag: ShoppingBag,
+    package: Package,
+    award: Award
+  };
+
+  const getIconComponent = (iconType) => {
+    return iconMap[iconType] || Bell;
+  };
+
+  // Helper function to map notification data to components (must be defined before useState)
+  const mapNotificationData = (notifications) => {
+    return notifications.map(n => ({
+      ...n,
+      iconType: n.iconType || n.type || 'info',
+      preview: n.preview ? {
+        ...n.preview,
+        icon: n.preview.iconType ? (() => {
+          const previewIconMap = {
+            award: Award,
+            package: Package,
+            shoppingBag: ShoppingBag
+          };
+          return previewIconMap[n.preview.iconType] || null;
+        })() : null
+      } : null
+    }));
+  };
+
+  // Notification state - shared between dropdown and page
+  const [notifications, setNotifications] = useState(() => {
+    const loaded = loadNotifications();
+    if (loaded.length > 0) {
+      return mapNotificationData(loaded);
+    }
+    // Default notifications if none exist
+    const defaultNotifications = [
+      {
+        id: 1,
+        type: 'achievement',
+        title: 'Achievement Unlocked!',
+        message: 'You\'ve completed your first game session!',
+        time: '2 minutes ago',
+        timestamp: Date.now() - 120000,
+        read: false,
+        iconType: 'gift',
+        preview: {
+          type: 'badge',
+          iconType: 'award',
+          color: '#4ade80',
+          label: 'Badge'
+        },
+        source: 'Achievement Unlocked'
+      },
+      {
+        id: 2,
+        type: 'friend',
+        title: 'New Friend Request',
+        message: 'GamerPro123 wants to be your friend',
+        time: '15 minutes ago',
+        timestamp: Date.now() - 900000,
+        read: false,
+        iconType: 'users'
+      },
+      {
+        id: 3,
+        type: 'update',
+        title: 'Game Update Available',
+        message: 'Pathline v2.1.0 is ready to download',
+        time: '1 hour ago',
+        timestamp: Date.now() - 3600000,
+        read: true,
+        iconType: 'alertCircle'
+      },
+      {
+        id: 4,
+        type: 'community',
+        title: 'New Community Post',
+        message: 'Someone replied to your post in the Community',
+        time: '3 hours ago',
+        timestamp: Date.now() - 10800000,
+        read: true,
+        iconType: 'messageSquare'
+      },
+      {
+        id: 5,
+        type: 'system',
+        title: 'System Maintenance',
+        message: 'Scheduled maintenance will occur tonight at 2 AM',
+        time: '1 day ago',
+        timestamp: Date.now() - 86400000,
+        read: true,
+        iconType: 'info'
+      }
+    ];
+    saveNotifications(defaultNotifications);
+    return mapNotificationData(defaultNotifications);
+  });
+  
+  // Subscribe to notification changes from other components
+  useEffect(() => {
+    const unsubscribe = subscribeToNotifications((updatedNotifications) => {
+      setNotifications(mapNotificationData(updatedNotifications));
+    });
+
+    return unsubscribe;
+  }, []);
   
   // Check if we're in Game Studio
   const isGameStudio = location?.pathname === '/game-studio' || location?.pathname === '/game-studio-settings';
@@ -182,6 +313,240 @@ const TopNavigation = ({
       };
     }
   }, [showTransactionMenu]);
+
+  // Notification handlers - these will sync with Notifications page
+  const markNotificationAsRead = (id) => {
+    setNotifications(prev => {
+      const updated = markRead(id, prev);
+      return mapNotificationData(updated);
+    });
+  };
+
+  const markAllNotificationsAsRead = () => {
+    setNotifications(prev => {
+      const updated = markAllRead(prev);
+      return mapNotificationData(updated);
+    });
+  };
+
+  const deleteNotification = (id) => {
+    setNotifications(prev => {
+      const updated = deleteNotif(id, prev);
+      return mapNotificationData(updated);
+    });
+  };
+
+  const getNotificationColor = (type, priority) => {
+    // Priority-based colors (if priority is set, use it)
+    if (priority === 'error' || type === 'error') return '#ef4444'; // Red
+    if (priority === 'warning' || type === 'warning') return '#f59e0b'; // Yellow
+    if (priority === 'item' || type === 'item' || type === 'purchase' || type === 'inventory' || type === 'market') return '#3b82f6'; // Blue
+    if (priority === 'success' || type === 'achievement' || type === 'success' || type === 'confirmation') return '#4ade80'; // Green
+    
+    // Type-based colors
+    const colors = {
+      error: '#ef4444', // Red - errors
+      warning: '#f59e0b', // Yellow - warnings
+      item: '#3b82f6', // Blue - item related
+      purchase: '#3b82f6', // Blue - purchases
+      inventory: '#3b82f6', // Blue - inventory
+      market: '#3b82f6', // Blue - market
+      achievement: '#4ade80', // Green - confirmations/achievements
+      success: '#4ade80', // Green - success
+      confirmation: '#4ade80', // Green - confirmations
+      friend: '#3b82f6', // Blue - friend requests (item-related)
+      update: '#6b7280', // Grey - updates (not so important)
+      community: '#6b7280', // Grey - community (not so important)
+      system: '#6b7280' // Grey - system (not so important)
+    };
+    return colors[type] || '#6b7280'; // Default to grey
+  };
+
+  // Helper function to convert hex to rgba
+  const hexToRgba = (hex, alpha) => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+
+  // Get background color for unread notifications
+  const getNotificationBackgroundColor = (type, priority, hover = false) => {
+    const color = getNotificationColor(type, priority);
+    const opacity = hover ? 0.09 : 0.06;
+    return hexToRgba(color, opacity);
+  };
+
+  const unreadCount = notifications.filter(n => !n.read).length;
+  
+  // Get the highest priority color from unread notifications
+  const getHighestPriorityColor = () => {
+    const unreadNotifications = notifications.filter(n => !n.read);
+    if (unreadNotifications.length === 0) return null;
+    
+    // Priority order: error (red) > warning (yellow) > item (blue) > success (green) > other (grey)
+    for (const notification of unreadNotifications) {
+      const color = getNotificationColor(notification.type, notification.priority);
+      if (color === '#ef4444') return color; // Error (highest priority)
+    }
+    for (const notification of unreadNotifications) {
+      const color = getNotificationColor(notification.type, notification.priority);
+      if (color === '#f59e0b') return color; // Warning
+    }
+    for (const notification of unreadNotifications) {
+      const color = getNotificationColor(notification.type, notification.priority);
+      if (color === '#3b82f6') return color; // Item
+    }
+    for (const notification of unreadNotifications) {
+      const color = getNotificationColor(notification.type, notification.priority);
+      if (color === '#4ade80') return color; // Success
+    }
+    
+    return '#ef4444'; // Default to red if there are unread notifications
+  };
+  
+  const highestPriorityColor = unreadCount > 0 ? getHighestPriorityColor() : null;
+
+  // Handle notification dropdown click
+  const handleNotificationButtonClick = (e) => {
+    e.stopPropagation();
+    setShowNotificationDropdown(prev => !prev);
+  };
+
+  // Handle click outside notification dropdown
+  useEffect(() => {
+    if (!showNotificationDropdown) return;
+
+    const handleClickOutside = (event) => {
+      const target = event.target;
+      const isButton = notificationButtonRef.current && notificationButtonRef.current.contains(target);
+      const isDropdown = notificationDropdownRef.current && notificationDropdownRef.current.contains(target);
+      
+      if (!isButton && !isDropdown) {
+        setShowNotificationDropdown(false);
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setShowNotificationDropdown(false);
+      }
+    };
+
+    // Use setTimeout to avoid immediate closure when opening
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscape);
+    }, 0);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [showNotificationDropdown]);
+
+  // Create fake notification for testing
+  const createFakeNotification = () => {
+    const types = ['achievement', 'friend', 'update', 'community', 'system'];
+    const icons = ['gift', 'users', 'alertCircle', 'messageSquare', 'info'];
+    const randomType = types[Math.floor(Math.random() * types.length)];
+    const randomIcon = icons[Math.floor(Math.random() * icons.length)];
+    
+    const titles = {
+      achievement: ['Achievement Unlocked!', 'New Achievement Earned!', 'Milestone Reached!'],
+      friend: ['New Friend Request', 'Friend Online', 'Friend Activity'],
+      update: ['Game Update Available', 'New Version Released', 'Update Downloaded'],
+      community: ['New Community Post', 'Reply to Your Comment', 'Community Activity'],
+      system: ['System Notification', 'Maintenance Scheduled', 'System Update']
+    };
+
+    const messages = {
+      achievement: [
+        'You\'ve completed your first game session!',
+        'Congratulations! You reached level 10',
+        'Amazing work! You\'ve unlocked a new badge'
+      ],
+      friend: [
+        'GamerPro123 wants to be your friend',
+        'YourFriend2024 is now online',
+        'FriendActivity shared a new achievement'
+      ],
+      update: [
+        'Pathline v2.1.0 is ready to download',
+        'A new update is available for your games',
+        'Download complete! Restart to apply updates'
+      ],
+      community: [
+        'Someone replied to your post in the Community',
+        'New post in your favorite group',
+        'Your comment received 5 likes!'
+      ],
+      system: [
+        'Scheduled maintenance will occur tonight at 2 AM',
+        'Your account has been verified',
+        'New features are now available'
+      ]
+    };
+
+    const randomTitle = titles[randomType][Math.floor(Math.random() * titles[randomType].length)];
+    const randomMessage = messages[randomType][Math.floor(Math.random() * messages[randomType].length)];
+    
+    // Create preview based on type
+    let preview = null;
+    let sourceIcon = null;
+    let source = null;
+    
+    if (randomType === 'achievement') {
+      preview = {
+        type: 'badge',
+        icon: Award,
+        color: '#4ade80',
+        label: 'Badge'
+      };
+      source = 'Achievement Unlocked';
+    } else if (randomType === 'friend' && Math.random() > 0.5) {
+      // Random gift from friend
+      preview = {
+        type: 'item',
+        icon: Package,
+        color: '#3b82f6',
+        label: 'Item'
+      };
+      sourceIcon = 'gift';
+      source = 'Gift from Friend';
+    } else if (randomType === 'update' && Math.random() > 0.5) {
+      // Random purchase
+      preview = {
+        type: 'item',
+        icon: ShoppingBag,
+        color: '#f59e0b',
+        label: 'Purchase'
+      };
+      sourceIcon = 'store';
+      source = 'Store Purchase';
+    }
+    
+    const newNotification = {
+      id: Date.now(),
+      type: randomType,
+      title: randomTitle,
+      message: randomMessage,
+      time: 'just now',
+      timestamp: Date.now(),
+      read: false,
+      iconType: randomIcon,
+      preview: preview,
+      sourceIcon: sourceIcon,
+      source: source
+    };
+
+    setNotifications(prev => {
+      const updated = [newNotification, ...prev];
+      saveNotifications(updated);
+      return mapNotificationData(updated);
+    });
+  };
 
   // Unified outside-click/Escape handling for Game Studio dropdowns
   const publishingWrapperRef = useRef(null);
@@ -653,7 +1018,10 @@ const TopNavigation = ({
 
   return (
     <>
-    <div className="top-navigation">
+    <div 
+      className="top-navigation"
+      style={{ '--sidebar-width': `${sidebarWidth}px` }}
+    >
       {/* Left Section - Home Button */}
       <div className="nav-left">
         <button 
@@ -672,6 +1040,35 @@ const TopNavigation = ({
             <span>KINMA</span>
           )}
         </button>
+        
+        {/* Main Navigation Links - Aligned with Content Area */}
+        {!isGameStudio && (
+          <div className={`nav-main-links ${isResizing ? 'resizing' : ''}`}>
+            <button 
+              className={`nav-item nav-item-with-text ${currentPage === 'store' ? 'active' : ''}`}
+              onClick={() => handleNavigation('store')}
+            >
+              <Store size={18} />
+              <span>Store</span>
+            </button>
+            
+            <button 
+              className={`nav-item nav-item-with-text ${currentPage === 'market' ? 'active' : ''}`}
+              onClick={() => handleNavigation('market')}
+            >
+              <ShoppingCart size={18} />
+              <span>Market</span>
+            </button>
+            
+            <button 
+              className={`nav-item nav-item-with-text ${currentPage === 'community' ? 'active' : ''}`}
+              onClick={() => handleNavigation('community')}
+            >
+              <Globe size={18} />
+              <span>Community</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Right Section - Smart Navigation Order */}
@@ -990,33 +1387,152 @@ const TopNavigation = ({
             </button>
           </>
         ) : (
-          /* Regular navigation */
+          /* Regular navigation - Right side items */
           <>
-            <button 
-              className={`nav-item nav-item-with-text ${currentPage === 'store' ? 'active' : ''}`}
-              onClick={() => handleNavigation('store')}
-            >
-              <Store size={18} />
-              <span>Store</span>
-            </button>
-            
-            <button 
-              className={`nav-item nav-item-with-text ${currentPage === 'market' ? 'active' : ''}`}
-              onClick={() => handleNavigation('market')}
-            >
-              <ShoppingCart size={18} />
-              <span>Market</span>
-            </button>
-            
-            <button 
-              className={`nav-item nav-item-with-text ${currentPage === 'community' ? 'active' : ''}`}
-              onClick={() => handleNavigation('community')}
-            >
-              <Globe size={18} />
-              <span>Community</span>
-            </button>
-            
-            <div className="nav-separator" />
+            {/* Notification Button */}
+            {authUser && (
+              <div 
+                className="notification-wrapper" 
+                style={{ position: 'relative' }}
+              >
+                <button
+                  ref={notificationButtonRef}
+                  className={`nav-item notification-button ${unreadCount > 0 ? 'has-notifications' : ''} ${showNotificationDropdown ? 'dropdown-open' : ''}`}
+                  style={highestPriorityColor ? { '--notification-color': highestPriorityColor } : {}}
+                  onClick={handleNotificationButtonClick}
+                >
+                  <Bell size={20} />
+                  {unreadCount > 0 && (
+                    <span className="notification-badge">{unreadCount}</span>
+                  )}
+                </button>
+
+                {/* Notification Dropdown */}
+                {showNotificationDropdown && (
+                  <div
+                    ref={notificationDropdownRef}
+                    className="notification-dropdown"
+                  >
+                    <div className="notification-dropdown-header">
+                      <div className="notification-dropdown-title">
+                        <Bell size={18} />
+                        <span>Notifications</span>
+                        {unreadCount > 0 && (
+                          <span className="notification-dropdown-badge">{unreadCount}</span>
+                        )}
+                      </div>
+                      <div className="notification-dropdown-header-actions">
+                        <button
+                          className="notification-create-fake"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            createFakeNotification();
+                          }}
+                          title="Create fake notification"
+                        >
+                          <Plus size={14} />
+                        </button>
+                        {unreadCount > 0 && (
+                          <button
+                            className="notification-mark-all-read"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              markAllNotificationsAsRead();
+                            }}
+                            title="Mark all as read"
+                          >
+                            <Check size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="notification-dropdown-content">
+                      {notifications.length === 0 ? (
+                        <div className="notification-dropdown-empty">
+                          <Bell size={32} />
+                          <p>No notifications</p>
+                        </div>
+                      ) : (
+                        <div className="notification-dropdown-list">
+                          {notifications.map(notification => {
+                            const IconComponent = getIconComponent(notification.iconType);
+                            return (
+                              <div
+                                key={notification.id}
+                                className={`notification-dropdown-item ${notification.read ? 'read' : 'unread'}`}
+                                style={{ 
+                                  '--notification-color': getNotificationColor(notification.type, notification.priority),
+                                  ...(notification.read ? {} : { 
+                                    background: getNotificationBackgroundColor(notification.type, notification.priority)
+                                  })
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (!notification.read) {
+                                    e.currentTarget.style.background = getNotificationBackgroundColor(notification.type, notification.priority, true);
+                                  }
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (!notification.read) {
+                                    e.currentTarget.style.background = getNotificationBackgroundColor(notification.type, notification.priority, false);
+                                  }
+                                }}
+                                onClick={() => {
+                                  if (!notification.read) {
+                                    markNotificationAsRead(notification.id);
+                                  }
+                                  setShowNotificationDropdown(false);
+                                  // Navigate with notification ID as URL parameter
+                                  const newPath = '/notifications?id=' + notification.id;
+                                  window.history.pushState({ page: 'notifications' }, '', newPath);
+                                  navigate(newPath);
+                                }}
+                              >
+                                <div className="notification-dropdown-icon" style={{ '--notification-color': getNotificationColor(notification.type, notification.priority) }}>
+                                  <IconComponent
+                                    size={16}
+                                    color={getNotificationColor(notification.type, notification.priority)}
+                                  />
+                                </div>
+                                <div className="notification-dropdown-text">
+                                  <div className="notification-dropdown-title-text">
+                                    {notification.title}
+                                  </div>
+                                  <div className="notification-dropdown-message">
+                                    {notification.message}
+                                  </div>
+                                  <div className="notification-dropdown-time">
+                                    {notification.time}
+                                  </div>
+                                </div>
+                                {!notification.read && (
+                                  <div className="notification-dropdown-unread-indicator"></div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {notifications.length > 0 && (
+                      <div className="notification-dropdown-footer">
+                        <button
+                          className="notification-dropdown-view-all"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowNotificationDropdown(false);
+                            handleNavigation('notifications');
+                          }}
+                        >
+                          View all notifications
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             
             {/* Profile with Balance Inside */}
             {authUser ? (
@@ -1273,20 +1789,6 @@ const TopNavigation = ({
                       >
                         <DollarSign size={16} />
                         <span>Add Funds</span>
-                      </button>
-                      <button 
-                        className="profile-menu-action-btn"
-                        onClick={() => { handleNavigation('profile'); setShowProfileMenu(false); }}
-                      >
-                        <User size={16} />
-                        <span>Open Profile</span>
-                      </button>
-                      <button 
-                        className="profile-menu-action-btn"
-                        onClick={() => { handleNavigation('notifications'); setShowProfileMenu(false); }}
-                      >
-                        <Bell size={16} />
-                        <span>Notifications</span>
                       </button>
                       <button 
                         className="profile-menu-action-btn"

@@ -1082,15 +1082,17 @@
 
 .code-section-tabs {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 4px;
-  padding: 12px 16px;
+  padding: 0 16px;
   background: rgb(15, 17, 21);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   flex-shrink: 0;
   overflow-x: hidden;
   overflow-y: hidden;
   flex-wrap: wrap;
+  min-height: 48px;
+  box-sizing: border-box;
 }
 
 .code-search-filter-bar {
@@ -1102,14 +1104,18 @@
   background: rgba(15, 17, 21, 0.95);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   flex-shrink: 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  height: 48px;
+  min-height: 48px;
+  max-height: 48px;
+  box-sizing: border-box;
 }
 
 .code-search-container {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: 6px;
+  padding: 4px 10px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
@@ -1117,11 +1123,15 @@
   max-width: 400px;
   margin-left: auto;
   margin-right: 0;
+  height: 28px;
+  box-sizing: border-box;
 }
 
 .code-search-container svg {
   color: rgba(255, 255, 255, 0.5);
   flex-shrink: 0;
+  width: 14px;
+  height: 14px;
 }
 
 .code-search-input {
@@ -1130,9 +1140,11 @@
   border: none;
   outline: none;
   color: #e5e5e5;
-  font-size: 13px;
+  font-size: 12px;
   font-family: var(--font-family);
   min-width: 0;
+  height: 100%;
+  line-height: 1;
 }
 
 .code-search-input::placeholder {
@@ -1150,39 +1162,66 @@
   padding: 2px;
   flex-shrink: 0;
   transition: color 0.2s ease;
+  width: 16px;
+  height: 16px;
 }
 
 .code-search-clear:hover {
   color: rgba(255, 255, 255, 0.8);
 }
 
+.code-search-clear svg {
+  width: 12px;
+  height: 12px;
+}
+
 .css-filter-container {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
+  gap: 4px;
+  padding: 4px 6px;
   background: rgba(255, 255, 255, 0.03);
   border-radius: 6px;
   flex-shrink: 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  height: 28px;
+  min-width: 280px;
+  box-sizing: border-box;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+
+.css-filter-container.hidden {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  position: relative;
+  overflow: hidden;
 }
 
 .css-filter-container svg {
   color: rgba(255, 255, 255, 0.5);
   flex-shrink: 0;
+  width: 14px;
+  height: 14px;
 }
 
 .css-filter-btn {
-  padding: 4px 10px;
+  padding: 3px 8px;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 4px;
   color: rgba(255, 255, 255, 0.7);
-  font-size: 12px;
+  font-size: 11px;
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
   font-family: var(--font-family);
+  height: 20px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .css-filter-btn:hover {
@@ -1238,56 +1277,150 @@
 .code-layout-controls {
   display: flex !important;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   margin-left: auto;
-  padding-left: 4px;
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  padding-left: 0;
+  border-left: none;
   flex-shrink: 0;
-  min-width: 120px; /* Ensure buttons always have space */
+  min-width: 120px;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .layout-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 48px;
+  height: 48px;
   padding: 0;
   background: transparent;
-  border: 1.5px solid rgba(255, 255, 255, 0.15);
-  border-radius: 6px;
+  border: none;
+  border-radius: 0;
   color: #b3b3b3;
   cursor: pointer;
   transition: all 0.2s ease;
   flex-shrink: 0;
-  min-width: 32px;
+  min-width: 48px;
+  position: relative;
+  overflow: hidden;
+}
+
+.layout-btn::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: transparent;
+  transition: left 0.2s ease, right 0.2s ease, background 0.2s ease;
+  border-radius: 0 0 8px 8px;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.layout-btn::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  background: transparent;
+  pointer-events: none;
+  border-radius: 0;
+  opacity: 0;
+  transition: opacity 0.2s ease, background 0.2s ease;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .layout-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(74, 158, 255, 0.4);
+  background: transparent;
   color: #e5e5e5;
-  transform: translateY(-1px);
+}
+
+.layout-btn:hover::after {
+  opacity: 1;
+  background: linear-gradient(to top, 
+    rgba(74, 158, 255, 0.06) 0%, 
+    rgba(74, 158, 255, 0.02) 30%, 
+    rgba(74, 158, 255, 0.008) 60%, 
+    transparent 100%
+  );
+}
+
+.layout-btn:not(:hover):not(.active)::after {
+  opacity: 0 !important;
+  background: transparent !important;
+}
+
+.layout-btn:hover::before {
+  left: 0;
+  right: 0;
+  background: rgba(74, 158, 255, 0.4);
+}
+
+.layout-btn:not(:hover):not(.active)::before {
+  left: 8px;
+  right: 8px;
+  background: transparent;
 }
 
 .layout-btn.active {
-  background: rgba(74, 158, 255, 0.2);
-  border-color: rgba(74, 158, 255, 0.6);
+  background: transparent;
   color: #4a9eff;
-  box-shadow: 0 2px 8px rgba(74, 158, 255, 0.2);
+}
+
+.layout-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  background: linear-gradient(to top, 
+    rgba(74, 158, 255, 0.25) 0%, 
+    rgba(74, 158, 255, 0.1) 30%, 
+    rgba(74, 158, 255, 0.04) 60%, 
+    transparent 100%
+  );
+  pointer-events: none;
+  border-radius: 0;
+  opacity: 1;
+}
+
+.layout-btn.active::before {
+  left: 0;
+  right: 0;
+  border-radius: 0;
+  background: var(--accent-primary);
 }
 
 .layout-btn svg {
   width: 18px;
   height: 18px;
   stroke-width: 2;
+  transition: all 0.2s ease;
+  color: rgba(255, 255, 255, 0.7);
+  position: relative;
+  z-index: 1;
+}
+
+.layout-btn:hover svg {
+  color: rgba(255, 255, 255, 1);
+}
+
+.layout-btn.active svg {
+  color: rgba(255, 255, 255, 1);
 }
 
 .code-tab {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
+  padding: 0 16px;
   background: transparent;
   border: none;
   border-radius: 0;
@@ -1296,17 +1429,118 @@
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: nowrap;
+  height: 100%;
+  min-height: 48px;
+  box-sizing: border-box;
+  line-height: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.code-tab::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: transparent;
+  transition: left 0.2s ease, right 0.2s ease, background 0.2s ease;
+  border-radius: 0 0 8px 8px;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.code-tab::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  background: transparent;
+  pointer-events: none;
+  border-radius: 0;
+  opacity: 0;
+  transition: opacity 0.2s ease, background 0.2s ease;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .code-tab:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: transparent;
   color: #e5e5e5;
 }
 
+.code-tab:hover::after {
+  opacity: 1;
+  background: linear-gradient(to top, 
+    rgba(74, 158, 255, 0.06) 0%, 
+    rgba(74, 158, 255, 0.02) 30%, 
+    rgba(74, 158, 255, 0.008) 60%, 
+    transparent 100%
+  );
+}
+
+.code-tab:not(:hover):not(.active)::after {
+  opacity: 0 !important;
+  background: transparent !important;
+}
+
+.code-tab:hover::before {
+  left: 0;
+  right: 0;
+  background: rgba(74, 158, 255, 0.4);
+}
+
+.code-tab:not(:hover):not(.active)::before {
+  left: 8px;
+  right: 8px;
+  background: transparent;
+}
+
 .code-tab.active {
-  background: rgba(74, 158, 255, 0.15);
-  border: 1px solid rgba(74, 158, 255, 0.3);
+  background: transparent;
   color: #4a9eff;
+}
+
+.code-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  background: linear-gradient(to top, 
+    rgba(74, 158, 255, 0.25) 0%, 
+    rgba(74, 158, 255, 0.1) 30%, 
+    rgba(74, 158, 255, 0.04) 60%, 
+    transparent 100%
+  );
+  pointer-events: none;
+  border-radius: 0;
+  opacity: 1;
+}
+
+.code-tab.active::before {
+  left: 0;
+  right: 0;
+  border-radius: 0;
+  background: var(--accent-primary);
+}
+
+.code-tab svg {
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.code-tab:hover svg {
+  color: rgba(255, 255, 255, 1);
+}
+
+.code-tab.active svg {
+  color: rgba(255, 255, 255, 1);
 }
 
 .code-tab-separator {
@@ -1314,6 +1548,7 @@
   height: 24px;
   background: rgba(255, 255, 255, 0.1);
   margin: 0 8px;
+  flex-shrink: 0;
 }
 
 .code-section-content {
@@ -1322,6 +1557,8 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  margin: 0;
+  padding: 0;
 }
 
 .debug-console-panel,

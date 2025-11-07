@@ -12,6 +12,7 @@ import Market from './pages/Market';
 import Community from './pages/Community';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
+import Notifications from './pages/Notifications';
 import GameStudioSettings from './pages/GameStudioSettings';
 import Game from './pages/Game';
 import DeveloperOnboarding from './pages/DeveloperOnboarding';
@@ -140,7 +141,7 @@ const AppContent = () => {
     const handleResize = (e) => {
       e.preventDefault();
       const newWidth = e.clientX;
-      const minWidth = 200;
+      const minWidth = 240;
       const maxWidth = 600;
       
       if (newWidth >= minWidth && newWidth <= maxWidth) {
@@ -240,6 +241,8 @@ const AppContent = () => {
           onUpdateGame={handleUpdateGame}
           onToggleSidebar={toggleSidebar}
           location={location}
+          sidebarWidth={sidebarCollapsed ? 0 : sidebarWidth}
+          isResizing={isResizing}
         />
       )}
       <div className="app-layout">
@@ -279,6 +282,7 @@ const AppContent = () => {
               <Route path="/game/:gameId/community" element={<Community />} />
               <Route path="/profile" element={<Profile navigate={navigate} />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/notifications" element={<Notifications />} />
               <Route path="/developer-onboarding" element={<DeveloperOnboarding navigate={navigate} />} />
               <Route path="/game-studio-settings" element={<GameStudioSettings />} />
               <Route path="/game/:gameId" element={<Game />} />

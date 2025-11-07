@@ -1,17 +1,46 @@
 .profile {
-  padding: 32px;
+  padding: 0;
   color: var(--text-primary);
   min-height: calc(100vh - var(--nav-height));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Sidebar Title */
+.sidebar-title {
+  padding: 24px 24px 20px 24px;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+  text-transform: uppercase;
+  opacity: 0.9;
 }
 
 .profile-container {
-  max-width: 1400px;
-  margin: 0 auto;
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  height: calc(100vh - var(--nav-height));
 }
 
 /* View Mode */
 .profile-view-mode {
   width: 100%;
+  display: flex;
+  gap: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.profile-main-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 32px;
 }
 
 .profile-placeholder {
@@ -68,6 +97,7 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
 }
+
 
 /* Edit Mode */
 .profile-edit-mode {
@@ -243,20 +273,24 @@
 /* Code Section Tabs */
 .code-section-tabs {
   display: flex;
-  align-items: center;
-  gap: 0;
+  align-items: stretch;
+  gap: 4px;
   background: rgb(15, 17, 21);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 0 20px;
-  overflow-x: auto;
+  padding: 0 16px;
+  overflow-x: hidden;
+  overflow-y: hidden;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  min-height: 48px;
+  box-sizing: border-box;
 }
 
 .code-tab {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 12px 16px;
+  padding: 0 16px;
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
@@ -266,21 +300,119 @@
   transition: all 0.2s ease;
   white-space: nowrap;
   position: relative;
+  height: 100%;
+  min-height: 48px;
+  box-sizing: border-box;
+  line-height: 1;
+  overflow: hidden;
+}
+
+.code-tab::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: transparent;
+  transition: left 0.2s ease, right 0.2s ease, background 0.2s ease;
+  border-radius: 0 0 8px 8px;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.code-tab::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  background: transparent;
+  pointer-events: none;
+  border-radius: 0;
+  opacity: 0;
+  transition: opacity 0.2s ease, background 0.2s ease;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .code-tab:hover {
+  background: transparent;
   color: #e5e5e5;
-  background: rgba(255, 255, 255, 0.05);
+  border-bottom-color: transparent;
+}
+
+.code-tab:hover::after {
+  opacity: 1;
+  background: linear-gradient(to top, 
+    rgba(74, 158, 255, 0.06) 0%, 
+    rgba(74, 158, 255, 0.02) 30%, 
+    rgba(74, 158, 255, 0.008) 60%, 
+    transparent 100%
+  );
+}
+
+.code-tab:not(:hover):not(.active)::after {
+  opacity: 0 !important;
+  background: transparent !important;
+}
+
+.code-tab:hover::before {
+  left: 0;
+  right: 0;
+  background: rgba(74, 158, 255, 0.4);
+}
+
+.code-tab:not(:hover):not(.active)::before {
+  left: 8px;
+  right: 8px;
+  background: transparent;
 }
 
 .code-tab.active {
+  background: transparent;
   color: #4a9eff;
-  border-bottom-color: #4a9eff;
-  background: rgba(74, 158, 255, 0.05);
+  border-bottom-color: transparent;
+}
+
+.code-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  background: linear-gradient(to top, 
+    rgba(74, 158, 255, 0.25) 0%, 
+    rgba(74, 158, 255, 0.1) 30%, 
+    rgba(74, 158, 255, 0.04) 60%, 
+    transparent 100%
+  );
+  pointer-events: none;
+  border-radius: 0;
+  opacity: 1;
+}
+
+.code-tab.active::before {
+  left: 0;
+  right: 0;
+  border-radius: 0;
+  background: var(--accent-primary);
 }
 
 .code-tab svg {
+  transition: all 0.2s ease;
   flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.code-tab:hover svg {
+  color: rgba(255, 255, 255, 1);
+}
+
+.code-tab.active svg {
+  color: rgba(255, 255, 255, 1);
 }
 
 .code-tab-separator {
@@ -297,15 +429,17 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  margin: 0;
+  padding: 0;
 }
 
 .code-section-content .code-editor-wrapper {
   flex: 1;
   height: 100%;
   overflow: hidden;
-  padding: 16px;
+  padding: 0;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   background: transparent;
 }
 

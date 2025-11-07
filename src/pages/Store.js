@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Star, Download, Play, Users, TrendingUp, TrendingDown, Share2, Bookmark, MessageSquare, Bell, Search, X, Filter, ChevronDown, DollarSign, Settings, Save, Volume2, VolumeX, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Star, Download, Play, Users, TrendingUp, TrendingDown, Share2, Bookmark, MessageSquare, Bell, Search, X, ChevronDown, DollarSign, Settings, Save, Volume2, VolumeX, ChevronLeft, ChevronRight, CheckCircle2, Flame, Gift } from 'lucide-react';
 import { getUserData, getUserScopedKey, getAllUsersData, saveUserData, getCurrentUserId } from '../utils/UserDataManager';
 import CustomVideoPlayer from '../components/CustomVideoPlayer';
 import './Store.css';
@@ -13,9 +13,22 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
   const [isBannerHovered, setIsBannerHovered] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
-  const [showFilterMenu, setShowFilterMenu] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState('all');
-  const filterMenuRef = useRef(null);
+  const [activeFilter, setActiveFilter] = useState(() => {
+    // Load saved filter from localStorage, default to 'grid'
+    try {
+      const saved = localStorage.getItem('storeActiveFilter');
+      return saved && ['grid', 'bookmarked', 'trending', 'free'].includes(saved) ? saved : 'grid';
+    } catch (_) {
+      return 'grid';
+    }
+  });
+  
+  // Save filter to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('storeActiveFilter', activeFilter);
+    } catch (_) {}
+  }, [activeFilter]);
   
   // Media slideshow state
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
@@ -23,21 +36,28 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
   const [isMediaMuted, setIsMediaMuted] = useState(true);
   const mediaVideoRefs = useRef({});
 
-  // Close filter menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (filterMenuRef.current && !filterMenuRef.current.contains(event.target)) {
-        setShowFilterMenu(false);
-      }
-    };
-
-    if (showFilterMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
+  // Filter games based on active filter
+  const getFilteredGames = (games) => {
+    if (!games || games.length === 0) return [];
+    
+    switch (activeFilter) {
+      case 'bookmarked':
+        return games.filter(g => bookmarkedGames.has(g.id));
+      case 'trending':
+        // Show trending games (positive trending percentage)
+        return games.filter(g => {
+          const stats = getGameStats(g);
+          return stats.trending.startsWith('+');
+        });
+      case 'free':
+        // Show free games
+        return games.filter(g => getPriceValue(g) === 0);
+      case 'grid':
+      default:
+        // Grid view - show all (view type is handled by CSS)
+        return games;
     }
-  }, [showFilterMenu]);
+  };
 
   const toggleFavorite = (gameId) => {
     setFavoriteGames(prev => {
@@ -336,13 +356,15 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
     }
   }, [currentMediaIndex, safeFeaturedGame.id, currentMedia.length, isMediaMuted]);
 
-  const nextBanner = () => {
+  const nextBanner = (e) => {
+    e.stopPropagation(); // Prevent banner click navigation
     if (isPreview) return; // Disabled in preview mode
     if (!featuredGames.length) return;
     setCurrentBannerIndex((prev) => (prev + 1) % featuredGames.length);
   };
 
-  const prevBanner = () => {
+  const prevBanner = (e) => {
+    e.stopPropagation(); // Prevent banner click navigation
     if (isPreview) return; // Disabled in preview mode
     if (!featuredGames.length) return;
     setCurrentBannerIndex((prev) => (prev - 1 + featuredGames.length) % featuredGames.length);
@@ -662,7 +684,8 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
     };
   };
 
-  const goToBanner = (index) => {
+  const goToBanner = (index, e) => {
+    if (e) e.stopPropagation(); // Prevent banner click navigation
     if (isPreview) return; // Disabled in preview mode
     setCurrentBannerIndex(index);
   };
@@ -776,12 +799,12 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
             </div>
             <div className="featured-actions">
               {isGameOwnedByMe(safeFeaturedGame) ? (
-                <button className="play-btn install">
+                <button className="play-btn install" onClick={(e) => e.stopPropagation()}>
                   <Play size={20} />
                   Play Now
                 </button>
               ) : (
-                <button className={`play-btn ${safeFeaturedGame.price > 0 ? 'buy' : 'install'}`}>
+                <button className={`play-btn ${safeFeaturedGame.price > 0 ? 'buy' : 'install'}`} onClick={(e) => e.stopPropagation()}>
                   <Play size={20} />
                   {safeFeaturedGame.price === 0 ? 'Play Free' : `Buy for $${safeFeaturedGame.price}`}
                 </button>
@@ -887,7 +910,10 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                       <button
                         key={index}
                         className={`media-indicator ${index === currentMediaIndex ? 'active' : ''}`}
-                        onClick={() => setCurrentMediaIndex(index)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCurrentMediaIndex(index);
+                        }}
                         aria-label={`Go to media ${index + 1}`}
                       />
                     ))}
@@ -920,7 +946,7 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
               <button
                 key={index}
                 className={`indicator ${index === currentBannerIndex ? 'active' : ''} ${isPreview ? 'disabled' : ''}`}
-                onClick={() => goToBanner(index)}
+                onClick={(e) => goToBanner(index, e)}
                 disabled={isPreview}
               />
             ))}
@@ -934,9 +960,13 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
             <div className="taskbar-left">
             </div>
 
-            {/* Middle Section - Buttons */}
+            {/* Middle Section - Filter Buttons */}
             <div className="taskbar-center">
-              <button className="taskbar-btn taskbar-btn-grid" title="Toggle Grid View">
+              <button 
+                className={`taskbar-btn taskbar-btn-grid ${activeFilter === 'grid' ? 'active' : ''}`} 
+                title="Grid View"
+                onClick={() => setActiveFilter('grid')}
+              >
                 <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
                   {/* 3x3 grid with gaps */}
                   <rect x="1" y="1" width="4" height="4" fill="currentColor"/>
@@ -950,82 +980,31 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                   <rect x="13" y="13" width="4" height="4" fill="currentColor"/>
                 </svg>
               </button>
-              <button className="taskbar-btn taskbar-btn-wishlist" title="Add to Wishlist">
+              <button 
+                className={`taskbar-btn taskbar-btn-bookmarked ${activeFilter === 'bookmarked' ? 'active' : ''}`} 
+                title="Bookmarked"
+                onClick={() => setActiveFilter('bookmarked')}
+              >
                 <Bookmark size={18} />
               </button>
-              <button className="taskbar-btn taskbar-btn-share" title="Share">
-                <Share2 size={18} />
+              <button 
+                className={`taskbar-btn taskbar-btn-trending ${activeFilter === 'trending' ? 'active' : ''}`} 
+                title="Trending"
+                onClick={() => setActiveFilter('trending')}
+              >
+                <Flame size={18} />
               </button>
-              <button className="taskbar-btn taskbar-btn-follow" title="Follow">
-                <Bell size={18} />
-              </button>
-              <button className="taskbar-btn taskbar-btn-comment" title="Comment">
-                <MessageSquare size={18} />
+              <button 
+                className={`taskbar-btn taskbar-btn-free ${activeFilter === 'free' ? 'active' : ''}`} 
+                title="Free Games"
+                onClick={() => setActiveFilter('free')}
+              >
+                <Gift size={18} />
               </button>
             </div>
 
-            {/* Right Section - Filter & Search */}
+            {/* Right Section - Search */}
             <div className="taskbar-right">
-              {/* Filter Button (Icon Only) */}
-              <div className="taskbar-filter-wrapper" ref={filterMenuRef}>
-                <button 
-                  className="taskbar-filter-btn-icon"
-                  onClick={() => setShowFilterMenu(!showFilterMenu)}
-                  title="Filter"
-                >
-                  <Filter size={20} />
-                </button>
-                {showFilterMenu && (
-                  <div className="filter-menu">
-                    <div 
-                      className={`filter-option ${selectedFilter === 'all' ? 'active' : ''}`}
-                      onClick={() => {
-                        setSelectedFilter('all');
-                        setShowFilterMenu(false);
-                      }}
-                    >
-                      All Games
-                    </div>
-                    <div 
-                      className={`filter-option ${selectedFilter === 'featured' ? 'active' : ''}`}
-                      onClick={() => {
-                        setSelectedFilter('featured');
-                        setShowFilterMenu(false);
-                      }}
-                    >
-                      Featured
-                    </div>
-                    <div 
-                      className={`filter-option ${selectedFilter === 'new' ? 'active' : ''}`}
-                      onClick={() => {
-                        setSelectedFilter('new');
-                        setShowFilterMenu(false);
-                      }}
-                    >
-                      New Releases
-                    </div>
-                    <div 
-                      className={`filter-option ${selectedFilter === 'popular' ? 'active' : ''}`}
-                      onClick={() => {
-                        setSelectedFilter('popular');
-                        setShowFilterMenu(false);
-                      }}
-                    >
-                      Popular
-                    </div>
-                    <div 
-                      className={`filter-option ${selectedFilter === 'free' ? 'active' : ''}`}
-                      onClick={() => {
-                        setSelectedFilter('free');
-                        setShowFilterMenu(false);
-                      }}
-                    >
-                      Free to Play
-                    </div>
-                  </div>
-                )}
-              </div>
-
               {/* Search Bar (Just underline with icon) */}
               <div className="taskbar-search-wrapper">
                 <Search size={18} className="taskbar-search-icon" />
@@ -1053,8 +1032,17 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
           <div className="featured-below">
             {/* New games - horizontal scroll */}
             <div className="new-games-row">
-              {customGames.map((g, i) => normalizeGame(g, i)).slice(0, 10).map((g) => (
-                <div key={`new-${g.id}`} className="featured-below-card">
+              {getFilteredGames(customGames.map((g, i) => normalizeGame(g, i))).slice(0, 10).map((g) => (
+                <div 
+                  key={`new-${g.id}`} 
+                  className="featured-below-card"
+                  onClick={() => {
+                    if (g.id) {
+                      navigate(`/store/game/${g.id}`);
+                    }
+                  }}
+                  style={{ cursor: g.id ? 'pointer' : 'default' }}
+                >
                   <div className="featured-below-banner">
                     {g.banner ? (
                       <img src={g.banner} alt={g.name || 'Game'} onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }} />
@@ -1069,8 +1057,8 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                       aria-label={bookmarkedGames.has(g.id) ? 'Remove bookmark' : 'Add bookmark'}
                       aria-pressed={bookmarkedGames.has(g.id)}
                     >
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill={bookmarkedGames.has(g.id) ? 'currentColor' : 'none'} xmlns="http://www.w3.org/2000/svg">
-                        <path d="M6 3h12v18l-6-4-6 4V3z" stroke="currentColor" stroke-width="2" stroke-linejoin="miter" stroke-linecap="butt"/>
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill={bookmarkedGames.has(g.id) ? 'currentColor' : 'none'} xmlns="http://www.w3.org/2000/svg">
+                        <path d="M6 3h12v18l-6-4-6 4V3z" stroke="currentColor" strokeWidth="2" strokeLinejoin="miter" strokeLinecap="butt"/>
                       </svg>
                     </button>
                     <div className="banner-cta">
@@ -1100,9 +1088,9 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                     <div className={`card-info-price ${!(getPriceValue(g) > 0) ? 'is-free' : ''}`}>{displayPrice(g)}</div>
                     <div className="card-info-actions">
                       {isGameOwnedByMe(g) ? (
-                        <button className="card-info-primary install">Play Now</button>
+                        <button className="card-info-primary install" onClick={(e) => e.stopPropagation()}>Play Now</button>
                       ) : (
-                        <button className={`card-info-primary ${getPriceValue(g) > 0 ? 'buy' : 'install'}`}>{getPriceValue(g) > 0 ? 'Buy Now' : 'Install Now'}</button>
+                        <button className={`card-info-primary ${getPriceValue(g) > 0 ? 'buy' : 'install'}`} onClick={(e) => e.stopPropagation()}>{getPriceValue(g) > 0 ? 'Buy Now' : 'Install Now'}</button>
                       )}
                     </div>
                   </div>
@@ -1112,8 +1100,17 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
 
             {/* Older games - alternating grid */}
             <div className="featured-older-grid">
-              {customGames.map((g, i) => normalizeGame(g, i)).slice(10).map((g) => (
-                <div key={g.id} className="featured-below-card">
+              {getFilteredGames(customGames.map((g, i) => normalizeGame(g, i))).slice(10).map((g) => (
+                <div 
+                  key={g.id} 
+                  className="featured-below-card"
+                  onClick={() => {
+                    if (g.id) {
+                      navigate(`/store/game/${g.id}`);
+                    }
+                  }}
+                  style={{ cursor: g.id ? 'pointer' : 'default' }}
+                >
                   <div className="featured-below-banner">
                     {g.banner ? (
                       <img
@@ -1137,8 +1134,8 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                       aria-label={bookmarkedGames.has(g.id) ? 'Remove bookmark' : 'Add bookmark'}
                       aria-pressed={bookmarkedGames.has(g.id)}
                     >
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill={bookmarkedGames.has(g.id) ? 'currentColor' : 'none'} xmlns="http://www.w3.org/2000/svg">
-                        <path d="M6 3h12v18l-6-4-6 4V3z" stroke="currentColor" stroke-width="2" stroke-linejoin="miter" stroke-linecap="butt"/>
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill={bookmarkedGames.has(g.id) ? 'currentColor' : 'none'} xmlns="http://www.w3.org/2000/svg">
+                        <path d="M6 3h12v18l-6-4-6 4V3z" stroke="currentColor" strokeWidth="2" strokeLinejoin="miter" strokeLinecap="butt"/>
                       </svg>
                     </button>
                     <div className="banner-cta">
@@ -1173,9 +1170,9 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                     </div>
                     <div className="card-info-actions">
                       {isGameOwnedByMe(g) ? (
-                        <button className="card-info-primary install">Play Now</button>
+                        <button className="card-info-primary install" onClick={(e) => e.stopPropagation()}>Play Now</button>
                       ) : (
-                        <button className={`card-info-primary ${getPriceValue(g) > 0 ? 'buy' : 'install'}`}>{getPriceValue(g) > 0 ? 'Buy Now' : 'Install Now'}</button>
+                        <button className={`card-info-primary ${getPriceValue(g) > 0 ? 'buy' : 'install'}`} onClick={(e) => e.stopPropagation()}>{getPriceValue(g) > 0 ? 'Buy Now' : 'Install Now'}</button>
                       )}
                     </div>
                   </div>

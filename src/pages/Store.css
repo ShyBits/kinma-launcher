@@ -311,7 +311,7 @@
 }
 
 .featured-actions .banner-bookmark.inline.bookmarked { 
-  color: #ffffff; 
+  color: #FFD700; 
 }
 
 .featured-background {
@@ -1528,20 +1528,16 @@
   border-color: rgba(255, 59, 48, 0.3);
 }
 
-.taskbar-btn-wishlist {
-  border-color: rgba(255, 149, 0, 0.3);
+.taskbar-btn-bookmarked {
+  border-color: rgba(255, 193, 7, 0.3);
 }
 
-.taskbar-btn-share {
-  border-color: rgba(52, 199, 89, 0.3);
+.taskbar-btn-trending {
+  border-color: rgba(255, 87, 34, 0.3);
 }
 
-.taskbar-btn-follow {
-  border-color: rgba(88, 86, 214, 0.3);
-}
-
-.taskbar-btn-comment {
-  border-color: rgba(74, 158, 255, 0.3);
+.taskbar-btn-free {
+  border-color: rgba(76, 175, 80, 0.3);
 }
 
 .taskbar-btn-grid {
@@ -1574,43 +1570,77 @@
   fill: currentColor;
 }
 
-.taskbar-btn-wishlist:hover {
-  background: rgba(255, 149, 0, 0.15);
-  color: #ff9500;
-  border-color: rgba(255, 149, 0, 0.3);
+.taskbar-btn-bookmarked:hover {
+  background: rgba(255, 193, 7, 0.15);
+  color: #ffc107;
+  border-color: rgba(255, 193, 7, 0.3);
 }
 
-.taskbar-btn-wishlist:hover svg {
+.taskbar-btn-bookmarked:hover svg {
   fill: currentColor;
 }
 
-.taskbar-btn-share:hover {
-  background: rgba(52, 199, 89, 0.15);
-  color: #34c759;
-  border-color: rgba(52, 199, 89, 0.3);
+.taskbar-btn-trending:hover {
+  background: rgba(255, 87, 34, 0.15);
+  color: #ff5722;
+  border-color: rgba(255, 87, 34, 0.3);
 }
 
-.taskbar-btn-share:hover svg {
+.taskbar-btn-trending:hover svg {
   fill: currentColor;
 }
 
-.taskbar-btn-follow:hover {
-  background: rgba(88, 86, 214, 0.15);
-  color: #5856d6;
-  border-color: rgba(88, 86, 214, 0.3);
+.taskbar-btn-free:hover {
+  background: rgba(76, 175, 80, 0.15);
+  color: #4caf50;
+  border-color: rgba(76, 175, 80, 0.3);
 }
 
-.taskbar-btn-follow:hover svg {
+.taskbar-btn-free:hover svg {
   fill: currentColor;
 }
 
-.taskbar-btn-comment:hover {
-  background: rgba(74, 158, 255, 0.15);
+.taskbar-btn.active {
+  background: rgba(74, 158, 255, 0.2);
+  border-width: 2px;
+  border-color: rgba(74, 158, 255, 0.6);
   color: #4a9eff;
-  border-color: rgba(74, 158, 255, 0.3);
+  box-shadow: inset 0 0 0 3px rgba(15, 17, 21, 0.95);
 }
 
-.taskbar-btn-comment:hover svg {
+.taskbar-btn-grid.active {
+  background: rgba(255, 255, 255, 0.2);
+  border-width: 2px;
+  border-color: rgba(255, 255, 255, 0.6);
+  color: #ffffff;
+  box-shadow: inset 0 0 0 3px rgba(15, 17, 21, 0.95);
+}
+
+.taskbar-btn-bookmarked.active {
+  background: rgba(255, 193, 7, 0.2);
+  border-width: 2px;
+  border-color: rgba(255, 193, 7, 0.6);
+  color: #ffc107;
+  box-shadow: inset 0 0 0 3px rgba(15, 17, 21, 0.95);
+}
+
+.taskbar-btn-trending.active {
+  background: rgba(255, 87, 34, 0.2);
+  border-width: 2px;
+  border-color: rgba(255, 87, 34, 0.6);
+  color: #ff5722;
+  box-shadow: inset 0 0 0 3px rgba(15, 17, 21, 0.95);
+}
+
+.taskbar-btn-free.active {
+  background: rgba(76, 175, 80, 0.2);
+  border-width: 2px;
+  border-color: rgba(76, 175, 80, 0.6);
+  color: #4caf50;
+  box-shadow: inset 0 0 0 3px rgba(15, 17, 21, 0.95);
+}
+
+.taskbar-btn.active svg {
   fill: currentColor;
 }
 
@@ -1765,11 +1795,19 @@
   width: 200px;
   min-width: 200px;
   height: 100%;
-  overflow: hidden;
+  overflow: visible;
   background: rgba(255, 255, 255, 0.02);
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0;
+  margin: 0;
+}
+
+.featured-below-card .banner-bookmark {
+  top: -3px;
+  right: -1px;
+  transform: none;
 }
 
 /* CTA overlay on the banner when collapsed */
@@ -1807,14 +1845,14 @@
   color: var(--text-primary);
   background: transparent;
   border: none;
-  width: 32px;
+  width: 48px;
   height: 48px;
   display: flex;
   align-items: flex-start;
   justify-content: center;
   opacity: 0.9;
   transition: opacity 120ms ease, transform 120ms ease, color 120ms ease;
-  z-index: 2;
+  z-index: 10;
   cursor: pointer;
   padding: 0;
   margin: 0;
@@ -1823,15 +1861,25 @@
 
 .banner-bookmark:hover {
   opacity: 1;
-  transform: translateY(-1px);
+}
+
+.featured-below-card .banner-bookmark:hover {
+  transform: none;
+  opacity: 1;
 }
 
 .banner-bookmark.bookmarked {
-  color: #ffffff;
+  color: #FFD700;
 }
 
 /* only change to accent on hover when not bookmarked */
 .banner-bookmark:not(.bookmarked):hover { color: var(--accent-primary); }
+
+.banner-bookmark svg {
+  width: 32px;
+  height: 32px;
+  margin-top: 0;
+}
 
 .card-info-price.is-free {
   color: #ffffff;

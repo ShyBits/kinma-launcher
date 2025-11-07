@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Edit2, X, Plus, Layout, BarChart3, Image, List, Code, Save, Terminal, Bug, FileText, AlertCircle } from 'lucide-react';
+import { User, Edit2, X, Plus, Layout, BarChart3, Image, List, Code, Save, Terminal, Bug, FileText, AlertCircle, Package, Settings, History, Award, ShoppingBag, Heart, ChevronDown, ChevronUp, Minimize2, Sparkles, Target, Sword, Shield, Trophy, Mountain, Skull, Activity, Laugh, Rows, PanelLeftClose, PanelRightClose, FileCode, Paintbrush, Brackets, Search, Filter } from 'lucide-react';
 import { getUserData, saveUserData } from '../utils/UserDataManager';
 import CodeEditor from '../components/CodeEditor';
 import './Profile.css';
+import './GamePromo.css';
 
 const Profile = ({ navigate }) => {
   const [authUser, setAuthUser] = useState(() => {
@@ -45,11 +46,41 @@ const Profile = ({ navigate }) => {
       return 400;
     }
   });
+  const [previewWidth, setPreviewWidth] = useState(() => {
+    try {
+      const saved = getUserData('profilePreviewWidth', null);
+      return saved !== null ? saved : 700;
+    } catch (_) {
+      return 700;
+    }
+  });
+  const [showPreviewLabels, setShowPreviewLabels] = useState(() => {
+    try {
+      const saved = getUserData('profilePreviewLabels', null);
+      return saved !== null ? saved === 'true' : true;
+    } catch (_) {
+      return true;
+    }
+  });
+  const [codeLayoutMode, setCodeLayoutMode] = useState(() => {
+    try {
+      return getUserData('profileCodeLayout', 'bottom');
+    } catch (_) {
+      return 'bottom';
+    }
+  });
+  const [isTabsCompact, setIsTabsCompact] = useState(false);
+  const editorTabsRef = useRef(null);
   const [activeTab, setActiveTab] = useState('html');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [cssFilter, setCssFilter] = useState('all');
   const [debugConsole, setDebugConsole] = useState([]);
   const [output, setOutput] = useState([]);
   const [terminal, setTerminal] = useState([]);
   const [problems, setProblems] = useState([]);
+  const [profileView, setProfileView] = useState('overview');
+  const [isTemplatesExpanded, setIsTemplatesExpanded] = useState(true);
+  const [isResizing, setIsResizing] = useState(false);
 
   const previewRef = useRef(null);
   const editorRef = useRef(null);
@@ -86,17 +117,86 @@ const Profile = ({ navigate }) => {
     saveUserData('profilePreviewHeight', previewHeight);
   }, [previewHeight]);
 
+  useEffect(() => {
+    saveUserData('profilePreviewWidth', previewWidth);
+  }, [previewWidth]);
+
+  useEffect(() => {
+    saveUserData('profilePreviewLabels', showPreviewLabels.toString());
+  }, [showPreviewLabels]);
+
+  useEffect(() => {
+    saveUserData('profileCodeLayout', codeLayoutMode);
+  }, [codeLayoutMode]);
+
+  // Check if tabs should be compact based on editor width
+  useEffect(() => {
+    if (!editorRef.current || codeLayoutMode === 'bottom') {
+      setIsTabsCompact(false);
+      return;
+    }
+    
+    const checkCompact = () => {
+      const editorWidth = editorRef.current?.offsetWidth || 0;
+      setIsTabsCompact(editorWidth < 500);
+    };
+    
+    checkCompact();
+    const resizeObserver = new ResizeObserver(checkCompact);
+    if (editorRef.current) {
+      resizeObserver.observe(editorRef.current);
+    }
+    
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [codeLayoutMode, previewWidth]);
+
+  // Reset CSS filter when switching away from CSS tab
+  useEffect(() => {
+    if (activeTab !== 'css') {
+      setCssFilter('all');
+    }
+  }, [activeTab]);
+
+  // Ensure previewWidth respects minimum size when switching to left/right mode
+  useEffect(() => {
+    if ((codeLayoutMode === 'left' || codeLayoutMode === 'right') && previewWidth < 400) {
+      setPreviewWidth(400);
+    }
+    
+    if (codeLayoutMode === 'left' || codeLayoutMode === 'right') {
+      const container = document.querySelector('.promo-edit-content');
+      if (container) {
+        const containerWidth = container.offsetWidth;
+        const codeEditorMinWidth = 480;
+        const previewMaxWidth = containerWidth - codeEditorMinWidth;
+        if (previewWidth > previewMaxWidth) {
+          setPreviewWidth(Math.max(400, previewMaxWidth));
+        }
+      }
+    }
+  }, [codeLayoutMode, previewWidth]);
+
   const handleResizeStart = (e) => {
     e.preventDefault();
-    isResizingRef.current = true;
+    e.stopPropagation();
+    setIsResizing(true);
     
+    if (codeLayoutMode === 'bottom') {
+      isResizingRef.current = true;
     const startY = e.clientY;
     const startHeight = previewHeight;
-    const containerHeight = e.currentTarget.closest('.profile-edit-content').offsetHeight;
     
     const handleMouseMove = (e) => {
       if (!isResizingRef.current) return;
+        e.preventDefault();
+        e.stopPropagation();
       
+        const container = e.currentTarget?.closest?.('.promo-edit-content') || document.querySelector('.promo-edit-content');
+        if (!container) return;
+      
+        const containerHeight = container.offsetHeight;
       const deltaY = e.clientY - startY;
       const maxHeight = containerHeight * 0.9;
       const newHeight = Math.max(200, Math.min(maxHeight, startHeight + deltaY));
@@ -105,62 +205,342 @@ const Profile = ({ navigate }) => {
     
     const handleMouseUp = () => {
       isResizingRef.current = false;
+        setIsResizing(false);
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+        document.body.style.pointerEvents = '';
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
     
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'row-resize';
+      document.body.style.pointerEvents = 'none';
+      document.addEventListener('mousemove', handleMouseMove, { passive: false });
+      document.addEventListener('mouseup', handleMouseUp, { passive: false });
+    } else if (codeLayoutMode === 'left' || codeLayoutMode === 'right') {
+      isResizingRef.current = true;
+      const startX = e.clientX;
+      const startWidth = previewWidth;
+      
+      const handleMouseMove = (e) => {
+        if (!isResizingRef.current) return;
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const container = document.querySelector('.promo-edit-content');
+        if (!container) return;
+        
+        const containerWidth = container.offsetWidth;
+        const codeEditorMinWidth = 480;
+        const previewMaxWidth = containerWidth - codeEditorMinWidth;
+        
+        let deltaX;
+        if (codeLayoutMode === 'left') {
+          deltaX = e.clientX - startX;
+        } else {
+          deltaX = startX - e.clientX;
+        }
+        
+        const maxWidth = Math.max(400, previewMaxWidth);
+        const minWidth = Math.max(400, containerWidth * 0.25);
+        const newWidth = Math.max(minWidth, Math.min(maxWidth, startWidth + deltaX));
+        setPreviewWidth(newWidth);
+      };
+      
+      const handleMouseUp = () => {
+        isResizingRef.current = false;
+        setIsResizing(false);
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+        document.body.style.pointerEvents = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'col-resize';
+      document.body.style.pointerEvents = 'none';
+      document.addEventListener('mousemove', handleMouseMove, { passive: false });
+      document.addEventListener('mouseup', handleMouseUp, { passive: false });
+    }
+  };
+
+  // Get prebuilt items definition
+  const getPrebuiltItems = () => ({
+      header: {
+      html: '<div class="promo-header">\n  <h1>Profile Header</h1>\n  <p class="promo-subtitle">Welcome to my profile</p>\n</div>\n',
+      css: '.promo-header {\n  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);\n  padding: 60px 40px;\n  text-align: center;\n  color: #ffffff;\n  border-radius: 12px;\n  margin-bottom: 30px;\n}\n\n.promo-header h1 {\n  font-size: 48px;\n  font-weight: 900;\n  margin: 0 0 16px 0;\n}\n\n.promo-header .promo-subtitle {\n  font-size: 20px;\n  margin: 0;\n  opacity: 0.9;\n}\n',
+      cssSelector: '.promo-header',
+        js: ''
+      },
+      stats: {
+      html: '<div class="promo-stats-section">\n  <div class="stat-card">\n    <span class="stat-label">STAT LABEL</span>\n    <span class="stat-value">0</span>\n  </div>\n  <div class="stat-card">\n    <span class="stat-label">ANOTHER STAT</span>\n    <span class="stat-value">0</span>\n  </div>\n</div>\n',
+      css: '.promo-stats-section {\n  display: flex;\n  gap: 20px;\n  margin-bottom: 30px;\n}\n\n.promo-stats-section .stat-card {\n  flex: 1;\n  background: rgba(255, 255, 255, 0.1);\n  padding: 24px;\n  border-radius: 12px;\n  backdrop-filter: blur(10px);\n  border: 1px solid rgba(255, 255, 255, 0.2);\n}\n\n.promo-stats-section .stat-label {\n  display: block;\n  font-size: 14px;\n  color: rgba(255, 255, 255, 0.7);\n  margin-bottom: 8px;\n  text-transform: uppercase;\n  letter-spacing: 0.5px;\n}\n\n.promo-stats-section .stat-value {\n  display: block;\n  font-size: 32px;\n  font-weight: 700;\n  color: #ffffff;\n}\n',
+      cssSelector: '.promo-stats-section',
+        js: ''
+      },
+      gallery: {
+      html: '<div class="promo-gallery">\n  <h2 class="gallery-title">Gallery</h2>\n  <div class="gallery-grid">\n    <div class="gallery-item">\n      <div class="gallery-placeholder">Screenshot 1</div>\n    </div>\n    <div class="gallery-item">\n      <div class="gallery-placeholder">Screenshot 2</div>\n    </div>\n    <div class="gallery-item">\n      <div class="gallery-placeholder">Screenshot 3</div>\n    </div>\n  </div>\n</div>\n',
+      css: '.promo-gallery {\n  margin-bottom: 30px;\n}\n\n.promo-gallery .gallery-title {\n  font-size: 32px;\n  font-weight: 800;\n  margin: 0 0 24px 0;\n  color: #ffffff;\n}\n\n.promo-gallery .gallery-grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));\n  gap: 20px;\n}\n\n.promo-gallery .gallery-item {\n  aspect-ratio: 16/9;\n  border-radius: 12px;\n  overflow: hidden;\n  background: rgba(255, 255, 255, 0.1);\n  border: 1px solid rgba(255, 255, 255, 0.2);\n}\n\n.promo-gallery .gallery-placeholder {\n  width: 100%;\n  height: 100%;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  color: rgba(255, 255, 255, 0.5);\n  font-size: 16px;\n}\n',
+      cssSelector: '.promo-gallery',
+        js: ''
+      },
+    description: {
+      html: '<div class="promo-description-section">\n  <h2>About Me</h2>\n  <p>Write a compelling description about yourself here. Tell people what makes you special, what you enjoy, and why they should connect with you.</p>\n  <p>You can add multiple paragraphs to provide more details and create an engaging narrative.</p>\n</div>\n',
+      css: '.promo-description-section {\n  background: rgba(255, 255, 255, 0.05);\n  padding: 40px;\n  border-radius: 12px;\n  margin-bottom: 30px;\n  border: 1px solid rgba(255, 255, 255, 0.1);\n}\n\n.promo-description-section h2 {\n  font-size: 32px;\n  font-weight: 800;\n  margin: 0 0 20px 0;\n  color: #ffffff;\n}\n\n.promo-description-section p {\n  font-size: 18px;\n  line-height: 1.8;\n  color: rgba(255, 255, 255, 0.9);\n  margin: 0 0 16px 0;\n}\n\n.promo-description-section p:last-child {\n  margin-bottom: 0;\n}\n',
+      cssSelector: '.promo-description-section',
+        js: ''
+      }
+  });
+
+  // Check if a prebuilt item is already added
+  const isPrebuiltItemAdded = (type) => {
+    const prebuiltItems = getPrebuiltItems();
+    const item = prebuiltItems[type];
+    if (!item || !item.cssSelector) return false;
+    
+    const selectorWithoutDot = item.cssSelector.replace('.', '');
+    return profileHTML.includes(`class="${selectorWithoutDot}"`) || profileHTML.includes(`class="${item.cssSelector.replace('.', '')}"`);
+  };
+
+  // Process HTML to add X buttons to prebuilt items in edit mode
+  const processPreviewHTML = (html) => {
+    if (!isEditMode || !html) return html;
+    
+    const prebuiltItems = getPrebuiltItems();
+    let processedHTML = html;
+    
+    Object.keys(prebuiltItems).forEach(type => {
+      const item = prebuiltItems[type];
+      if (!item || !item.cssSelector) return;
+      
+      const selectorWithoutDot = item.cssSelector.replace('.', '');
+      const classPattern = `class=["'][^"']*${selectorWithoutDot}[^"']*["']`;
+      const openingTagRegex = new RegExp(`(<div[^>]*${classPattern}[^>]*>)`, 'gi');
+      
+      let lastIndex = 0;
+      const matches = [];
+      let match;
+      
+      while ((match = openingTagRegex.exec(processedHTML)) !== null) {
+        matches.push({
+          index: match.index,
+          match: match[0],
+          openingTag: match[1]
+        });
+      }
+      
+      for (let i = matches.length - 1; i >= 0; i--) {
+        const { index, match: fullMatch, openingTag } = matches[i];
+        
+        if (fullMatch.includes('prebuilt-item-remove-btn')) {
+          continue;
+        }
+        
+        const dataAttr = `data-prebuilt-item="${type}"`;
+        const xButton = `<button class="prebuilt-item-remove-btn" data-remove-type="${type}" data-remove-class="${selectorWithoutDot}" title="Remove item">×</button>`;
+        
+        let modifiedTag = openingTag;
+        if (modifiedTag.includes('style=')) {
+          modifiedTag = modifiedTag.replace('style=', `${dataAttr} style=`);
+        } else {
+          modifiedTag = modifiedTag.replace('>', ` ${dataAttr}>`);
+        }
+        
+        const before = processedHTML.substring(0, index);
+        const after = processedHTML.substring(index + fullMatch.length);
+        processedHTML = before + modifiedTag + xButton + after;
+      }
+    });
+    
+    return processedHTML;
+  };
+
+  // Handle remove button clicks in preview
+  useEffect(() => {
+    if (!isEditMode || !previewRef.current) return;
+    
+    const handleRemoveClick = (e) => {
+      const removeBtn = e.target.closest('.prebuilt-item-remove-btn');
+      if (!removeBtn) return;
+      
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const type = removeBtn.getAttribute('data-remove-type');
+      const removeClass = removeBtn.getAttribute('data-remove-class');
+      
+      if (type) {
+        handleRemovePrebuilt(type, { target: { closest: () => removeBtn } });
+      }
+    };
+    
+    const previewContent = previewRef.current?.querySelector('.promo-preview-content');
+    if (previewContent) {
+      previewContent.addEventListener('click', handleRemoveClick);
+      return () => {
+        previewContent.removeEventListener('click', handleRemoveClick);
+      };
+    }
+  }, [isEditMode, profileHTML, profileCSS]);
+
+  const handleRemovePrebuilt = (type, e) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    
+    const removeBtn = e?.target?.closest?.('.prebuilt-item-remove-btn');
+    const removeClass = removeBtn?.getAttribute('data-remove-class');
+    
+    if (removeClass) {
+      const selectorWithoutDot = removeClass.split(/\s+/)[0].replace(/^\./, '');
+      let newHTML = profileHTML;
+      
+      const classPattern = `class=["'][^"']*${selectorWithoutDot}[^"']*["']`;
+      const openingTagRegex = new RegExp(`<div[^>]*${classPattern}[^>]*>`, 'i');
+      
+      if (openingTagRegex.test(newHTML)) {
+        let depth = 0;
+        let startIndex = -1;
+        let endIndex = -1;
+        
+        const match = newHTML.match(openingTagRegex);
+        if (match) {
+          startIndex = match.index;
+          let i = startIndex;
+          
+          while (i < newHTML.length) {
+            if (newHTML.substring(i).startsWith('<div')) {
+              depth++;
+            } else if (newHTML.substring(i).startsWith('</div>')) {
+              depth--;
+              if (depth === 0) {
+                endIndex = i + 6;
+                break;
+              }
+            }
+            i++;
+          }
+          
+          if (startIndex >= 0 && endIndex > startIndex) {
+            newHTML = newHTML.substring(0, startIndex) + newHTML.substring(endIndex);
+            newHTML = newHTML.trim();
+          }
+        }
+      }
+      
+      const remainingInstances = (newHTML.match(new RegExp(classPattern, 'gi')) || []).length;
+      
+      let newCSS = profileCSS;
+      if (newCSS && selectorWithoutDot && remainingInstances === 0) {
+        const cssSelector = `.${selectorWithoutDot}`;
+        const lines = newCSS.split('\n');
+        let inBlock = false;
+        let blockDepth = 0;
+        const filteredLines = [];
+        
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          const isSelectorLine = line.includes(cssSelector) && (line.includes('{') || line.includes('}'));
+          
+          if (isSelectorLine && !inBlock && line.includes('{')) {
+            const selectorEscaped = cssSelector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            if (new RegExp(`^${selectorEscaped}\\s*\\{`).test(line)) {
+              inBlock = true;
+              blockDepth = (line.match(/{/g) || []).length - (line.match(/}/g) || []).length;
+              continue;
+            }
+          }
+          
+          if (inBlock) {
+            blockDepth += (line.match(/{/g) || []).length - (line.match(/}/g) || []).length;
+            if (blockDepth <= 0) {
+              inBlock = false;
+              blockDepth = 0;
+            }
+            continue;
+          }
+          
+          filteredLines.push(lines[i]);
+        }
+        
+        newCSS = filteredLines.join('\n').trim();
+      }
+      
+      setProfileHTML(newHTML);
+      setProfileCSS(newCSS);
+      return;
+    }
+  };
+
+  const getFilteredCSS = (css) => {
+    if (cssFilter === 'all' || !css) return css;
+    
+    const lines = css.split('\n');
+    const filteredLines = [];
+    let inBlock = false;
+    let blockType = '';
+    let braceCount = 0;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmed = line.trim();
+      
+      const openBraces = (line.match(/\{/g) || []).length;
+      const closeBraces = (line.match(/\}/g) || []).length;
+      const prevBraceCount = braceCount;
+      braceCount += openBraces - closeBraces;
+      
+      if (cssFilter === 'keyframes') {
+        if (trimmed.startsWith('@keyframes')) {
+          inBlock = true;
+          blockType = 'keyframes';
+          filteredLines.push(line);
+        } else if (inBlock && blockType === 'keyframes') {
+          filteredLines.push(line);
+          if (prevBraceCount > 0 && braceCount === 0) {
+            inBlock = false;
+            blockType = '';
+          }
+        }
+      } else if (cssFilter === 'media') {
+        if (trimmed.startsWith('@media')) {
+          inBlock = true;
+          blockType = 'media';
+          filteredLines.push(line);
+        } else if (inBlock && blockType === 'media') {
+          filteredLines.push(line);
+          if (prevBraceCount > 0 && braceCount === 0) {
+            inBlock = false;
+            blockType = '';
+          }
+        }
+      } else if (cssFilter === 'import') {
+        if (trimmed.startsWith('@import')) {
+          filteredLines.push(line);
+        }
+      } else if (cssFilter === 'variables') {
+        if (trimmed.startsWith('--') || trimmed.includes(':root') || trimmed.includes('--')) {
+          filteredLines.push(line);
+        }
+      }
+    }
+    
+    return filteredLines.length > 0 ? filteredLines.join('\n') : '';
   };
 
   const userName = authUser?.name || authUser?.username || authUser?.email?.split('@')[0] || 'Player';
 
   const handleAddPrebuilt = (type) => {
-    const prebuiltItems = {
-      header: {
-        html: '<div class="profile-header">\n  <div class="header-content">\n    <h1>Profile Header</h1>\n    <p class="header-subtitle">Welcome to my profile</p>\n  </div>\n</div>\n',
-        css: '.profile-header {\n  background: #ffffff;\n  padding: 40px;\n  border-radius: 8px;\n  margin-bottom: 20px;\n  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);\n}\n\n.profile-header .header-content {\n  text-align: center;\n}\n\n.profile-header h1 {\n  color: #000000;\n  margin: 0 0 10px 0;\n  font-size: 32px;\n  font-weight: 600;\n}\n\n.profile-header .header-subtitle {\n  color: #666666;\n  margin: 0;\n  font-size: 16px;\n  font-weight: 400;\n}\n',
-        cssSelector: '.profile-header',
-        js: ''
-      },
-      stats: {
-        html: '<div class="profile-stats">\n  <div class="stat-item">\n    <span class="stat-label">Stat Label</span>\n    <span class="stat-value">0</span>\n  </div>\n  <div class="stat-item">\n    <span class="stat-label">Another Stat</span>\n    <span class="stat-value">0</span>\n  </div>\n</div>\n',
-        css: '.profile-stats {\n  background: #ffffff;\n  padding: 30px;\n  border-radius: 8px;\n  margin-bottom: 20px;\n  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);\n}\n\n.profile-stats .stat-item {\n  display: flex;\n  justify-content: space-between;\n  align-items: center;\n  padding: 15px;\n  border-bottom: 1px solid #e0e0e0;\n  transition: background-color 0.2s ease;\n}\n\n.profile-stats .stat-item:hover {\n  background-color: #f5f5f5;\n}\n\n.profile-stats .stat-item:last-child {\n  border-bottom: none;\n}\n\n.profile-stats .stat-label {\n  color: #666666;\n  font-size: 14px;\n  font-weight: 400;\n}\n\n.profile-stats .stat-value {\n  color: #000000;\n  font-size: 18px;\n  font-weight: 600;\n}\n',
-        cssSelector: '.profile-stats',
-        js: ''
-      },
-      gallery: {
-        html: '<div class="profile-gallery">\n  <h2 class="gallery-title">Gallery</h2>\n  <div class="gallery-grid">\n    <div class="gallery-item">\n      <div class="gallery-item-placeholder">Image Placeholder</div>\n    </div>\n    <div class="gallery-item">\n      <div class="gallery-item-placeholder">Image Placeholder</div>\n    </div>\n    <div class="gallery-item">\n      <div class="gallery-item-placeholder">Image Placeholder</div>\n    </div>\n  </div>\n</div>\n',
-        css: '.profile-gallery {\n  background: #ffffff;\n  padding: 30px;\n  border-radius: 8px;\n  margin-bottom: 20px;\n  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);\n}\n\n.profile-gallery .gallery-title {\n  color: #000000;\n  margin: 0 0 20px 0;\n  font-size: 24px;\n  font-weight: 600;\n}\n\n.profile-gallery .gallery-grid {\n  display: grid;\n  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));\n  gap: 15px;\n}\n\n.profile-gallery .gallery-item {\n  aspect-ratio: 1;\n  border-radius: 4px;\n  overflow: hidden;\n  transition: transform 0.2s ease;\n}\n\n.profile-gallery .gallery-item:hover {\n  transform: scale(1.05);\n}\n\n.profile-gallery .gallery-item-placeholder {\n  width: 100%;\n  height: 100%;\n  background: #f0f0f0;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  color: #999999;\n  font-size: 14px;\n}\n',
-        cssSelector: '.profile-gallery',
-        js: ''
-      },
-      bio: {
-        html: '<div class="profile-bio">\n  <h2 class="bio-title">About Me</h2>\n  <div class="bio-content">\n    <p>Your bio here. Write a brief description about yourself, your interests, and what makes you unique.</p>\n    <p>You can add multiple paragraphs to make your bio more detailed and engaging.</p>\n  </div>\n</div>\n',
-        css: '.profile-bio {\n  background: #ffffff;\n  padding: 30px;\n  border-radius: 8px;\n  margin-bottom: 20px;\n  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);\n}\n\n.profile-bio .bio-title {\n  color: #000000;\n  margin: 0 0 15px 0;\n  font-size: 24px;\n  font-weight: 600;\n}\n\n.profile-bio .bio-content {\n  color: #333333;\n}\n\n.profile-bio .bio-content p {\n  margin: 0 0 15px 0;\n  line-height: 1.6;\n  font-size: 16px;\n}\n\n.profile-bio .bio-content p:last-child {\n  margin-bottom: 0;\n}\n',
-        cssSelector: '.profile-bio',
-        js: ''
-      },
-      timeline: {
-        html: '<div class="profile-timeline">\n  <h2 class="timeline-title">Timeline</h2>\n  <div class="timeline-content">\n    <div class="timeline-item">\n      <div class="timeline-date">2024</div>\n      <div class="timeline-text">Timeline Item Description</div>\n    </div>\n    <div class="timeline-item">\n      <div class="timeline-date">2023</div>\n      <div class="timeline-text">Another Timeline Item</div>\n    </div>\n  </div>\n</div>\n',
-        css: '.profile-timeline {\n  background: #ffffff;\n  padding: 30px;\n  border-radius: 8px;\n  margin-bottom: 20px;\n  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);\n}\n\n.profile-timeline .timeline-title {\n  color: #000000;\n  margin: 0 0 20px 0;\n  font-size: 24px;\n  font-weight: 600;\n}\n\n.profile-timeline .timeline-content {\n  position: relative;\n}\n\n.profile-timeline .timeline-item {\n  display: flex;\n  gap: 20px;\n  padding: 15px;\n  padding-left: 20px;\n  border-left: 3px solid #4a9eff;\n  margin-bottom: 20px;\n  transition: background-color 0.2s ease;\n}\n\n.profile-timeline .timeline-item:hover {\n  background-color: #f5f5f5;\n}\n\n.profile-timeline .timeline-item:last-child {\n  margin-bottom: 0;\n}\n\n.profile-timeline .timeline-date {\n  color: #4a9eff;\n  font-weight: 600;\n  font-size: 14px;\n  min-width: 60px;\n  flex-shrink: 0;\n}\n\n.profile-timeline .timeline-text {\n  color: #333333;\n  font-size: 16px;\n  line-height: 1.5;\n}\n',
-        cssSelector: '.profile-timeline',
-        js: ''
-      }
-    };
-
+    const prebuiltItems = getPrebuiltItems();
     const item = prebuiltItems[type];
     if (!item) return;
 
-    // Always add HTML (duplicates are fine)
     const newHTML = profileHTML ? profileHTML + '\n' + item.html : item.html;
-    
-    // Check if CSS already exists - if the main selector is found, don't add it again
     const cssExists = profileCSS && item.cssSelector && profileCSS.includes(item.cssSelector);
     const newCSS = cssExists ? profileCSS : (profileCSS ? profileCSS + '\n' + item.css : item.css);
-    
-    // Handle JS
-    const newJS = item.js ? (profileJS ? profileJS + '\n' + item.js : item.js) : profileJS;
+    const newJS = item.js ? (profileJS ? profileJS + '\n' + item.js : profileJS) : profileJS;
 
     setProfileHTML(newHTML);
     setProfileCSS(newCSS);
@@ -168,15 +548,30 @@ const Profile = ({ navigate }) => {
   };
 
   const handleSave = () => {
+    saveUserData('profileHTML', profileHTML);
+    saveUserData('profileCSS', profileCSS);
+    saveUserData('profileJS', profileJS);
+    saveUserData('profilePreviewHeight', previewHeight.toString());
+    saveUserData('profilePreviewWidth', previewWidth.toString());
+    saveUserData('profilePreviewLabels', showPreviewLabels.toString());
+    saveUserData('profileCodeLayout', codeLayoutMode);
     setIsEditMode(false);
   };
 
   const handleCancel = () => {
-    setIsEditMode(false);
-    setShowCustomCode(false);
     setProfileHTML(getUserData('profileHTML', ''));
     setProfileCSS(getUserData('profileCSS', ''));
     setProfileJS(getUserData('profileJS', ''));
+    const savedHeight = getUserData('profilePreviewHeight', null);
+    if (savedHeight !== null) setPreviewHeight(savedHeight);
+    const savedWidth = getUserData('profilePreviewWidth', null);
+    if (savedWidth !== null) setPreviewWidth(savedWidth);
+    const savedLabels = getUserData('profilePreviewLabels', null);
+    if (savedLabels !== null) setShowPreviewLabels(savedLabels === 'true');
+    const savedLayout = getUserData('profileCodeLayout', null);
+    if (savedLayout) setCodeLayoutMode(savedLayout);
+    setIsEditMode(false);
+    setShowCustomCode(false);
   };
 
   // Render view mode
@@ -185,6 +580,7 @@ const Profile = ({ navigate }) => {
       <div className="profile">
         <div className="profile-container">
           <div className="profile-view-mode">
+            <div className="profile-main-content">
             <div className="profile-placeholder">
               <User size={64} />
               <h2>{userName}</h2>
@@ -214,6 +610,78 @@ const Profile = ({ navigate }) => {
               />
             )}
           </div>
+
+            {/* Right Sidebar Navigation */}
+            <aside className="marketplace-sidebar">
+              <div className="sidebar-title">Profile</div>
+              <nav className="sidebar-nav">
+                {/* Main Section */}
+                <div className="sidebar-nav-section sidebar-nav-main">
+                  <button 
+                    className={`sidebar-nav-item sidebar-nav-main-item ${profileView === 'overview' ? 'active' : ''}`}
+                    onClick={() => setProfileView('overview')}
+                  >
+                    <User size={20} />
+                    <span>Overview</span>
+                  </button>
+        </div>
+                
+                <div className="sidebar-nav-section">
+                  <h3 className="sidebar-section-title">Profile</h3>
+                  <button 
+                    className={`sidebar-nav-item ${profileView === 'inventory' ? 'active' : ''}`}
+                    onClick={() => setProfileView('inventory')}
+                  >
+                    <Package size={18} />
+                    <span>Inventory</span>
+                  </button>
+                  <button 
+                    className={`sidebar-nav-item ${profileView === 'purchases' ? 'active' : ''}`}
+                    onClick={() => setProfileView('purchases')}
+                  >
+                    <ShoppingBag size={18} />
+                    <span>Purchases</span>
+                  </button>
+                  <button 
+                    className={`sidebar-nav-item ${profileView === 'favorites' ? 'active' : ''}`}
+                    onClick={() => setProfileView('favorites')}
+                  >
+                    <Heart size={18} />
+                    <span>Favorites</span>
+                  </button>
+      </div>
+                
+                <div className="sidebar-nav-section">
+                  <h3 className="sidebar-section-title">Activity</h3>
+                  <button 
+                    className={`sidebar-nav-item ${profileView === 'achievements' ? 'active' : ''}`}
+                    onClick={() => setProfileView('achievements')}
+                  >
+                    <Award size={18} />
+                    <span>Achievements</span>
+              </button>
+                  <button 
+                    className={`sidebar-nav-item ${profileView === 'history' ? 'active' : ''}`}
+                    onClick={() => setProfileView('history')}
+                  >
+                    <History size={18} />
+                    <span>History</span>
+              </button>
+          </div>
+
+                <div className="sidebar-nav-section">
+                  <h3 className="sidebar-section-title">Settings</h3>
+                  <button 
+                    className={`sidebar-nav-item ${profileView === 'settings' ? 'active' : ''}`}
+                    onClick={() => setProfileView('settings')}
+                  >
+                    <Settings size={18} />
+                    <span>Settings</span>
+                  </button>
+            </div>
+              </nav>
+            </aside>
+          </div>
         </div>
       </div>
     );
@@ -221,48 +689,75 @@ const Profile = ({ navigate }) => {
 
   // Render edit mode
   return (
-    <div className="profile profile-edit-mode">
-      <div className="profile-edit-container">
+    <div className="game-promo-page promo-edit-mode">
+      <div className="promo-edit-container">
         {/* Main Content Area */}
-        <div className={`profile-edit-content ${isEditMode ? 'sidebar-open' : ''}`}>
-          <div className="profile-edit-header">
-            <h2>Edit Profile</h2>
-            <div className="profile-edit-actions">
-              <button className="save-profile-btn" onClick={handleSave}>
-                <Save size={16} />
-                Save
-              </button>
-              <button className="cancel-profile-btn" onClick={handleCancel}>
-                <X size={16} />
-                Cancel
-              </button>
-            </div>
-          </div>
-
-          {!showCustomCode ? (
-            <div className="profile-edit-placeholder">
-              <p>Click "Custom Code" in the sidebar to start building your profile</p>
-            </div>
-          ) : (
-            <>
-              {/* Preview Area */}
-              <div 
-                className="profile-preview-wrapper" 
+        <div className={`promo-edit-content ${isEditMode ? 'sidebar-open' : ''} code-layout-${codeLayoutMode}`}>
+          {/* Preview Area - Always visible when there's content, takes full available space */}
+          {(profileHTML || profileCSS || profileJS) && (
+            <div 
+              className={`promo-preview-wrapper ${isResizing ? 'resizing' : ''}`}
                 ref={previewRef}
-                style={{ height: `${previewHeight}px` }}
-              >
-                <h3>Preview</h3>
-                <div 
-                  className="profile-preview-content"
+              style={{ 
+                height: showCustomCode && codeLayoutMode === 'bottom' ? `${previewHeight}px` : '100%', 
+                flex: showCustomCode && codeLayoutMode === 'bottom' ? 'none' : (showCustomCode && (codeLayoutMode === 'left' || codeLayoutMode === 'right') ? '0 0 auto' : '1'),
+                width: showCustomCode && (codeLayoutMode === 'left' || codeLayoutMode === 'right') ? `${previewWidth}px` : '100%'
+              }}
+            >
+              {showPreviewLabels && (
+                <>
+                  <div className="promo-preview-label promo-preview-label-top-left">Preview</div>
+                  <div className="promo-preview-label promo-preview-label-top-right">Preview</div>
+                  <div className="promo-preview-label promo-preview-label-bottom-left">Preview</div>
+                  <div className="promo-preview-label promo-preview-label-bottom-right">Preview</div>
+                </>
+              )}
+              <div 
+                className={`promo-preview-content ${isResizing ? 'resizing' : ''}`}
                   dangerouslySetInnerHTML={{ 
                     __html: `
                       <!DOCTYPE html>
                       <html>
                       <head>
                         <style>${profileCSS}</style>
+                      <style>
+                        [data-prebuilt-item] {
+                          position: relative !important;
+                        }
+                        .prebuilt-item-remove-btn {
+                          position: absolute !important;
+                          top: 8px !important;
+                          right: 8px !important;
+                          width: 28px !important;
+                          height: 28px !important;
+                          display: flex !important;
+                          align-items: center !important;
+                          justify-content: center !important;
+                          background: rgba(255, 77, 77, 0.9) !important;
+                          border: 2px solid rgba(255, 255, 255, 0.3) !important;
+                          border-radius: 6px !important;
+                          color: #ffffff !important;
+                          cursor: pointer !important;
+                          font-size: 20px !important;
+                          font-weight: bold !important;
+                          line-height: 1 !important;
+                          padding: 0 !important;
+                          z-index: 1000 !important;
+                          transition: all 0.2s ease !important;
+                          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+                        }
+                        .prebuilt-item-remove-btn:hover {
+                          background: rgba(255, 77, 77, 1) !important;
+                          transform: scale(1.1) !important;
+                          box-shadow: 0 4px 12px rgba(255, 77, 77, 0.5) !important;
+                        }
+                        .prebuilt-item-remove-btn:active {
+                          transform: scale(0.95) !important;
+                        }
+                      </style>
                       </head>
                       <body>
-                        ${profileHTML}
+                      ${processPreviewHTML(profileHTML)}
                         <script>${profileJS}</script>
                       </body>
                       </html>
@@ -270,69 +765,106 @@ const Profile = ({ navigate }) => {
                   }}
                 />
               </div>
+          )}
 
-              {/* Resize Handle */}
+          {/* Resize Handle - Positioned between preview and code editor based on layout mode */}
+          {showCustomCode && (profileHTML || profileCSS || profileJS) && (
+            <>
+              {codeLayoutMode === 'bottom' && (
               <div 
-                className="profile-resize-handle"
+                  className="promo-resize-handle promo-resize-handle-bottom"
                 onMouseDown={handleResizeStart}
               />
+              )}
+              {codeLayoutMode === 'left' && (
+                <div 
+                  className="promo-resize-handle promo-resize-handle-left"
+                  onMouseDown={handleResizeStart}
+                />
+              )}
+              {codeLayoutMode === 'right' && (
+                <div 
+                  className="promo-resize-handle promo-resize-handle-right"
+                  onMouseDown={handleResizeStart}
+                />
+              )}
+            </>
+          )}
 
+          {/* Placeholder or Code Editor */}
+          {!profileHTML && !profileCSS && !profileJS ? (
+            <div className="promo-edit-placeholder">
+              <p>Choose a prebuilt template or add items to start building your profile</p>
+            </div>
+          ) : showCustomCode ? (
+            <>
               {/* Code Editor with Tabs */}
               <div 
-                className="profile-editor-wrapper" 
+                className="promo-editor-wrapper" 
                 ref={editorRef}
+                style={{
+                  width: codeLayoutMode === 'left' || codeLayoutMode === 'right' ? 'auto' : '100%',
+                  flex: codeLayoutMode === 'bottom' ? '1 1 300px' : '1',
+                  height: codeLayoutMode === 'bottom' ? 'auto' : '100%',
+                  minHeight: codeLayoutMode === 'bottom' ? '300px' : '0',
+                  minWidth: codeLayoutMode === 'left' || codeLayoutMode === 'right' ? '480px' : '0'
+                }}
               >
-                <div className="code-section-tabs">
+                <div className={`code-section-tabs ${isTabsCompact ? 'compact' : ''}`} ref={editorTabsRef}>
                   <button
                     className={`code-tab ${activeTab === 'html' ? 'active' : ''}`}
                     onClick={() => setActiveTab('html')}
+                    title="HTML"
                   >
-                    <Code size={14} />
-                    HTML
+                    <FileCode size={14} />
+                    {!isTabsCompact && <span>HTML</span>}
                   </button>
                   <button
                     className={`code-tab ${activeTab === 'css' ? 'active' : ''}`}
                     onClick={() => setActiveTab('css')}
+                    title="CSS"
                   >
-                    <Code size={14} />
-                    CSS
+                    <Paintbrush size={14} />
+                    {!isTabsCompact && <span>CSS</span>}
                   </button>
                   <button
                     className={`code-tab ${activeTab === 'js' ? 'active' : ''}`}
                     onClick={() => setActiveTab('js')}
+                    title="JavaScript"
                   >
-                    <Code size={14} />
-                    JavaScript
+                    <Brackets size={14} />
+                    {!isTabsCompact && <span>JavaScript</span>}
                   </button>
                   
-                  <div className="code-tab-separator" />
-                  
-                  <button
-                    className={`code-tab ${activeTab === 'debug' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('debug')}
-                  >
-                    <Bug size={14} />
-                    Debug Console
+                  <div className="code-layout-controls">
+                    <button
+                      className={`layout-btn ${codeLayoutMode === 'right' ? 'active' : ''}`}
+                      onClick={() => setCodeLayoutMode('right')}
+                      title="Code on right side"
+                    >
+                      <PanelRightClose size={18} />
+                    </button>
+                    <button
+                      className={`layout-btn ${codeLayoutMode === 'bottom' ? 'active' : ''}`}
+                      onClick={() => setCodeLayoutMode('bottom')}
+                      title="Code below preview"
+                    >
+                      <Rows size={18} />
+                    </button>
+                    <button
+                      className={`layout-btn ${codeLayoutMode === 'left' ? 'active' : ''}`}
+                      onClick={() => setCodeLayoutMode('left')}
+                      title="Code on left side"
+                    >
+                      <PanelLeftClose size={18} />
                   </button>
-                  <button
-                    className={`code-tab ${activeTab === 'output' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('output')}
-                  >
-                    <FileText size={14} />
-                    Output
-                  </button>
-                  <button
-                    className={`code-tab ${activeTab === 'terminal' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('terminal')}
-                  >
-                    <Terminal size={14} />
-                    Terminal
-                  </button>
+                  </div>
                 </div>
 
                 <div className="code-section-content">
                   {activeTab === 'html' && (
                     <CodeEditor
+                      key="html-editor"
                       value={profileHTML}
                       onChange={(e) => setProfileHTML(e.target.value)}
                       language="html"
@@ -342,162 +874,114 @@ const Profile = ({ navigate }) => {
 
                   {activeTab === 'css' && (
                     <CodeEditor
-                      value={profileCSS}
-                      onChange={(e) => setProfileCSS(e.target.value)}
+                      key={`css-editor-${cssFilter}`}
+                      value={cssFilter === 'all' ? profileCSS : getFilteredCSS(profileCSS)}
+                      onChange={(e) => {
+                        if (cssFilter === 'all') {
+                          setProfileCSS(e.target.value);
+                        }
+                      }}
                       language="css"
-                      placeholder="Enter your CSS code here..."
+                      placeholder={cssFilter === 'all' ? "Enter your CSS code here..." : "Switch to 'All' filter to edit CSS"}
+                      readOnly={cssFilter !== 'all'}
                     />
                   )}
 
                   {activeTab === 'js' && (
                     <CodeEditor
+                      key="js-editor"
                       value={profileJS}
                       onChange={(e) => setProfileJS(e.target.value)}
                       language="javascript"
                       placeholder="Enter your JavaScript code here..."
                     />
                   )}
-
-                  {activeTab === 'debug' && (
-                    <div className="debug-console-panel">
-                      <div className="panel-header">
-                        <span>Debug Console</span>
-                        <button 
-                          className="clear-panel-btn"
-                          onClick={() => setDebugConsole([])}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="panel-content">
-                        {debugConsole.length === 0 ? (
-                          <div className="panel-empty">No debug messages</div>
-                        ) : (
-                          debugConsole.map((msg, index) => (
-                            <div key={index} className={`console-message ${msg.type}`}>
-                              <span className="console-time">{msg.time}</span>
-                              <span className="console-text">{msg.text}</span>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {activeTab === 'output' && (
-                    <div className="output-panel">
-                      <div className="panel-header">
-                        <span>Output</span>
-                        <button 
-                          className="clear-panel-btn"
-                          onClick={() => setOutput([])}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="panel-content">
-                        {output.length === 0 ? (
-                          <div className="panel-empty">No output</div>
-                        ) : (
-                          output.map((msg, index) => (
-                            <div key={index} className="output-message">
-                              {msg}
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {activeTab === 'terminal' && (
-                    <div className="terminal-panel">
-                      <div className="panel-header">
-                        <span>Terminal</span>
-                        <button 
-                          className="clear-panel-btn"
-                          onClick={() => setTerminal([])}
-                        >
-                          Clear
-                        </button>
-                      </div>
-                      <div className="panel-content terminal-content">
-                        {terminal.length === 0 ? (
-                          <div className="panel-empty">Terminal ready</div>
-                        ) : (
-                          terminal.map((line, index) => (
-                            <div key={index} className="terminal-line">
-                              {line}
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             </>
-          )}
+          ) : null}
         </div>
 
         {/* Sidebar */}
-        <div className={`profile-edit-sidebar ${isEditMode ? 'open' : ''}`}>
+        <div className={`promo-edit-sidebar ${isEditMode ? 'open' : ''}`}>
           <div className="sidebar-header">
-            <h3>Add Items</h3>
-            <button className="close-sidebar-btn" onClick={() => setIsEditMode(false)}>
-              <X size={16} />
-            </button>
+            <h3>Options</h3>
           </div>
 
           <div className="sidebar-content">
+            {/* Preview Labels Toggle */}
+            {(profileHTML || profileCSS || profileJS) && (
+              <div className="preview-labels-toggle">
+                <label className="toggle-label">
+                  <input
+                    type="checkbox"
+                    checked={showPreviewLabels}
+                    onChange={(e) => setShowPreviewLabels(e.target.checked)}
+                  />
+                  <span>Show Preview Labels</span>
+                </label>
+              </div>
+            )}
+
+            {(profileHTML || profileCSS || profileJS) && <div className="sidebar-divider" />}
+
+            {/* Pre-built Items */}
             <div className="prebuilt-items">
               <h4>Pre-built Items</h4>
               
-              <button className="prebuilt-item-btn" onClick={() => handleAddPrebuilt('header')}>
+              <button 
+                className={`prebuilt-item-btn ${isPrebuiltItemAdded('header') ? 'added' : ''}`}
+                onClick={() => handleAddPrebuilt('header')}
+              >
                 <Layout size={20} />
                 <span>Header</span>
               </button>
 
-              <button className="prebuilt-item-btn" onClick={() => handleAddPrebuilt('stats')}>
+              <button 
+                className={`prebuilt-item-btn ${isPrebuiltItemAdded('stats') ? 'added' : ''}`}
+                onClick={() => handleAddPrebuilt('stats')}
+              >
                 <BarChart3 size={20} />
                 <span>Stats</span>
               </button>
 
-              <button className="prebuilt-item-btn" onClick={() => handleAddPrebuilt('gallery')}>
+              <button 
+                className={`prebuilt-item-btn ${isPrebuiltItemAdded('gallery') ? 'added' : ''}`}
+                onClick={() => handleAddPrebuilt('gallery')}
+              >
                 <Image size={20} />
                 <span>Gallery</span>
               </button>
 
-              <button className="prebuilt-item-btn" onClick={() => handleAddPrebuilt('bio')}>
+              <button 
+                className={`prebuilt-item-btn ${isPrebuiltItemAdded('description') ? 'added' : ''}`}
+                onClick={() => handleAddPrebuilt('description')}
+              >
                 <List size={20} />
-                <span>Bio</span>
-              </button>
-
-              <button className="prebuilt-item-btn" onClick={() => handleAddPrebuilt('timeline')}>
-                <BarChart3 size={20} />
-                <span>Timeline</span>
+                <span>Description</span>
               </button>
             </div>
+            </div>
 
-            <div className="sidebar-divider" />
-
-            <div className="custom-code-section">
+          {/* Sidebar Footer with Save/Cancel buttons */}
+          <div className="sidebar-footer">
+            {(profileHTML || profileCSS || profileJS) && (
               <button 
-                className="custom-code-btn" 
-                onClick={() => {
-                  setShowCustomCode(true);
-                  if (!profileHTML && !profileCSS && !profileJS) {
-                    const customHTML = '<div class="custom-profile">\n  <h1>Custom Profile Page</h1>\n</div>\n';
-                    const customCSS = 'body {\n  font-family: Arial, sans-serif;\n  margin: 0;\n  padding: 0;\n}\n\n.custom-profile {\n  padding: 20px;\n}\n';
-                    const customJS = 'console.log("Custom profile loaded");\n';
-                    setProfileHTML(customHTML);
-                    setProfileCSS(customCSS);
-                    setProfileJS(customJS);
-                  }
-                }}
+                className="promo-custom-code-toggle-btn" 
+                onClick={() => setShowCustomCode(!showCustomCode)}
+                title={showCustomCode ? 'Hide Code' : 'Show Code'}
               >
-                <Code size={20} />
-                <span>Custom Code</span>
-                <small>Full profile page builder</small>
+                <span className="code-symbol">&lt;/&gt;</span>
+                <span className="code-btn-text">{showCustomCode ? 'exit code view' : 'add custom design to current'}</span>
+              </button>
+            )}
+            <div className="button-row">
+              <button className="cancel-promo-btn" onClick={handleCancel}>
+                <X size={18} />
+              </button>
+              <button className="save-promo-btn" onClick={handleSave}>
+                <Save size={16} />
+                Save
               </button>
             </div>
           </div>

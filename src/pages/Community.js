@@ -1,16 +1,16 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import WorkshopSection from '../components/WorkshopSection';
-import { MessageSquare, Package, Users } from 'lucide-react';
+import { MessageSquare, Package, Users, Bookmark, TrendingUp, Heart, Globe, Sparkles, Plus, Search, Filter, Bell, BellOff } from 'lucide-react';
 import { getUserData, getUserScopedKey, getAllUsersData, saveUserData, getCurrentUserId } from '../utils/UserDataManager';
+import { loadNotifications, addNotification } from '../utils/NotificationManager';
 import './Community.css';
-
-// Posts will be loaded from API or localStorage
 
 const Community = () => {
   const { gameId } = useParams();
   const navigate = useNavigate();
   const [selectedTab, setSelectedTab] = React.useState('posts'); // posts | workshop
+  const [communityView, setCommunityView] = React.useState('all'); // all, saved, trending, following
   
   // Posts/Threads toggle state (merged section)
   const [showThreads, setShowThreads] = React.useState(false); // false = posts, true = threads
@@ -40,6 +40,31 @@ const Community = () => {
   const [showThreadCreator, setShowThreadCreator] = React.useState(false);
   const [selectedThreadId, setSelectedThreadId] = React.useState(null);
   const [threadSearchQuery, setThreadSearchQuery] = React.useState('');
+  const [postContent, setPostContent] = React.useState('');
+
+  // Game notification preferences - structure: { gameId: { posts: boolean, threads: boolean, workshop: boolean } }
+  const [gameNotifications, setGameNotifications] = React.useState(() => {
+    try {
+      const notifications = getUserData('gameNotifications', {});
+      return notifications;
+    } catch (_) {
+      return {};
+    }
+  });
+
+  const toggleGameNotification = (gameId, type, e) => {
+    e.stopPropagation(); // Prevent game selection when clicking toggle
+    const currentState = gameNotifications[gameId] || { posts: false, threads: false, workshop: false };
+    const newNotifications = {
+      ...gameNotifications,
+      [gameId]: {
+        ...currentState,
+        [type]: !currentState[type]
+      }
+    };
+    setGameNotifications(newNotifications);
+    saveUserData('gameNotifications', newNotifications);
+  };
 
   // Build game list from ALL published games from ALL users (shared marketplace)
   const gameList = React.useMemo(() => {
@@ -71,14 +96,6 @@ const Community = () => {
     return list;
   }, []);
 
-  const toggleTag = (tag) => {
-    setSelectedTags(prev => {
-      const next = new Set(prev);
-      if (next.has(tag)) next.delete(tag); else next.add(tag);
-      return next;
-    });
-  };
-
   // Load ALL published posts from ALL users (shared community)
   const [posts, setPosts] = React.useState(() => {
     try {
@@ -109,149 +126,174 @@ const Community = () => {
     }
   });
 
-  // Reload posts when user changes or posts are updated
-  React.useEffect(() => {
-    const loadPosts = () => {
-      try {
-        const allPosts = getAllUsersData('communityPosts');
-        const publishedPosts = allPosts.filter(post => {
-          const status = post.status || 'published';
-          return status === 'public' || status === 'published';
-        });
-        setPosts(publishedPosts);
-      } catch (_) {
-        setPosts([]);
-      }
-    };
-
-    const loadThreads = () => {
-      try {
-        const allThreads = getAllUsersData('communityThreads');
-        const publishedThreads = allThreads.filter(thread => {
-          const status = thread.status || 'published';
-          return status === 'public' || status === 'published';
-        });
-        setThreads(publishedThreads);
-      } catch (_) {
-        setThreads([]);
-      }
-    };
-
-    loadPosts();
-    loadThreads();
-
-    const handleStorageChange = (e) => {
-      if (e.key && e.key.startsWith('communityPosts_')) {
-        loadPosts();
-      }
-      if (e.key && e.key.startsWith('communityThreads_')) {
-        loadThreads();
-      }
-    };
-
-    const handleUserChanged = () => {
-      loadPosts();
-      loadThreads();
-    };
+  // Filter and sort posts
+  const sortedPosts = React.useMemo(() => {
+    let filtered = [...posts];
     
-    window.addEventListener('user-changed', handleUserChanged);
-    window.addEventListener('storage', handleStorageChange);
-    
-    return () => {
-      window.removeEventListener('user-changed', handleUserChanged);
-      window.removeEventListener('storage', handleStorageChange);
-    };
-  }, []);
-
-  // Posts filtering and sorting (uses posts-specific state)
-  const filteredByGame = posts.filter(p => (postsGame === 'all' || p.game === postsGame));
-  const filtered = filteredByGame.filter(p => (postsSelectedTags.size === 0 || p.tags?.some(t => postsSelectedTags.has(t))));
-  const sortedPosts = [...filtered].sort((a,b) => postsSortBy === 'popular' ? (b.likes - a.likes) : 0);
-  
-  // Threads filtering and sorting (uses posts game filter when in merged section)
-  const filteredThreads = threads.filter(t => {
-    // If there's a search query, filter by title or description
-    if (threadSearchQuery.trim()) {
-      const query = threadSearchQuery.toLowerCase();
-      const matchesTitle = t.title?.toLowerCase().includes(query);
-      const matchesDescription = t.description?.toLowerCase().includes(query);
-      const matchesAuthor = t.author?.toLowerCase().includes(query);
-      return matchesTitle || matchesDescription || matchesAuthor;
-    }
-    // If game filter is set and not 'all', optionally filter by game (but threads can exist without games)
+    // Filter by game
     if (postsGame !== 'all') {
-      return !t.game || t.game === postsGame;
-    }
-    return true;
-  });
-  
-  const sortedThreads = [...filteredThreads].sort((a,b) => {
-    if (postsSortBy === 'popular') return (b.likes || 0) - (a.likes || 0);
-    if (postsSortBy === 'recent') return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
-    return 0;
-  });
-  
-  // Handle thread creation (creates a new thread space/room for a game)
-  const handleCreateThread = () => {
-    if (!threadTitle.trim()) {
-      alert('Please enter a thread title');
-      return;
+      filtered = filtered.filter(p => p.game === postsGame);
     }
     
-    const currentUser = getCurrentUserId();
-    if (!currentUser) {
-      alert('Please log in to create a thread');
-      return;
+    // Filter by view
+    if (communityView === 'saved') {
+      filtered = filtered.filter(p => savedSet.has(p.id));
+    } else if (communityView === 'trending') {
+      filtered = filtered.filter(p => (p.likes || 0) > 5 || (p.comments || 0) > 3);
+    } else if (communityView === 'following') {
+      // TODO: Implement following logic
+      filtered = [];
     }
     
-    try {
-      const authUser = JSON.parse(localStorage.getItem('authUser') || '{}');
-      const authorName = authUser.name || 'Anonymous';
-      
-      const newThread = {
-        id: Date.now().toString(),
-        title: threadTitle.trim(),
-        description: threadDescription.trim() || '',
-        author: authorName,
-        authorId: currentUser,
-        game: threadGame === 'all' ? null : threadGame,
-        createdAt: new Date().toISOString(),
-        time: 'just now',
-        members: 1, // Starting member count
-        posts: 0, // Posts within this thread
-        status: 'published',
-        tags: []
-      };
-      
-      const existingThreads = getUserData('communityThreads', []);
-      const updatedThreads = [...existingThreads, newThread];
-      saveUserData('communityThreads', updatedThreads);
-      
-      // Reload threads
-      const allThreads = getAllUsersData('communityThreads');
-      const publishedThreads = allThreads.filter(thread => {
-        const status = thread.status || 'published';
-        return status === 'public' || status === 'published';
+    // Sort
+    if (postsSortBy === 'trending') {
+      filtered.sort((a, b) => {
+        const aScore = (a.likes || 0) * 2 + (a.comments || 0);
+        const bScore = (b.likes || 0) * 2 + (b.comments || 0);
+        return bScore - aScore;
       });
-      setThreads(publishedThreads);
-      
-      // Reset form
-      setThreadTitle('');
-      setThreadDescription('');
-      setThreadGame('all');
-      setShowThreadCreator(false);
-      // Auto-select the newly created thread
-      setSelectedThreadId(newThread.id);
-      
-      // Trigger storage event for other tabs
-      window.dispatchEvent(new Event('storage'));
-    } catch (error) {
-      console.error('Error creating thread:', error);
-      alert('Failed to create thread');
+    } else if (postsSortBy === 'recent') {
+      filtered.sort((a, b) => {
+        const aTime = a.timestamp || a.createdAt || 0;
+        const bTime = b.timestamp || b.createdAt || 0;
+        return bTime - aTime;
+      });
+    } else if (postsSortBy === 'popular') {
+      filtered.sort((a, b) => (b.likes || 0) - (a.likes || 0));
     }
+    
+    return filtered;
+  }, [posts, postsGame, communityView, postsSortBy, savedSet]);
+
+  // Filter and sort threads
+  const sortedThreads = React.useMemo(() => {
+    let filtered = [...threads];
+    
+    // Filter by game
+    if (postsGame !== 'all') {
+      filtered = filtered.filter(t => t.game === postsGame);
+    }
+    
+    // Filter by search query
+    if (threadSearchQuery) {
+      const query = threadSearchQuery.toLowerCase();
+      filtered = filtered.filter(t => 
+        t.title?.toLowerCase().includes(query) ||
+        t.description?.toLowerCase().includes(query) ||
+        t.author?.toLowerCase().includes(query)
+      );
+    }
+    
+    // Sort by members/popularity
+    filtered.sort((a, b) => (b.members || 1) - (a.members || 1));
+    
+    return filtered;
+  }, [threads, postsGame, threadSearchQuery]);
+
+  const handleCreateThread = () => {
+    if (!threadTitle.trim()) return;
+    const newThread = {
+      id: Date.now(),
+      title: threadTitle,
+      description: threadDescription,
+      game: threadGame === 'all' ? null : threadGame,
+      author: 'You',
+      time: 'just now',
+      createdAt: Date.now(),
+      members: 1,
+      posts: 0,
+      status: 'published'
+    };
+    const currentUserId = getCurrentUserId();
+    const existing = getUserData('communityThreads', []);
+    saveUserData('communityThreads', [...existing, newThread], currentUserId);
+    setThreads(prev => [...prev, newThread]);
+    
+    // Send notifications to users who have notifications enabled for this game
+    if (threadGame !== 'all' && threadGame) {
+      try {
+        const currentNotifications = loadNotifications();
+        const gameName = gameList.find(g => g.id === threadGame)?.name || threadGame;
+        const currentUserId = getCurrentUserId();
+        
+        // Check current user's notification preferences
+        const userNotifications = getUserData('gameNotifications', {});
+        if (userNotifications[threadGame]?.threads) {
+          const notification = {
+            id: Date.now() + Math.random() * 1000,
+            type: 'community',
+            title: 'New Community Thread',
+            message: `A new thread "${threadTitle}" was created for ${gameName}`,
+            time: 'just now',
+            timestamp: Date.now(),
+            read: false,
+            iconType: 'users',
+            source: 'Community Threads'
+          };
+          addNotification(notification, currentNotifications);
+        }
+      } catch (error) {
+        console.error('Error sending thread notifications:', error);
+      }
+    }
+    
+    setThreadTitle('');
+    setThreadDescription('');
+    setThreadGame('all');
+    setShowThreadCreator(false);
   };
 
-  // Handle click outside for picker
+  const handleCreatePost = () => {
+    if (!postContent.trim()) return;
+    const newPost = {
+      id: Date.now(),
+      text: postContent,
+      game: postsGame === 'all' ? null : postsGame,
+      author: 'You',
+      time: 'just now',
+      timestamp: Date.now(),
+      createdAt: Date.now(),
+      likes: 0,
+      comments: 0,
+      status: 'published'
+    };
+    const currentUserId = getCurrentUserId();
+    const existing = getUserData('communityPosts', []);
+    saveUserData('communityPosts', [...existing, newPost], currentUserId);
+    setPosts(prev => [...prev, newPost]);
+    
+    // Send notifications to users who have notifications enabled for this game
+    if (postsGame !== 'all' && postsGame) {
+      try {
+        const currentNotifications = loadNotifications();
+        const gameName = gameList.find(g => g.id === postsGame)?.name || postsGame;
+        const previewText = postContent.length > 50 ? postContent.substring(0, 50) + '...' : postContent;
+        
+        // Check current user's notification preferences
+        const userNotifications = getUserData('gameNotifications', {});
+        if (userNotifications[postsGame]?.posts) {
+          const notification = {
+            id: Date.now() + Math.random() * 1000,
+            type: 'community',
+            title: 'New Game Post',
+            message: `New post in ${gameName}: ${previewText}`,
+            time: 'just now',
+            timestamp: Date.now(),
+            read: false,
+            iconType: 'messageSquare',
+            source: 'Game Posts'
+          };
+          addNotification(notification, currentNotifications);
+        }
+      } catch (error) {
+        console.error('Error sending post notifications:', error);
+      }
+    }
+    
+    setPostContent('');
+  };
+
+  // Close picker when clicking outside
   React.useEffect(() => {
     const handleClickOutside = (e) => {
       if (!pickerOpen) return;
@@ -265,224 +307,205 @@ const Community = () => {
   }, [pickerOpen]);
 
   return (
-    <div className="community" data-tab={selectedTab}>
-      <div className="community-topbar">
-        <div className="comm-tabs">
-          <button className={`comm-tab ${selectedTab==='posts'?'active':''}`} data-tab="posts" onClick={()=>setSelectedTab('posts')}>
-            <MessageSquare size={16} />
-            <span>Community</span>
-          </button>
-          <button className={`comm-tab ${selectedTab==='workshop'?'active':''}`} data-tab="workshop" onClick={()=>setSelectedTab('workshop')}>
-            <Package size={16} />
-            <span>Workshop</span>
-          </button>
-        </div>
-      </div>
+    <div className="community">
       <div className="community-layout-3">
         {/* Left: Filters */}
         <aside className="community-left">
-          {selectedTab === 'posts' ? (
-            <div className="comm-card">
-              <div className="comm-view-switch">
-                <button 
-                  className={`comm-switch-btn ${!showThreads ? 'active' : ''}`}
-                  onClick={() => setShowThreads(false)}
-                >
-                  <MessageSquare size={14} />
-                  <span>Posts</span>
-                </button>
-                <button 
-                  className={`comm-switch-btn ${showThreads ? 'active' : ''}`}
-                  onClick={() => setShowThreads(true)}
-                >
-                  <Users size={14} />
-                  <span>Threads</span>
-                </button>
-              </div>
-              <div className="comm-card-title">Community</div>
-              {showThreads ? (
-                <>
-                  <div className="comm-filter-group">
-                    <button 
-                      className="comm-create-thread-btn-sidebar" 
-                      onClick={() => setShowThreadCreator(!showThreadCreator)}
-                    >
-                      <Users size={16} />
-                      <span>{showThreadCreator ? 'Cancel' : 'Create Thread'}</span>
-                    </button>
-                    {showThreadCreator && (
-                      <div className="comm-thread-form-sidebar">
-                        <input
-                          className="comm-thread-title"
-                          placeholder="Thread name..."
-                          value={threadTitle}
-                          onChange={(e) => setThreadTitle(e.target.value)}
-                        />
-                        <textarea
-                          className="comm-thread-content"
-                          placeholder="Description (optional)..."
-                          value={threadDescription}
-                          onChange={(e) => setThreadDescription(e.target.value)}
-                          rows={2}
-                        />
-                        <div className="comm-thread-game-select">
-                          <label className="comm-thread-label">Game (optional):</label>
-                          <select
-                            className="comm-thread-game-selector"
-                            value={threadGame}
-                            onChange={(e) => setThreadGame(e.target.value)}
-                          >
-                            <option value="all">No game</option>
-                            {gameList.filter(g => g.id !== 'all').map(game => (
-                              <option key={game.id} value={game.id}>{game.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <button className="comm-post-btn" onClick={handleCreateThread}>
-                          Create
-                        </button>
-                      </div>
+          <div className="community-left-content">
+            {/* CHOOSE GAME Filter - Keep this design exactly as is */}
+            <div className="comm-filter-group">
+              <div className="comm-filter-label">Choose game</div>
+              <div className="comm-game-picker" ref={pickerRef}>
+                <button className="comm-picker-btn" onClick={() => setPickerOpen(!pickerOpen)}>
+                  <div className="comm-picker-card">
+                    {selectedTab === 'posts' ? (
+                      postsGame === 'all' ? (
+                        <span>🎮</span>
+                      ) : (gameList.find(g => g.id === postsGame)?.card ? (
+                        <img src={gameList.find(g => g.id === postsGame)?.card} alt="card" />
+                      ) : (
+                        <span>🎮</span>
+                      ))
+                    ) : (
+                      workshopGame === 'all' ? (
+                        <span>🎮</span>
+                      ) : (gameList.find(g => g.id === workshopGame)?.card ? (
+                        <img src={gameList.find(g => g.id === workshopGame)?.card} alt="card" />
+                      ) : (
+                        <span>🎮</span>
+                      ))
                     )}
                   </div>
-                  <div className="comm-filter-group">
-                    <div className="comm-filter-label">My Threads</div>
-                    <ul className="comm-thread-list">
-                      {sortedThreads.length === 0 ? (
-                        <li className="comm-thread-list-empty">No threads yet</li>
-                      ) : (
-                        sortedThreads.map(thread => (
-                          <li 
-                            key={thread.id} 
-                            className={`comm-thread-list-item ${selectedThreadId === thread.id ? 'active' : ''}`}
-                            onClick={() => setSelectedThreadId(selectedThreadId === thread.id ? null : thread.id)}
-                          >
-                            <div className="comm-thread-list-icon">#</div>
-                            <div className="comm-thread-list-info">
-                              <div className="comm-thread-list-title">{thread.title}</div>
-                              <div className="comm-thread-list-meta">
-                                {thread.game ? (
-                                  <span className="comm-game-badge-small">{gameList.find(g => g.id === thread.game)?.name || thread.game}</span>
-                                ) : (
-                                  <span className="comm-game-badge-small">All Games</span>
-                                )}
-                                <span className="comm-thread-list-stats">{thread.members || 1} members</span>
-                              </div>
+                  <span className="comm-picker-label">
+                    {selectedTab === 'posts' 
+                      ? (gameList.find(g => g.id === postsGame)?.name || 'Select Game')
+                      : (gameList.find(g => g.id === workshopGame)?.name || 'Select Game')
+                    }
+                  </span>
+                </button>
+                {pickerOpen && (
+                  <div className="comm-picker-menu">
+                    <div className="comm-picker-search">
+                      <input
+                        className="comm-picker-input"
+                        value={pickerQuery}
+                        onChange={(e) => setPickerQuery(e.target.value)}
+                        placeholder="Search games..."
+                        autoFocus
+                      />
+                    </div>
+                    {gameList.filter(g => g.name.toLowerCase().includes(pickerQuery.toLowerCase())).length === 0 ? (
+                      <div className="comm-picker-empty">
+                        <span>No games found</span>
+                      </div>
+                    ) : (
+                      gameList.filter(g => g.name.toLowerCase().includes(pickerQuery.toLowerCase())).map(g => (
+                        <div 
+                          key={g.id} 
+                          className={`comm-picker-option ${g.id === 'all' ? 'is-all' : ''} ${(selectedTab === 'posts' ? postsGame : workshopGame) === g.id ? 'active' : ''}`} 
+                          onClick={() => {
+                            if (selectedTab === 'posts') {
+                              setPostsGame(g.id);
+                              if (g.id === 'all') navigate('/community');
+                              else navigate(`/game/${g.id}/community`);
+                            } else {
+                              setWorkshopGame(g.id);
+                            }
+                            setPickerOpen(false);
+                          }}
+                        >
+                          {g.id !== 'all' && (
+                            <div className="comm-picker-logo">
+                              {g.logo ? <img src={g.logo} alt={g.name} /> : <span>🎮</span>}
                             </div>
-                          </li>
-                        ))
-                      )}
-                    </ul>
+                          )}
+                          <span className="comm-picker-name">{g.name}</span>
+                          {g.id !== 'all' && (
+                            <div className="comm-picker-notifications">
+                              <button
+                                className={`comm-picker-notification-toggle ${gameNotifications[g.id]?.posts ? 'enabled' : ''}`}
+                                onClick={(e) => toggleGameNotification(g.id, 'posts', e)}
+                                title={gameNotifications[g.id]?.posts ? 'Disable game posts notifications' : 'Enable game posts notifications'}
+                              >
+                                <MessageSquare size={12} />
+                              </button>
+                              <button
+                                className={`comm-picker-notification-toggle ${gameNotifications[g.id]?.threads ? 'enabled' : ''}`}
+                                onClick={(e) => toggleGameNotification(g.id, 'threads', e)}
+                                title={gameNotifications[g.id]?.threads ? 'Disable community threads notifications' : 'Enable community threads notifications'}
+                              >
+                                <Users size={12} />
+                              </button>
+                              <button
+                                className={`comm-picker-notification-toggle ${gameNotifications[g.id]?.workshop ? 'enabled' : ''}`}
+                                onClick={(e) => toggleGameNotification(g.id, 'workshop', e)}
+                                title={gameNotifications[g.id]?.workshop ? 'Disable workshop notifications' : 'Enable workshop notifications'}
+                              >
+                                <Package size={12} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))
+                    )}
                   </div>
-                </>
-              ) : null}
-              <div className="comm-filter-group">
-                <div className="comm-filter-label">Choose game</div>
-                <div className="comm-game-picker" ref={pickerRef}>
-                  <button className="comm-picker-btn" onClick={()=> setPickerOpen(!pickerOpen)}>
-                    <div className="comm-picker-card">
-                      {postsGame==='all' ? (
-                        <span>🎮</span>
-                      ) : (gameList.find(g=>g.id===postsGame)?.card ? (
-                        <img src={gameList.find(g=>g.id===postsGame)?.card} alt="card" />
-                      ) : (
-                        <span>🎮</span>
-                      ))}
-                    </div>
-                    <span className="comm-picker-label">{gameList.find(g => g.id === postsGame)?.name || 'Select Game'}</span>
-                  </button>
-                  {pickerOpen && (
-                    <div className="comm-picker-menu">
-                      <div className="comm-picker-search">
-                        <input
-                          className="comm-picker-input"
-                          value={pickerQuery}
-                          onChange={(e)=> setPickerQuery(e.target.value)}
-                          placeholder="Search games..."
-                          autoFocus
-                        />
-                      </div>
-                      {gameList.filter(g => g.name.toLowerCase().includes(pickerQuery.toLowerCase())).map(g => (
-                        <div key={g.id} className={`comm-picker-option ${g.id==='all'?'is-all':''} ${postsGame===g.id?'active':''}`} onClick={()=>{ setPostsGame(g.id); setPickerOpen(false); if (g.id==='all') navigate('/community'); else navigate(`/game/${g.id}/community`); }}>
-                          {g.id!=='all' && (
-                            <div className="comm-picker-logo">
-                              {g.logo ? <img src={g.logo} alt={g.name} /> : <span>🎮</span>}
-                            </div>
-                          )}
-                          <span className="comm-picker-name">{g.name}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="comm-filter-group">
-                <div className="comm-filter-label">Trending communities</div>
-                <ul className="comm-mini-list">
-                  {gameList.filter(g=>g.id!=='all').slice(0,3).map(g => (
-                    <li key={g.id} className="comm-mini-item" onClick={()=>{ setPostsGame(g.id); navigate(`/game/${g.id}/community`); }}>
-                      <div className="comm-picker-logo">{g.logo ? <img src={g.logo} alt={g.name} /> : <span>🎮</span>}</div>
-                      <span className="comm-mini-name">{g.name}</span>
-                    </li>
-                  ))}
-                </ul>
+                )}
               </div>
             </div>
-          ) : (
-            <div className="comm-card">
-              <div className="comm-card-title">Filters</div>
-              <div className="comm-filter-group">
-                <div className="comm-filter-label">Choose game</div>
-                <div className="comm-game-picker" ref={pickerRef}>
-                  <button className="comm-picker-btn" onClick={()=> setPickerOpen(!pickerOpen)}>
-                    <div className="comm-picker-card">
-                      {workshopGame==='all' ? (
-                        <span>🎮</span>
-                      ) : (gameList.find(g=>g.id===workshopGame)?.card ? (
-                        <img src={gameList.find(g=>g.id===workshopGame)?.card} alt="card" />
-                      ) : (
-                        <span>🎮</span>
-                      ))}
-                    </div>
-                    <span className="comm-picker-label">{gameList.find(g => g.id === workshopGame)?.name || 'Select Game'}</span>
+
+            {/* Notification Toggles - Show when a game is selected */}
+            {((selectedTab === 'posts' && postsGame !== 'all') || (selectedTab === 'workshop' && workshopGame !== 'all')) && (
+              <div className="comm-notification-toggles">
+                {selectedTab === 'posts' && !showThreads && (
+                  <button
+                    className={`comm-notification-toggle ${gameNotifications[postsGame]?.posts ? 'enabled' : ''}`}
+                    onClick={(e) => toggleGameNotification(postsGame, 'posts', e)}
+                    title={gameNotifications[postsGame]?.posts ? 'Disable game posts notifications' : 'Enable game posts notifications'}
+                  >
+                    <MessageSquare size={14} />
+                    <span>Notify me about new game posts</span>
                   </button>
-                  {pickerOpen && (
-                    <div className="comm-picker-menu">
-                      <div className="comm-picker-search">
-                        <input
-                          className="comm-picker-input"
-                          value={pickerQuery}
-                          onChange={(e)=> setPickerQuery(e.target.value)}
-                          placeholder="Search games..."
-                          autoFocus
-                        />
-                      </div>
-                      {gameList.filter(g => g.name.toLowerCase().includes(pickerQuery.toLowerCase())).map(g => (
-                        <div key={g.id} className={`comm-picker-option ${g.id==='all'?'is-all':''} ${workshopGame===g.id?'active':''}`} onClick={()=>{ setWorkshopGame(g.id); setPickerOpen(false); }}>
-                          {g.id!=='all' && (
-                            <div className="comm-picker-logo">
-                              {g.logo ? <img src={g.logo} alt={g.name} /> : <span>🎮</span>}
-                            </div>
-                          )}
-                          <span className="comm-picker-name">{g.name}</span>
-                        </div>
+                )}
+                {selectedTab === 'posts' && showThreads && (
+                  <button
+                    className={`comm-notification-toggle ${gameNotifications[postsGame]?.threads ? 'enabled' : ''}`}
+                    onClick={(e) => toggleGameNotification(postsGame, 'threads', e)}
+                    title={gameNotifications[postsGame]?.threads ? 'Disable community threads notifications' : 'Enable community threads notifications'}
+                  >
+                    <Users size={14} />
+                    <span>Notify me about new community threads</span>
+                  </button>
+                )}
+                {selectedTab === 'workshop' && (
+                  <button
+                    className={`comm-notification-toggle ${gameNotifications[workshopGame]?.workshop ? 'enabled' : ''}`}
+                    onClick={(e) => toggleGameNotification(workshopGame, 'workshop', e)}
+                    title={gameNotifications[workshopGame]?.workshop ? 'Disable workshop notifications' : 'Enable workshop notifications'}
+                  >
+                    <Package size={14} />
+                    <span>Notify me about new workshop items</span>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Thread Creation - Only show when threads view is active */}
+            {selectedTab === 'posts' && showThreads && (
+              <div className="comm-thread-creation">
+                <button 
+                  className="comm-create-thread-btn" 
+                  onClick={() => setShowThreadCreator(!showThreadCreator)}
+                >
+                  <Plus size={16} />
+                  <span>{showThreadCreator ? 'Cancel' : 'Create Community Thread'}</span>
+                </button>
+                {showThreadCreator && (
+                  <div className="comm-thread-form">
+                    <input
+                      className="comm-thread-title-input"
+                      placeholder="Community thread name..."
+                      value={threadTitle}
+                      onChange={(e) => setThreadTitle(e.target.value)}
+                    />
+                    <textarea
+                      className="comm-thread-description-input"
+                      placeholder="Description (optional)..."
+                      value={threadDescription}
+                      onChange={(e) => setThreadDescription(e.target.value)}
+                      rows={3}
+                    />
+                    <select
+                      className="comm-thread-game-select"
+                      value={threadGame}
+                      onChange={(e) => setThreadGame(e.target.value)}
+                    >
+                      <option value="all">No game</option>
+                      {gameList.filter(g => g.id !== 'all').map(game => (
+                        <option key={game.id} value={game.id}>{game.name}</option>
                       ))}
-                    </div>
-                  )}
+                    </select>
+                    <button className="comm-thread-submit-btn" onClick={handleCreateThread}>
+                      Create Community Thread
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Stats Section */}
+            <div className="comm-stats-section">
+              <div className="comm-stats-row">
+                <div className="comm-stat">
+                  <div className="comm-stat-num">{savedSet.size}</div>
+                  <div className="comm-stat-label">saved</div>
+                </div>
+                <div className="comm-stat">
+                  <div className="comm-stat-num">{sortedPosts.length}</div>
+                  <div className="comm-stat-label">game posts</div>
                 </div>
               </div>
-              <div className="comm-filter-group">
-                <div className="comm-filter-label">Trending communities</div>
-                <ul className="comm-mini-list">
-                  {gameList.filter(g=>g.id!=='all').slice(0,3).map(g => (
-                    <li key={g.id} className="comm-mini-item" onClick={()=>{ setWorkshopGame(g.id); }}>
-                      <div className="comm-picker-logo">{g.logo ? <img src={g.logo} alt={g.name} /> : <span>🎮</span>}</div>
-                      <span className="comm-mini-name">{g.name}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
             </div>
-          )}
+          </div>
         </aside>
 
         {/* Center: Feed */}
@@ -492,7 +515,7 @@ const Community = () => {
               {selectedTab === 'workshop'
                 ? (workshopGame === 'all' ? 'All Workshop' : `${workshopGame} Workshop`)
                 : showThreads
-                ? 'All Threads'
+                ? 'All Community Threads'
                 : (postsGame === 'all' ? 'All Communities' : `${postsGame} Community`)
               }
             </div>
@@ -500,20 +523,22 @@ const Community = () => {
               {selectedTab === 'workshop'
                 ? 'Browse community content'
                 : showThreads
-                ? `${sortedThreads.length} threads • sorted by ${postsSortBy}`
-                : `${sortedPosts.length} posts • sorted by ${postsSortBy}`
+                ? `${sortedThreads.length} community threads • sorted by popularity`
+                : `${sortedPosts.length} game posts • sorted by ${postsSortBy}`
               }
             </div>
           </div>
-          {selectedTab==='workshop' ? (
-            <WorkshopSection gameId={workshopGame==='all'? null : workshopGame} />
+
+          {selectedTab === 'workshop' ? (
+            <WorkshopSection gameId={workshopGame === 'all' ? null : workshopGame} />
           ) : showThreads ? (
             <>
               <div className="comm-thread-search">
+                <Search size={18} />
                 <input
                   className="comm-thread-search-input"
                   type="text"
-                  placeholder="Search threads by title, description, or author..."
+                  placeholder="Search community threads by title, description, or author..."
                   value={threadSearchQuery}
                   onChange={(e) => setThreadSearchQuery(e.target.value)}
                 />
@@ -527,7 +552,7 @@ const Community = () => {
                       <>
                         <div className="comm-thread-detail-header">
                           <button className="comm-thread-back-btn" onClick={() => setSelectedThreadId(null)}>
-                            ← Back to Threads
+                            ← Back to Community Threads
                           </button>
                           <h2 className="comm-thread-detail-title">{thread.title}</h2>
                           <div className="comm-thread-detail-meta">
@@ -560,8 +585,10 @@ const Community = () => {
               ) : (
                 <div className="comm-feed">
                   {sortedThreads.length === 0 ? (
-                    <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                      No threads yet. Create your first thread in the sidebar!
+                    <div className="comm-empty-state">
+                      <Users size={48} />
+                      <h3>No community threads yet</h3>
+                      <p>Create your first community thread to start a discussion!</p>
                     </div>
                   ) : (
                     sortedThreads.map(thread => (
@@ -588,7 +615,7 @@ const Community = () => {
                           <span className="comm-thread-stat">🕐 {thread.time || new Date(thread.createdAt).toLocaleDateString()}</span>
                         </div>
                         <button className="comm-thread-enter-btn" onClick={() => setSelectedThreadId(thread.id)}>
-                          Enter Thread →
+                          Enter Community Thread →
                         </button>
                       </article>
                     ))
@@ -599,48 +626,66 @@ const Community = () => {
           ) : (
             <>
               <div className="comm-composer">
-                <input className="comm-input" placeholder="Share something..." />
-                <button className="comm-post-btn">Post</button>
+                <div className="comm-composer-avatar">👤</div>
+                <div className="comm-composer-content">
+                  <textarea
+                    className="comm-composer-input"
+                    placeholder="Share something..."
+                    value={postContent}
+                    onChange={(e) => setPostContent(e.target.value)}
+                    rows={3}
+                  />
+                  <div className="comm-composer-actions">
+                    <button className="comm-post-btn" onClick={handleCreatePost}>
+                      Post
+                    </button>
+                  </div>
+                </div>
               </div>
               <div className="comm-feed">
                 {sortedPosts.length === 0 ? (
-                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                    No posts yet. Be the first to share something!
+                  <div className="comm-empty-state">
+                    <MessageSquare size={48} />
+                    <h3>No game posts yet</h3>
+                    <p>Be the first to share something!</p>
                   </div>
                 ) : (
                   sortedPosts.map(p => (
-                  <article key={p.id} className={`comm-post ${p.type ? `type-${p.type}` : ''}`}>
-                    <header className="comm-post-header">
-                      <div className="comm-avatar">👤</div>
-                      <div className="comm-meta">
-                        <div className="comm-author">{p.author} {p.game && (<span className="comm-game-badge">{p.game}</span>)}</div>
-                        <div className="comm-time">{p.time}</div>
-                      </div>
-                    </header>
-                    {p.type === 'speedrun' ? (
-                      <div className="comm-speedrun">
-                        <div className="comm-time-big">{`${p.h?.toString().padStart(2,'0')}:${p.m?.toString().padStart(2,'0')}:${p.s?.toString().padStart(2,'0')}.${(p.ms??0).toString().padStart(2,'0')}`}</div>
+                    <article key={p.id} className={`comm-post ${p.type ? `type-${p.type}` : ''}`}>
+                      <header className="comm-post-header">
+                        <div className="comm-avatar">👤</div>
+                        <div className="comm-meta">
+                          <div className="comm-author">
+                            {p.author} 
+                            {p.game && <span className="comm-game-badge">{p.game}</span>}
+                          </div>
+                          <div className="comm-time">{p.time}</div>
+                        </div>
+                      </header>
+                      {p.type === 'speedrun' ? (
+                        <div className="comm-speedrun">
+                          <div className="comm-time-big">{`${p.h?.toString().padStart(2,'0')}:${p.m?.toString().padStart(2,'0')}:${p.s?.toString().padStart(2,'0')}.${(p.ms??0).toString().padStart(2,'0')}`}</div>
+                          <p className="comm-text">{p.text}</p>
+                        </div>
+                      ) : p.type === 'screenshot' ? (
+                        <div className="comm-screenshot">
+                          {p.image && (<div className="comm-shot"><img src={p.image} alt="screenshot" /></div>)}
+                          <p className="comm-text">{p.text}</p>
+                        </div>
+                      ) : (
                         <p className="comm-text">{p.text}</p>
-                      </div>
-                    ) : p.type === 'screenshot' ? (
-                      <div className="comm-screenshot">
-                        {p.image && (<div className="comm-shot"><img src={p.image} alt="screenshot" /></div>)}
-                        <p className="comm-text">{p.text}</p>
-                      </div>
-                    ) : (
-                      <p className="comm-text">{p.text}</p>
-                    )}
-                    {p.tags?.length ? (
-                      <div className="comm-post-tags">
-                        {p.tags.map(t => <span key={t} className="comm-post-tag">{t}</span>)}
-                      </div>
-                    ) : null}
-                    <footer className="comm-actions">
-                      <button className="comm-action">❤️ {p.likes}</button>
-                      <button className="comm-action">💬 {p.comments}</button>
-                      <button className="comm-action">↗︎ Share</button>
-                    </footer>
-                  </article>
+                      )}
+                      {p.tags?.length ? (
+                        <div className="comm-post-tags">
+                          {p.tags.map(t => <span key={t} className="comm-post-tag">{t}</span>)}
+                        </div>
+                      ) : null}
+                      <footer className="comm-actions">
+                        <button className="comm-action">❤️ {p.likes}</button>
+                        <button className="comm-action">💬 {p.comments}</button>
+                        <button className="comm-action">↗︎ Share</button>
+                      </footer>
+                    </article>
                   ))
                 )}
               </div>
@@ -648,33 +693,47 @@ const Community = () => {
           )}
         </main>
 
-        {/* Right: Extras */}
-        <aside className="community-right">
-          <div className="comm-right-section">
-            <div className="comm-card-title">Saved</div>
-            <div className="comm-stats-row">
-              <div className="comm-stat">
-                <div className="comm-stat-num">{savedSet.size}</div>
-                <div className="comm-stat-label">saved posts</div>
-              </div>
-              <div className="comm-stat">
-                <div className="comm-stat-num">{sortedPosts.length}</div>
-                <div className="comm-stat-label">posts here</div>
-              </div>
+        {/* Right: Navigation Sidebar */}
+        <aside className="community-right marketplace-sidebar">
+          <div className="sidebar-title">Community</div>
+          <nav className="sidebar-nav">
+            <div className="sidebar-nav-section">
+              <h3 className="sidebar-section-title">Content</h3>
+              <button 
+                className={`sidebar-nav-item ${selectedTab === 'posts' && !showThreads ? 'active' : ''}`}
+                onClick={() => {
+                  setSelectedTab('posts');
+                  setShowThreads(false);
+                }}
+              >
+                <MessageSquare size={18} />
+                <span>Game Posts</span>
+                {sortedPosts.length > 0 && (
+                  <span className="sidebar-badge">{sortedPosts.length}</span>
+                )}
+              </button>
+              <button 
+                className={`sidebar-nav-item ${selectedTab === 'posts' && showThreads ? 'active' : ''}`}
+                onClick={() => {
+                  setSelectedTab('posts');
+                  setShowThreads(true);
+                }}
+              >
+                <Users size={18} />
+                <span>Community Threads</span>
+                {sortedThreads.length > 0 && (
+                  <span className="sidebar-badge">{sortedThreads.length}</span>
+                )}
+              </button>
+              <button 
+                className={`sidebar-nav-item ${selectedTab === 'workshop' ? 'active' : ''}`}
+                onClick={() => setSelectedTab('workshop')}
+              >
+                <Package size={18} />
+                <span>Workshop</span>
+              </button>
             </div>
-          </div>
-          <div className="comm-card">
-            <div className="comm-card-title">Trending</div>
-            <ul className="comm-list">
-              {/* Trending topics will be loaded from API */}
-            </ul>
-          </div>
-          <div className="comm-card">
-            <div className="comm-card-title">Suggested creators</div>
-            <ul className="comm-list">
-              {/* Suggested creators will be loaded from API */}
-            </ul>
-          </div>
+          </nav>
         </aside>
       </div>
     </div>
@@ -682,4 +741,3 @@ const Community = () => {
 };
 
 export default Community;
-

@@ -37,9 +37,9 @@
     "acceptTerms": true,
     "devIntent": false,
     "createdAt": "2025-11-02T21:04:17.524Z",
-    "lastLoginTime": "2025-11-05T02:42:11.115Z",
+    "lastLoginTime": "2025-11-06T23:42:01.211Z",
     "isLoggedIn": true,
-    "stayLoggedIn": false
+    "stayLoggedIn": true
   },
   {
     "id": "1762272498548",
@@ -78,7 +78,7 @@
     "acceptTerms": true,
     "devIntent": false,
     "createdAt": "2025-11-02T20:10:26.851Z",
-    "lastLoginTime": "2025-11-05T02:41:55.728Z",
+    "lastLoginTime": "2025-11-06T00:25:39.964Z",
     "isLoggedIn": true,
     "stayLoggedIn": true
   },

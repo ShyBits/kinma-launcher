@@ -4534,34 +4534,14 @@ const GamePromo = ({ gamesData = {} }) => {
                       {!isTabsCompact && <span>JavaScript</span>}
                     </button>
                     
-                    <>
-                      <button
-                        className={`code-tab ${activeTab === 'debug' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('debug')}
-                        title="Debug Console"
-                      >
-                        <Bug size={14} />
-                        {!isTabsCompact && <span>Debug Console</span>}
-                      </button>
-                      <button
-                        className={`code-tab ${activeTab === 'output' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('output')}
-                        title="Output"
-                      >
-                        <FileText size={14} />
-                        {!isTabsCompact && <span>Output</span>}
-                      </button>
-                      <button
-                        className={`code-tab ${activeTab === 'terminal' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('terminal')}
-                        title="Terminal"
-                      >
-                        <Terminal size={14} />
-                        {!isTabsCompact && <span>Terminal</span>}
-                      </button>
-                    </>
-                    
                     <div className="code-layout-controls">
+                      <button
+                        className={`layout-btn ${codeLayoutMode === 'right' ? 'active' : ''}`}
+                        onClick={() => setCodeLayoutMode('right')}
+                        title="Code on right side"
+                      >
+                        <PanelRightClose size={18} />
+                      </button>
                       <button
                         className={`layout-btn ${codeLayoutMode === 'bottom' ? 'active' : ''}`}
                         onClick={() => setCodeLayoutMode('bottom')}
@@ -4576,88 +4556,8 @@ const GamePromo = ({ gamesData = {} }) => {
                       >
                         <PanelLeftClose size={18} />
                       </button>
-                      <button
-                        className={`layout-btn ${codeLayoutMode === 'right' ? 'active' : ''}`}
-                        onClick={() => setCodeLayoutMode('right')}
-                        title="Code on right side"
-                      >
-                        <PanelRightClose size={18} />
-                      </button>
                     </div>
                   </div>
-
-                  {/* Search and Filter Bar - Below tabs */}
-                  {(activeTab === 'html' || activeTab === 'css' || activeTab === 'js') && (
-                    <div className="code-search-filter-bar">
-                      {/* CSS Filter Buttons - only show when CSS tab is active */}
-                      {activeTab === 'css' && (
-                        <div className="css-filter-container">
-                          <Filter size={14} />
-                          <button
-                            className={`css-filter-btn ${cssFilter === 'all' ? 'active' : ''}`}
-                            onClick={() => setCssFilter('all')}
-                            title="Show all"
-                          >
-                            All
-                          </button>
-                          <button
-                            className={`css-filter-btn ${cssFilter === 'keyframes' ? 'active' : ''}`}
-                            onClick={() => setCssFilter('keyframes')}
-                            title="Show @keyframes"
-                          >
-                            @keyframes
-                          </button>
-                          <button
-                            className={`css-filter-btn ${cssFilter === 'media' ? 'active' : ''}`}
-                            onClick={() => setCssFilter('media')}
-                            title="Show @media"
-                          >
-                            @media
-                          </button>
-                          <button
-                            className={`css-filter-btn ${cssFilter === 'import' ? 'active' : ''}`}
-                            onClick={() => setCssFilter('import')}
-                            title="Show @import"
-                          >
-                            @import
-                          </button>
-                          <button
-                            className={`css-filter-btn ${cssFilter === 'variables' ? 'active' : ''}`}
-                            onClick={() => setCssFilter('variables')}
-                            title="Show CSS variables"
-                          >
-                            Variables
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Search Bar - Right side */}
-                      <div className="code-search-container">
-                        <Search size={14} />
-                        <input
-                          type="text"
-                          className="code-search-input"
-                          placeholder={`Search ${activeTab === 'html' ? 'HTML' : activeTab === 'css' ? 'CSS' : activeTab === 'js' ? 'JavaScript' : activeTab}...`}
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Escape') {
-                              setSearchQuery('');
-                            }
-                          }}
-                        />
-                        {searchQuery && (
-                          <button
-                            className="code-search-clear"
-                            onClick={() => setSearchQuery('')}
-                            title="Clear search"
-                          >
-                            <X size={14} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
 
                   <div className="code-section-content">
                     {activeTab === 'html' && (
@@ -4666,7 +4566,6 @@ const GamePromo = ({ gamesData = {} }) => {
                         onChange={(e) => setPromoHTML(e.target.value)}
                         language="html"
                         placeholder="Enter your HTML code here..."
-                        searchQuery={activeTab === 'html' ? searchQuery : ''}
                       />
                     )}
 
@@ -4681,7 +4580,6 @@ const GamePromo = ({ gamesData = {} }) => {
                         }}
                         language="css"
                         placeholder={cssFilter === 'all' ? "Enter your CSS code here..." : "Switch to 'All' filter to edit CSS"}
-                        searchQuery={activeTab === 'css' ? searchQuery : ''}
                         readOnly={cssFilter !== 'all'}
                       />
                     )}
@@ -4692,186 +4590,7 @@ const GamePromo = ({ gamesData = {} }) => {
                         onChange={(e) => setPromoJS(e.target.value)}
                         language="javascript"
                         placeholder="Enter your JavaScript code here..."
-                        searchQuery={activeTab === 'js' ? searchQuery : ''}
                       />
-                    )}
-
-                    {activeTab === 'debug' && (
-                      <div className="debug-console-panel">
-                        <div className="panel-header">
-                          <span>Debug Console</span>
-                          <div className="panel-header-actions">
-                            <div className="code-search-container">
-                              <Search size={14} />
-                              <input
-                                type="text"
-                                className="code-search-input"
-                                placeholder="Search..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Escape') {
-                                    setSearchQuery('');
-                                  }
-                                }}
-                              />
-                              {searchQuery && (
-                                <button
-                                  className="code-search-clear"
-                                  onClick={() => setSearchQuery('')}
-                                  title="Clear search"
-                                >
-                                  <X size={14} />
-                                </button>
-                              )}
-                            </div>
-                            <button 
-                              className="clear-panel-btn"
-                              onClick={() => setDebugConsole([])}
-                            >
-                              Clear
-                            </button>
-                          </div>
-                        </div>
-                        <div className="panel-content">
-                          {debugConsole.length === 0 ? (
-                            <div className="panel-empty">No debug messages</div>
-                          ) : (
-                            debugConsole
-                              .filter((msg) => {
-                                if (!searchQuery) return true;
-                                const query = searchQuery.toLowerCase();
-                                return (
-                                  msg.text.toLowerCase().includes(query) ||
-                                  msg.type.toLowerCase().includes(query) ||
-                                  msg.time.toLowerCase().includes(query)
-                                );
-                              })
-                              .map((msg, index) => (
-                                <div key={index} className={`console-message ${msg.type}`}>
-                                  <span className="console-time">{msg.time}</span>
-                                  <span className="console-text">{msg.text}</span>
-                                </div>
-                              ))
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {activeTab === 'output' && (
-                      <div className="output-panel">
-                        <div className="panel-header">
-                          <span>Output</span>
-                          <div className="panel-header-actions">
-                            <div className="code-search-container">
-                              <Search size={14} />
-                              <input
-                                type="text"
-                                className="code-search-input"
-                                placeholder="Search..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Escape') {
-                                    setSearchQuery('');
-                                  }
-                                }}
-                              />
-                              {searchQuery && (
-                                <button
-                                  className="code-search-clear"
-                                  onClick={() => setSearchQuery('')}
-                                  title="Clear search"
-                                >
-                                  <X size={14} />
-                                </button>
-                              )}
-                            </div>
-                            <button 
-                              className="clear-panel-btn"
-                              onClick={() => setOutput([])}
-                            >
-                              Clear
-                            </button>
-                          </div>
-                        </div>
-                        <div className="panel-content">
-                          {output.length === 0 ? (
-                            <div className="panel-empty">No output</div>
-                          ) : (
-                            output
-                              .filter((msg) => {
-                                if (!searchQuery) return true;
-                                const query = searchQuery.toLowerCase();
-                                const msgStr = typeof msg === 'string' ? msg : String(msg);
-                                return msgStr.toLowerCase().includes(query);
-                              })
-                              .map((msg, index) => (
-                                <div key={index} className="output-message">
-                                  {msg}
-                                </div>
-                              ))
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {activeTab === 'terminal' && (
-                      <div className="terminal-panel">
-                        <div className="panel-header">
-                          <span>Terminal</span>
-                          <div className="panel-header-actions">
-                            <div className="code-search-container">
-                              <Search size={14} />
-                              <input
-                                type="text"
-                                className="code-search-input"
-                                placeholder="Search..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Escape') {
-                                    setSearchQuery('');
-                                  }
-                                }}
-                              />
-                              {searchQuery && (
-                                <button
-                                  className="code-search-clear"
-                                  onClick={() => setSearchQuery('')}
-                                  title="Clear search"
-                                >
-                                  <X size={14} />
-                                </button>
-                              )}
-                            </div>
-                            <button 
-                              className="clear-panel-btn"
-                              onClick={() => setTerminal([])}
-                            >
-                              Clear
-                            </button>
-                          </div>
-                        </div>
-                        <div className="panel-content terminal-content">
-                          {terminal.length === 0 ? (
-                            <div className="panel-empty">Terminal ready</div>
-                          ) : (
-                            terminal
-                              .filter((line) => {
-                                if (!searchQuery) return true;
-                                const query = searchQuery.toLowerCase();
-                                const lineStr = typeof line === 'string' ? line : String(line);
-                                return lineStr.toLowerCase().includes(query);
-                              })
-                              .map((line, index) => (
-                                <div key={index} className="terminal-line">
-                                  {line}
-                                </div>
-                              ))
-                          )}
-                        </div>
-                      </div>
                     )}
                   </div>
                 </div>

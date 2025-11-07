@@ -89,9 +89,24 @@
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
+  flex: 1;
 }
 
+/* Main Navigation Links - Aligned with Content Area */
+.nav-main-links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  position: absolute;
+  left: var(--sidebar-width, 260px); /* Dynamically follows sidebar resize - aligns with main content area */
+  top: 50%;
+  transform: translateY(-50%);
+  transition: left 0.1s ease;
+}
 
+.nav-main-links.resizing {
+  transition: none; /* Remove transition delay during resize */
+}
 
 .menu-toggle-btn {
   display: flex;
@@ -294,7 +309,7 @@
 .nav-item-profile {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     padding: 0 16px;
     min-width: fit-content;
     height: var(--nav-height);
@@ -324,8 +339,10 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 2px;
+    justify-content: center;
+    gap: 3px;
     min-width: 0;
+    line-height: 1.2;
 }
 
 .nav-user-name {
@@ -333,15 +350,19 @@
     font-size: 14px;
     font-weight: 500;
     white-space: nowrap;
-    line-height: 1.2;
+    line-height: 1.3;
+    margin: 0;
+    padding: 0;
 }
 
 .nav-balance-inline {
     color: #10b981;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
-    line-height: 1;
-    letter-spacing: 0.3px;
+    line-height: 1.2;
+    letter-spacing: 0.2px;
+    margin: 0;
+    padding: 0;
 }
 
 /* Profile Avatar in Navigation */
@@ -458,18 +479,14 @@
 .nav-item:hover::after {
   opacity: 1;
   background: linear-gradient(to top, 
-    rgba(74, 158, 255, 0.15) 0%, 
-    rgba(74, 158, 255, 0.06) 8%, 
-    rgba(74, 158, 255, 0.025) 20%, 
-    rgba(74, 158, 255, 0.01) 40%, 
-    rgba(74, 158, 255, 0.004) 60%, 
-    rgba(74, 158, 255, 0.001) 80%, 
-    rgba(74, 158, 255, 0.0005) 95%, 
+    rgba(74, 158, 255, 0.06) 0%, 
+    rgba(74, 158, 255, 0.02) 30%, 
+    rgba(74, 158, 255, 0.008) 60%, 
     transparent 100%
   );
 }
 
-.nav-item:not(:hover):not(.active)::after {
+.nav-item:not(:hover):not(.active):not(.dropdown-open)::after {
   opacity: 0 !important;
   background: transparent !important;
 }
@@ -477,10 +494,10 @@
 .nav-item:hover::before {
   left: 0;
   right: 0;
-  background: var(--accent-primary);
+  background: rgba(74, 158, 255, 0.4);
 }
 
-.nav-item:not(:hover):not(.active)::before {
+.nav-item:not(:hover):not(.active):not(.dropdown-open)::before {
   left: 8px;
   right: 8px;
   background: transparent;
@@ -499,13 +516,9 @@
   right: 0;
   top: 0;
   background: linear-gradient(to top, 
-    rgba(74, 158, 255, 1) 0%, 
-    rgba(74, 158, 255, 0.4) 8%, 
-    rgba(74, 158, 255, 0.15) 20%, 
-    rgba(74, 158, 255, 0.06) 40%, 
-    rgba(74, 158, 255, 0.02) 60%, 
-    rgba(74, 158, 255, 0.008) 80%, 
-    rgba(74, 158, 255, 0.003) 95%, 
+    rgba(74, 158, 255, 0.25) 0%, 
+    rgba(74, 158, 255, 0.1) 30%, 
+    rgba(74, 158, 255, 0.04) 60%, 
     transparent 100%
   );
   pointer-events: none;
@@ -761,12 +774,12 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
   overflow: visible;
   position: relative;
-  width: 320px;
+  width: 300px;
   animation: fadeInMenu 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .profile-menu-header {
-  padding: 20px;
+  padding: 14px 16px;
   position: relative;
   overflow: visible;
   border-bottom: none;
@@ -798,14 +811,14 @@
 .profile-menu-user-info {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   position: relative;
   width: 100%;
 }
 
 .profile-menu-avatar {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   border-radius: 0;
   background: rgba(74, 158, 255, 0.15);
   border: 1px solid rgba(74, 158, 255, 0.3);
@@ -813,7 +826,7 @@
   align-items: center;
   justify-content: center;
   color: #4a9eff;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   flex-shrink: 0;
   transition: all 0.2s ease;
@@ -824,15 +837,15 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .profile-menu-quick-switch-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   background: transparent;
   border: none;
   border-radius: 50%;
@@ -855,7 +868,7 @@
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   color: inherit;
   z-index: 2;
@@ -888,12 +901,12 @@
 .profile-menu-name-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .profile-menu-user-details h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: #e5e5e5;
   white-space: nowrap;
@@ -903,7 +916,7 @@
 }
 
 .profile-menu-level {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: #4a9eff;
   background: transparent;
@@ -915,7 +928,7 @@
 
 .profile-menu-user-details p {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   color: #b3b3b3;
   white-space: nowrap;
   overflow: hidden;
@@ -924,11 +937,11 @@
 }
 
 .profile-menu-accounts {
-  padding: 16px 20px;
+  padding: 12px 16px;
 }
 
 .profile-menu-quick-switch-section {
-  padding: 12px 14px 12px;
+  padding: 10px 12px;
   animation: slideDown 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -944,16 +957,16 @@
 }
 
 .profile-menu-section-title {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: #b3b3b3;
   text-transform: uppercase;
   letter-spacing: 0.8px;
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .quick-switch-header {
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .quick-switch-header span {
@@ -967,14 +980,14 @@
 .profile-menu-accounts-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .profile-menu-account-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 10px;
+  padding: 8px 10px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 0;
@@ -1001,8 +1014,8 @@
 }
 
 .profile-menu-account-avatar {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 0;
   background: rgba(74, 158, 255, 0.15);
   border: 1px solid rgba(74, 158, 255, 0.3);
@@ -1010,7 +1023,7 @@
   align-items: center;
   justify-content: center;
   color: #4a9eff;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   flex-shrink: 0;
 }
@@ -1024,12 +1037,12 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
 .profile-menu-account-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: #e5e5e5;
   white-space: nowrap;
@@ -1038,7 +1051,7 @@
 }
 
 .profile-menu-account-badge {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 500;
   color: #4a9eff;
 }
@@ -1054,30 +1067,30 @@
   height: 1px;
   background: rgba(255, 255, 255, 0.1);
   width: calc(100% - 24px);
-  margin: 8px 12px; /* inset divider, not full width */
+  margin: 6px 12px; /* inset divider, not full width */
   border-radius: 1px;
 }
 
 .profile-menu-manage-accounts {
-  padding: 8px;
+  padding: 6px;
 }
 
 .profile-menu-actions {
-  padding: 8px;
+  padding: 6px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .profile-menu-action-btn {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: 10px;
+  padding: 10px 12px;
   background: transparent;
   border: none;
   border-radius: 0;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: #e5e5e5;
   cursor: pointer;
@@ -1093,8 +1106,8 @@
 
 .profile-menu-action-btn.danger {
   color: rgba(244, 67, 54, 0.9);
-  margin-top: 8px;
-  padding-top: 12px;
+  margin-top: 6px;
+  padding-top: 10px;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -1105,8 +1118,8 @@
 
 .profile-menu-action-btn svg {
   flex-shrink: 0;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   opacity: 0.8;
   transition: opacity 0.2s ease;
   color: #b3b3b3;
@@ -1720,5 +1733,514 @@
 
 
 
+}
+
+/* Notification Button & Dropdown */
+.notification-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.notification-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  min-width: var(--nav-height);
+  width: var(--nav-height);
+  gap: 4px;
+  overflow: hidden;
+}
+
+.notification-button::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 8px;
+  right: 8px;
+  height: 2px;
+  background: transparent;
+  transition: left 0.2s ease, right 0.2s ease, background 0.2s ease;
+  border-radius: 0 0 8px 8px;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.notification-button::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  background: transparent;
+  pointer-events: none;
+  border-radius: 0;
+  opacity: 0;
+  transition: opacity 0.2s ease, background 0.2s ease;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}
+
+.notification-button svg {
+  transition: all 0.2s ease;
+  position: relative;
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.notification-button.dropdown-open {
+  background: transparent;
+}
+
+.notification-button.dropdown-open::before {
+  left: 0 !important;
+  right: 0 !important;
+  background: var(--accent-primary) !important;
+}
+
+.notification-button.dropdown-open.has-notifications::before {
+  background: #ef4444 !important;
+}
+
+.notification-button.dropdown-open::after {
+  opacity: 1 !important;
+  background: linear-gradient(to top, 
+    rgba(74, 158, 255, 0.25) 0%, 
+    rgba(74, 158, 255, 0.1) 30%, 
+    rgba(74, 158, 255, 0.04) 60%, 
+    transparent 100%
+  ) !important;
+}
+
+.notification-button.dropdown-open.has-notifications::after {
+  background: linear-gradient(to top, 
+    rgba(239, 68, 68, 0.25) 0%, 
+    rgba(239, 68, 68, 0.1) 30%, 
+    rgba(239, 68, 68, 0.04) 60%, 
+    transparent 100%
+  ) !important;
+}
+
+.notification-button.dropdown-open:not(:hover)::before {
+  left: 0 !important;
+  right: 0 !important;
+  background: var(--accent-primary) !important;
+}
+
+.notification-button.dropdown-open.has-notifications:not(:hover)::before {
+  background: #ef4444 !important;
+}
+
+.notification-button.dropdown-open:not(:hover)::after {
+  opacity: 1 !important;
+  background: linear-gradient(to top, 
+    rgba(74, 158, 255, 0.25) 0%, 
+    rgba(74, 158, 255, 0.1) 30%, 
+    rgba(74, 158, 255, 0.04) 60%, 
+    transparent 100%
+  ) !important;
+}
+
+.notification-button.dropdown-open.has-notifications:not(:hover)::after {
+  background: linear-gradient(to top, 
+    rgba(239, 68, 68, 0.25) 0%, 
+    rgba(239, 68, 68, 0.1) 30%, 
+    rgba(239, 68, 68, 0.04) 60%, 
+    transparent 100%
+  ) !important;
+}
+
+.notification-button.dropdown-open.has-notifications svg {
+  color: #ef4444 !important;
+  stroke: #ef4444 !important;
+  fill: #ef4444 !important;
+  opacity: 1 !important;
+}
+
+.notification-button.dropdown-open.has-notifications .notification-badge {
+  color: #ef4444;
+  opacity: 1;
+}
+
+.notification-button.has-notifications svg path,
+.notification-button.has-notifications svg circle,
+.notification-button.has-notifications svg line {
+  stroke: #ef4444 !important;
+  fill: #ef4444 !important;
+}
+
+.notification-button.has-notifications::before {
+  background: #ef4444 !important;
+  left: 0 !important;
+  right: 0 !important;
+}
+
+.notification-button.has-notifications::after {
+  opacity: 1 !important;
+  background: linear-gradient(to top, 
+    rgba(239, 68, 68, 0.25) 0%, 
+    rgba(239, 68, 68, 0.1) 30%, 
+    rgba(239, 68, 68, 0.04) 60%, 
+    transparent 100%
+  ) !important;
+}
+
+.notification-button.has-notifications:not(:hover)::before {
+  background: #ef4444 !important;
+  left: 0 !important;
+  right: 0 !important;
+}
+
+.notification-button.has-notifications:not(:hover)::after {
+  opacity: 1 !important;
+  background: linear-gradient(to top, 
+    rgba(239, 68, 68, 0.25) 0%, 
+    rgba(239, 68, 68, 0.1) 30%, 
+    rgba(239, 68, 68, 0.04) 60%, 
+    transparent 100%
+  ) !important;
+}
+
+.notification-button.has-notifications:hover svg {
+  color: #ef4444 !important;
+  stroke: #ef4444 !important;
+  fill: #ef4444 !important;
+}
+
+.notification-button.has-notifications:hover svg path,
+.notification-button.has-notifications:hover svg circle,
+.notification-button.has-notifications:hover svg line {
+  stroke: #ef4444 !important;
+  fill: #ef4444 !important;
+}
+
+.notification-badge {
+  position: relative;
+  background: transparent;
+  color: #ef4444 !important;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0;
+  border-radius: 0;
+  min-width: auto;
+  height: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  z-index: 3;
+  pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.notification-dropdown {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 380px;
+  max-height: 500px;
+  background: rgb(15, 17, 21);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7);
+  z-index: 1002;
+  overflow: hidden;
+  animation: fadeInMenu 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+.notification-dropdown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.notification-dropdown-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notification-dropdown-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #e5e5e5;
+}
+
+.notification-dropdown-title svg {
+  color: #4a9eff;
+}
+
+.notification-dropdown-badge {
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notification-create-fake {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #b3b3b3;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.notification-create-fake:hover {
+  background: rgba(74, 158, 255, 0.1);
+  color: #4a9eff;
+}
+
+.notification-mark-all-read {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #b3b3b3;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.notification-mark-all-read:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #4a9eff;
+}
+
+.notification-dropdown-content {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 400px;
+}
+
+.notification-dropdown-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.notification-dropdown-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.notification-dropdown-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+}
+
+.notification-dropdown-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.notification-dropdown-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 20px;
+  color: #b3b3b3;
+  text-align: center;
+}
+
+.notification-dropdown-empty svg {
+  opacity: 0.3;
+  margin-bottom: 12px;
+}
+
+.notification-dropdown-empty p {
+  margin: 0;
+  font-size: 14px;
+  color: #b3b3b3;
+}
+
+.notification-dropdown-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.notification-dropdown-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  background: transparent;
+}
+
+.notification-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.notification-dropdown-item.unread {
+  position: relative;
+}
+
+.notification-dropdown-item.unread::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--notification-color, #4a9eff);
+  z-index: 2;
+}
+
+.notification-dropdown-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  margin-top: 2px;
+}
+
+.notification-dropdown-icon svg {
+  color: var(--notification-color, #4a9eff);
+}
+
+.notification-dropdown-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.notification-dropdown-title-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #e5e5e5;
+  line-height: 1.3;
+}
+
+.notification-dropdown-item.unread .notification-dropdown-title-text {
+  font-weight: 600;
+}
+
+.notification-dropdown-message {
+  font-size: 13px;
+  color: #b3b3b3;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.notification-dropdown-time {
+  font-size: 11px;
+  color: #808080;
+  margin-top: 2px;
+}
+
+.notification-dropdown-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.notification-dropdown-item:hover .notification-dropdown-actions {
+  opacity: 1;
+}
+
+.notification-dropdown-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #b3b3b3;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.notification-dropdown-delete:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+.notification-dropdown-unread-indicator {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #4a9eff;
+}
+
+.notification-dropdown-footer {
+  padding: 12px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.notification-dropdown-view-all {
+  width: 100%;
+  padding: 10px;
+  background: rgba(74, 158, 255, 0.1);
+  border: 1px solid rgba(74, 158, 255, 0.2);
+  border-radius: 0;
+  color: #4a9eff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.notification-dropdown-view-all:hover {
+  background: rgba(74, 158, 255, 0.15);
+  border-color: rgba(74, 158, 255, 0.3);
+  color: #5aaaff;
 }
 
