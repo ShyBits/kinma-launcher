@@ -46,6 +46,51 @@
     z-index: 10;
 }
 
+.sidebar-top-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+}
+
+.sidebar-home-icon {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0;
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    flex-shrink: 0;
+}
+
+.sidebar-home-icon:hover {
+    background: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+    border-color: rgba(59, 130, 246, 0.4);
+    box-shadow: none;
+    transform: none;
+}
+
+.sidebar-home-icon.active {
+    background: rgba(59, 130, 246, 0.25);
+    color: #60a5fa;
+    border-color: rgba(59, 130, 246, 0.5);
+    box-shadow: none;
+}
+
+.sidebar-home-icon svg {
+    color: inherit;
+    transition: color 0.2s ease;
+}
+
 .sidebar-btn {
     width: 100%;
     padding: 12px 16px;
@@ -91,7 +136,9 @@
     background: rgba(0, 0, 0, 0.5);
     border: none;
     border-radius: 0;
-    margin-top: 12px;
+    flex: 1;
+    min-width: 0;
+    height: 36px;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -102,8 +149,6 @@
 .sidebar-search:focus-within {
     background: rgba(0, 0, 0, 0.7);
     box-shadow: none;
-    outline: 2px solid rgba(59, 130, 246, 0.4);
-    outline-offset: -2px;
 }
 
 .sidebar-search input {
@@ -113,6 +158,8 @@
     color: rgba(255, 255, 255, 0.85);
     font-size: 13px;
     flex: 1;
+    min-width: 0;
+    width: 100%;
     font-weight: 400;
 }
 
@@ -135,7 +182,7 @@
 .sidebar-content {
     flex: 1;
     overflow-y: auto;
-    padding: 12px 20px;
+    padding: 12px 12px 12px 20px;
     padding-bottom: 12px;
     position: relative;
     min-height: 0;
@@ -159,7 +206,7 @@
 .section-header {
     width: 100%;
     text-align: left;
-    padding: 8px 12px;
+    padding: 8px 0px;
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.8px;
@@ -168,11 +215,13 @@
     background: none;
     display: flex;
     align-items: center;
+    justify-content: flex-start;
     gap: 8px;
     border-radius: 0;
     cursor: pointer;
     transition: all 0.2s ease;
     margin-top: 0px;
+    position: relative;
 }
 
 .section-header:hover {
@@ -194,12 +243,86 @@
     color: var(--text-primary);
 }
 
+.section-folder-icon {
+    color: #8ab4ff;
+    flex-shrink: 0;
+}
+
+.section-header:hover .section-folder-icon {
+    color: #a5c9ff;
+}
+
 /* Game Items */
 .section-list {
     margin-top: 6px;
+    margin-left: 24px;
     display: flex;
     flex-direction: column;
     gap: 4px;
+    align-items: flex-start;
+    width: calc(100% - 24px);
+    padding-left: 12px;
+    position: relative;
+}
+
+/* Base vertical line - continuous gray line for entire section */
+.section-list::before {
+    content: '';
+    position: absolute;
+    left: -17px;
+    top: -17px;
+    width: 1px;
+    height: calc(100%);
+    background: rgba(255, 255, 255, 0.08);
+    z-index: 0;
+}
+
+/* Colored overlay vertical line - extends only to active item */
+.section-list::after {
+    content: '';
+    position: absolute;
+    left: -17px;
+    top: -17px;
+    width: 1px;
+    background: rgba(59, 130, 246, 0.3);
+    z-index: 1;
+    display: none;
+    transition: height 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Show colored line when section has active item */
+.section-list:has(.game-item.active)::after {
+    display: block;
+}
+
+/* Calculate height to extend to active item's connection point */
+/* JavaScript sets --active-line-height, fallback to full height */
+.section-list:has(.game-item.active)::after {
+    height: var(--active-line-height, calc(100% + 17px));
+    max-height: var(--active-line-height, calc(100% + 17px));
+}
+
+/* For updating active items - use orange color */
+.section-list:has(.game-item.updating.active)::after {
+    background: rgba(255, 167, 38, 0.3);
+}
+
+.sidebar-section {
+    position: relative;
+}
+
+.sidebar-section::after {
+    content: '';
+    position: absolute;
+    left: 8px;
+    top: 24px;
+    width: 1px;
+    background: rgba(255, 255, 255, 0.08);
+    display: none;
+}
+
+.sidebar-section:has(.section-list)::after {
+    display: none; /* Use section-list::before instead */
 }
 
 .game-item {
@@ -210,8 +333,40 @@
     border-radius: 0;
     padding: 0;
     cursor: pointer;
-    transition: all 0.2s ease;
-    overflow: hidden;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: visible;
+    width: 100%;
+    align-items: flex-start;
+    border-left: 3px solid transparent;
+}
+
+/* Horizontal line connecting each game item to the vertical line */
+.game-item::before {
+    content: '';
+    position: absolute;
+    left: -30px;
+    top: 20px;
+    width: 28px;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+    z-index: 2;
+    transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Connection point dot - positioned at intersection */
+.game-item::after {
+    content: '';
+    position: absolute;
+    left: -31px;
+    top: 20px;
+    width: 5px;
+    height: 5px;
+    background: rgba(77, 73, 73, 0.8);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 3;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
 }
 
 .game-item.updating {
@@ -242,8 +397,17 @@
     }
 }
 
-/* Remove old pseudo fill; progress is driven by .game-progress-bar width */
-.game-item.updating::before { content: none; }
+/* Connection lines and points should always show, even for updating items */
+.game-item.updating::before {
+    content: '';
+    position: absolute;
+    left: -16px;
+    top: 20px;
+    width: 16px;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+    z-index: 0;
+}
 
 .game-item.updating .game-row,
 .game-item.updating .update-icon-btn,
@@ -272,29 +436,88 @@
     }
 }
 
-.game-item:hover .game-row {
+.game-item:hover {
     background: rgba(255, 255, 255, 0.03);
+}
+
+.game-item:hover .game-row {
     color: var(--text-primary);
-    transform: translateX(2px);
 }
 
 .game-item.active {
-    background: rgba(59, 130, 246, 0.08);
+    background: linear-gradient(to right, 
+        rgba(74, 158, 255, 0.25) 0%, 
+        rgba(74, 158, 255, 0.1) 30%, 
+        rgba(74, 158, 255, 0.04) 60%, 
+        transparent 100%
+    );
+    border-left: 3px solid var(--accent-primary);
+    position: relative;
+}
+
+.game-item.active::before {
+    background: rgba(59, 130, 246, 0.4);
+    z-index: 2;
+}
+
+/* Color connection dot when item is active */
+.game-item.active::after {
+    background: var(--accent-primary);
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.6), 0 0 12px rgba(59, 130, 246, 0.3);
+    z-index: 3;
 }
 
 .game-item.active .game-row {
     color: #ffffff;
     font-weight: 500;
+    position: relative;
+    z-index: 1;
+}
+
+.game-item.active .game-icon {
+    background: rgba(59, 130, 246, 0.2);
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
+    position: relative;
+    z-index: 1;
 }
 
 /* Override active blue when item is updating - keep update (orange) theme */
 .game-item.updating.active {
-    background: rgba(255, 167, 38, 0.08);
-    border: 1px solid rgba(255, 167, 38, 0.4);
+    background: linear-gradient(to right, 
+        rgba(255, 167, 38, 0.25) 0%, 
+        rgba(255, 167, 38, 0.1) 30%, 
+        rgba(255, 167, 38, 0.04) 60%, 
+        transparent 100%
+    );
+    border-left: 3px solid var(--accent-warning);
+    border-top: none;
+    border-right: none;
+    border-bottom: none;
+}
+
+.game-item.updating.active::before {
+    background: rgba(255, 167, 38, 0.4);
+    z-index: 2;
+}
+
+/* Color connection dot when updating item is active */
+.game-item.updating.active::after {
+    background: var(--accent-warning);
+    box-shadow: 0 0 8px rgba(255, 167, 38, 0.6), 0 0 12px rgba(255, 167, 38, 0.3);
+    z-index: 3;
 }
 
 .game-item.updating.active .game-row {
     color: var(--text-primary);
+    position: relative;
+    z-index: 1;
+}
+
+.game-item.updating.active .game-icon {
+    background: rgba(255, 167, 38, 0.2);
+    box-shadow: 0 0 8px rgba(255, 167, 38, 0.3);
+    position: relative;
+    z-index: 1;
 }
 
 .game-item.completed-download .game-name {
@@ -344,11 +567,12 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 12px;
+    padding: 8px 0px 8px 8px;
     color: rgba(255, 255, 255, 0.9);
-    transition: all 0.2s ease;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     border-radius: 0;
     min-height: 40px; /* lock row height */
+    text-align: left;
 }
 
 /* Clickable */
@@ -376,6 +600,7 @@
     background: rgba(59, 130, 246, 0.08);
     flex-shrink: 0;
     overflow: hidden;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .game-icon img {

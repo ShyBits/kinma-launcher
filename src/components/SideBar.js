@@ -15,6 +15,8 @@ import {
   FolderPlus,
   Trash2,
   Edit2,
+  Folder,
+  FolderOpen,
 } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { subscribe as subscribeDownloadSpeed, setSpeed as setGlobalDownloadSpeed, setPaused as setGlobalPaused, clearSpeed as clearGlobalDownloadSpeed, getPaused } from "../utils/DownloadSpeedStore";
@@ -71,6 +73,7 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
   const downloadTimersRef = React.useRef({}); // track download timers for cancellation
   const sidebarContentRef = useRef(null);
   const footerRef = useRef(null);
+  const sectionListRefs = useRef({});
 
   // Hide side menu when the download finishes or is no longer in the downloads list
   useEffect(() => {
@@ -236,6 +239,40 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
       myOwn: myOwnGames
     };
   }, [customGames, gamesByCategory]);
+
+  // Calculate vertical line height for active items - MUST be after allGames is defined
+  useEffect(() => {
+    const updateVerticalLineHeights = () => {
+      // Use requestAnimationFrame to ensure DOM is updated
+      requestAnimationFrame(() => {
+        Object.keys(sectionListRefs.current).forEach(sectionId => {
+          const sectionList = sectionListRefs.current[sectionId];
+          if (!sectionList) return;
+          
+          const activeItem = sectionList.querySelector('.game-item.active');
+          if (activeItem) {
+            const itemTop = activeItem.offsetTop;
+            const connectionPointY = itemTop + 20; // 20px is where the connection point is
+            const height = connectionPointY + 17; // +17px to account for top offset
+            sectionList.style.setProperty('--active-line-height', `${height}px`);
+          } else {
+            sectionList.style.removeProperty('--active-line-height');
+          }
+        });
+      });
+    };
+
+    // Small delay to ensure DOM is ready
+    const timeoutId = setTimeout(updateVerticalLineHeights, 0);
+    
+    // Update on resize
+    window.addEventListener('resize', updateVerticalLineHeights);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('resize', updateVerticalLineHeights);
+    };
+  }, [currentGame, expanded]);
 
   const toggle = (section) => {
     setExpanded((prev) => {
@@ -760,23 +797,25 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
     >
       {!isCollapsed && (
         <div className="sidebar-top">
-          <button
-            className={`sidebar-btn ${location.pathname === "/library" ? "active" : ""
-              }`}
-            onClick={() => navigate("/library")}
-          >
-            <Home size={16} />
-            <span>Library</span>
-          </button>
+          <div className="sidebar-top-row">
+            <button
+              className={`sidebar-home-icon ${location.pathname === "/library" ? "active" : ""
+                }`}
+              onClick={() => navigate("/library")}
+              title="Library"
+            >
+              <Home size={16} />
+            </button>
 
-          <div className="sidebar-search">
-            <Search size={16} />
-            <input
-              type="text"
-              placeholder="Search games..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
+            <div className="sidebar-search">
+              <Search size={16} />
+              <input
+                type="text"
+                placeholder="Search games..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
           </div>
         </div>
       )}
@@ -855,16 +894,23 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
                       }
                     }}
                   >
-                    <ChevronDown
-                      size={16}
-                      className={expanded[section] ? "rotated" : ""}
-                    />
+                    {expanded[section] ? (
+                      <FolderOpen size={16} className="section-folder-icon" />
+                    ) : (
+                      <Folder size={16} className="section-folder-icon" />
+                    )}
                     {categoryName} ({games.length})
                   </button>
                 )}
 
                 {expanded[section] && (
-                  <div className="section-list">
+                  <div 
+                    className="section-list"
+                    ref={(el) => {
+                      if (el) sectionListRefs.current[section] = el;
+                      else delete sectionListRefs.current[section];
+                    }}
+                  >
                     {games.map((game) => {
                       const updating = updatingGames[game.id];
                       const downloading = downloadingGames[game.id] && !updating; // don't show downloading class if updating
