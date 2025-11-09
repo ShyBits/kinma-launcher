@@ -1,8 +1,43 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Check, Plus, Loader2, User } from 'lucide-react';
+import { Check, Plus, Loader2, User, X, Check as CheckIcon } from 'lucide-react';
 import './AccountSwitcher.css';
 
-const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, variant = 'modal', onHeightChange }) => {
+const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, variant = 'modal', onHeightChange, windowWidth, windowHeight }) => {
+  const [currentWindowWidth, setCurrentWindowWidth] = useState(windowWidth || 700);
+  const [currentWindowHeight, setCurrentWindowHeight] = useState(windowHeight || 450);
+  
+  // Update window dimensions when props change or window resizes
+  useEffect(() => {
+    if (windowWidth) setCurrentWindowWidth(windowWidth);
+    if (windowHeight) setCurrentWindowHeight(windowHeight);
+  }, [windowWidth, windowHeight]);
+  
+  // Listen for window resize events
+  useEffect(() => {
+    if (variant !== 'page') return;
+    
+    const handleResize = async () => {
+      try {
+        const api = window.electronAPI || window.electron;
+        if (api?.getWindowSize) {
+          const size = await api.getWindowSize();
+          if (size && size.width && size.height) {
+            setCurrentWindowWidth(size.width);
+            setCurrentWindowHeight(size.height);
+          }
+        }
+      } catch (error) {
+        console.error('Error getting window size:', error);
+      }
+    };
+    
+    // Check size on mount and periodically
+    handleResize();
+    const interval = setInterval(handleResize, 100);
+    
+    return () => clearInterval(interval);
+  }, [variant]);
+  
   // Check for pending switch immediately on mount to initialize state
   const getPendingSwitchState = () => {
     try {
@@ -36,6 +71,7 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
   const [isProcessing, setIsProcessing] = useState(pendingState.processing);
   const [showLoadingScreen, setShowLoadingScreen] = useState(pendingState.showLoading);
   const [switchingToUser, setSwitchingToUser] = useState(pendingState.switchingTo);
+  const [confirmingRemove, setConfirmingRemove] = useState(null);
   const containerRef = useRef(null);
   const bodyRef = useRef(null);
 
@@ -78,8 +114,9 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
       if (api && api.getUsers) {
         const result = await api.getUsers();
         if (result && result.success && Array.isArray(result.users)) {
-          // Filter to only show logged-in users (isLoggedIn !== false)
-          const loggedInUsers = result.users.filter(u => u.isLoggedIn !== false);
+          // Show all users (both logged in and not logged in) - they'll be handled differently when clicked
+          // Filter out users that are hidden from the account switcher
+          const loggedInUsers = result.users.filter(u => u.hiddenInSwitcher !== true);
           const sorted = loggedInUsers.sort((a, b) => {
             if (currentAuthUser) {
               if (a.id === currentAuthUser.id) return -1;
@@ -95,15 +132,18 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
             const nameB = (b.name || b.email || b.username || '').toLowerCase();
             return nameA.localeCompare(nameB);
           });
-          setUsers(sorted);
+          // Limit to 10 accounts
+          setUsers(sorted.slice(0, 10));
         } else {
           setUsers([]);
         }
       } else {
         const stored = JSON.parse(localStorage.getItem('users') || '[]');
-        // Filter to only show logged-in users
-        const loggedInUsers = stored.filter(u => u.isLoggedIn !== false);
-        setUsers(loggedInUsers);
+        // Show all users (both logged in and not logged in)
+        // Filter out users that are hidden from the account switcher
+        const visibleUsers = stored.filter(u => u.hiddenInSwitcher !== true);
+        // Limit to 10 accounts
+        setUsers(visibleUsers.slice(0, 10));
       }
     } catch (error) {
       console.error('Error loading users:', error);
@@ -191,6 +231,59 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
     onSwitchAccount?.(user);
   };
 
+  const handleRemoveAccount = async (user, e) => {
+    e.stopPropagation(); // Prevent triggering account click
+    
+    if (isProcessing || isActiveUser(user)) {
+      return;
+    }
+
+    // Show confirmation inside the card
+    if (confirmingRemove === user.id) {
+      // Already confirming - proceed with removal
+      await confirmRemoveAccount(user);
+    } else {
+      // Start confirmation
+      setConfirmingRemove(user.id);
+    }
+  };
+
+  const confirmRemoveAccount = async (user) => {
+    try {
+      const api = window.electronAPI;
+      if (api && api.getUsers && api.saveUsers) {
+        const result = await api.getUsers();
+        if (result && result.success && Array.isArray(result.users)) {
+          const users = result.users;
+          const userIndex = users.findIndex(u => u.id === user.id);
+          
+          if (userIndex !== -1) {
+            // IMPORTANT: Only when explicitly confirming removal should we:
+            // 1. Mark user as hidden in switcher (removes from account switcher)
+            // 2. Log them out (terminate session)
+            // This is the ONLY place where hiddenInSwitcher should be set to true
+            users[userIndex].hiddenInSwitcher = true;
+            users[userIndex].isLoggedIn = false; // Also log them out when removing
+            await api.saveUsers(users);
+            console.log('✅ Account removed from switcher and logged out');
+            
+            // Reload users to update the display
+            await loadUsers(currentUser, false);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error removing account from switcher:', error);
+    } finally {
+      setConfirmingRemove(null);
+    }
+  };
+
+  const cancelRemoveAccount = (e) => {
+    e?.stopPropagation();
+    setConfirmingRemove(null);
+  };
+
   useEffect(() => {
     const handleLoginStart = (event) => {
       // Get user data from event detail if available
@@ -224,20 +317,41 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
   useEffect(() => {
     if (!isOpen || variant !== 'page' || !bodyRef.current || !containerRef.current) return;
     
-    const updateHeight = () => {
+    const updateHeight = async () => {
       if (!bodyRef.current || !onHeightChange || !containerRef.current) return;
       
       const titleBarHeight = 32;
-      const headerHeight = 80;
-      const topPadding = 40;
-      const bottomPadding = 40;
+      const headerHeight = 60;
+      const topPadding = 12;
+      const bottomPadding = 24;
       
       // Calculate based on grid layout - 5 accounts per row max
-      const cardHeight = 130; // 100px card + 30px for name/spacing
       const cardsPerRow = 5; // Fixed: max 5 per row
-      const totalCards = users.length + 1; // users + add button
+      const totalCards = Math.min(users.length, 10) + 1; // users (max 10) + add button
       const rows = Math.ceil(totalCards / cardsPerRow);
-      const gridHeight = rows * cardHeight + (rows > 1 ? (rows - 1) * 15 : 0); // gap between rows (15px)
+      
+      // Get current window width to calculate responsive sizes
+      let width = currentWindowWidth || windowWidth || 700;
+      try {
+        const api = window.electronAPI || window.electron;
+        if (api?.getWindowSize) {
+          const size = await api.getWindowSize();
+          if (size && size.width) {
+            width = size.width;
+          }
+        }
+      } catch (_) {}
+      
+      // Calculate responsive card size based on width
+      const baseWidth = 700;
+      const baseCardSize = 120;
+      const widthScale = width / baseWidth;
+      const cardSize = Math.round(baseCardSize * widthScale);
+      
+      // Calculate card height (card size + name text + spacing)
+      const cardHeight = cardSize + 30; // card size + name text height + spacing
+      const gap = Math.round(width * 0.025); // gap between rows
+      const gridHeight = rows * cardHeight + (rows > 1 ? (rows - 1) * gap : 0);
       
       const totalHeight = titleBarHeight + headerHeight + topPadding + gridHeight + bottomPadding;
       const minHeight = 400;
@@ -256,7 +370,7 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
       clearTimeout(timeout2);
       clearTimeout(timeout3);
     };
-  }, [isOpen, users, loading, variant, onHeightChange]);
+  }, [isOpen, users, loading, variant, onHeightChange, currentWindowWidth, windowWidth]);
 
   if (!isOpen) return null;
 
@@ -339,9 +453,53 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
     }
   }, [isOpen, showLoadingScreen, switchingToUser, pendingUser, shouldShowLoading]);
 
+  // Calculate responsive sizes based on window dimensions
+  const calculateSizes = () => {
+    const width = currentWindowWidth || windowWidth || 700;
+    const height = currentWindowHeight || windowHeight || 450;
+    
+    if (!width || !height) {
+      return {
+        cardSize: 120,
+        fontSize: 42,
+        nameFontSize: 18,
+        gap: 18
+      };
+    }
+    
+    // Base sizes for 700x600 window (25% of 1920x1080)
+    const baseWidth = 700;
+    const baseHeight = 600;
+    const baseCardSize = 120;
+    const baseFontSize = 42;
+    const baseNameFontSize = 18;
+    
+    // Calculate scale factor (use width as primary, but consider both)
+    const widthScale = width / baseWidth;
+    const heightScale = height / baseHeight;
+    const scale = Math.min(widthScale, heightScale); // Use smaller scale to prevent overflow
+    
+    // Gap is based on window width (2.5% of window width)
+    const gap = Math.round(width * 0.025);
+    
+    return {
+      cardSize: Math.round(baseCardSize * scale),
+      fontSize: Math.round(baseFontSize * scale),
+      nameFontSize: Math.round(baseNameFontSize * scale),
+      gap: gap
+    };
+  };
+  
+  const sizes = calculateSizes();
+
   return (
-    <div className="account-switcher-page" ref={containerRef}>
-      {shouldShowLoading ? (
+    <div className="account-switcher-page" ref={containerRef} style={{
+      '--card-size': `${sizes.cardSize}px`,
+      '--card-font-size': `${sizes.fontSize}px`,
+      '--card-name-font-size': `${sizes.nameFontSize}px`,
+      '--card-gap': `${sizes.gap}px`
+    }}>
+        {shouldShowLoading ? (
         <div className="account-switcher-loading-screen">
           <div className="account-switcher-loading-circle">
             {userToDisplay && (
@@ -361,7 +519,7 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
       ) : (
         <>
           <div className="account-switcher-header" ref={bodyRef}>
-            <h1 className="account-switcher-title">Select Account</h1>
+            <h1 className="account-switcher-title">SELECT ACCOUNT</h1>
           </div>
           
           <div className="account-switcher-body">
@@ -376,29 +534,70 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
                   const isActive = isActiveUser(user);
                   const isProcessingThis = processingAccount === user.id;
                   const isDisabled = isProcessing || isActive;
+                  const isConfirming = confirmingRemove === user.id;
                   
                   return (
                     <div
                       key={user.id}
-                      className={`account-switcher-card ${isActive ? 'active' : ''} ${isProcessingThis ? 'processing' : ''} ${isDisabled ? 'disabled' : ''}`}
-                      onClick={() => !isDisabled && handleAccountClick(user)}
+                      className={`account-switcher-card ${isActive ? 'active' : ''} ${isProcessingThis ? 'processing' : ''} ${isDisabled ? 'disabled' : ''} ${isConfirming ? 'confirming' : ''}`}
+                      onClick={() => !isDisabled && !isConfirming && handleAccountClick(user)}
                     >
-                      <div className="account-switcher-card-avatar">
-                        {getInitials(user)}
-                        {isActive && (
-                          <div className="account-switcher-check">
-                            <Check size={14} strokeWidth={3} />
+                      {isConfirming ? (
+                        <>
+                          <div className="account-switcher-card-avatar confirming-avatar" style={{ color: 'rgba(59, 130, 246, 0.3)' }}>
+                            <span style={{ fontSize: `var(--card-font-size, ${sizes.fontSize}px)`, fontWeight: 500, position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 1 }}>
+                              {getInitials(user)}
+                            </span>
+                            <div className="account-switcher-confirm-buttons-inline">
+                              <button
+                                className="account-switcher-confirm-btn-inline account-switcher-confirm-btn-yes"
+                                onClick={(e) => confirmRemoveAccount(user)}
+                                title="Confirm removal"
+                              >
+                                <CheckIcon size={Math.round(sizes.cardSize * 0.14)} strokeWidth={2.5} />
+                              </button>
+                              <button
+                                className="account-switcher-confirm-btn-inline account-switcher-confirm-btn-no"
+                                onClick={(e) => cancelRemoveAccount(e)}
+                                title="Cancel"
+                              >
+                                <X size={Math.round(sizes.cardSize * 0.14)} strokeWidth={2.5} />
+                              </button>
+                            </div>
                           </div>
-                        )}
-                        {isProcessingThis && (
-                          <div className="account-switcher-loader">
-                            <Loader2 size={14} className="spinning" />
+                          <div className="account-switcher-confirm-text">
+                            Remove?
                           </div>
-                        )}
-                      </div>
-                      <div className="account-switcher-card-name">
-                        {user.name || user.username || user.email?.split('@')[0] || 'User'}
-                      </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="account-switcher-card-avatar">
+                            {getInitials(user)}
+                            {isActive && (
+                              <div className="account-switcher-check">
+                                <Check size={Math.round(sizes.cardSize * 0.14)} strokeWidth={3} />
+                              </div>
+                            )}
+                            {isProcessingThis && (
+                              <div className="account-switcher-loader">
+                                <Loader2 size={Math.round(sizes.cardSize * 0.14)} className="spinning" />
+                              </div>
+                            )}
+                            {!isActive && !isProcessingThis && (
+                              <button
+                                className="account-switcher-remove-btn"
+                                onClick={(e) => handleRemoveAccount(user, e)}
+                                title="Remove from account switcher"
+                              >
+                                <X size={Math.round(sizes.cardSize * 0.11)} strokeWidth={2.8} />
+                              </button>
+                            )}
+                          </div>
+                          <div className="account-switcher-card-name">
+                            {user.name || user.username || user.email?.split('@')[0] || 'User'}
+                          </div>
+                        </>
+                      )}
                     </div>
                   );
                 })}
@@ -409,7 +608,7 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
                   disabled={isProcessing}
                   title="Add Account"
                 >
-                  <Plus size={28} strokeWidth={2} />
+                  <Plus size={Math.round(sizes.cardSize * 0.28)} strokeWidth={2} />
                 </button>
               </div>
             )}

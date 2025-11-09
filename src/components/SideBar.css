@@ -15,7 +15,7 @@
 .sidebar {
     position: relative;
     width: 260px;
-    min-width: 240px;
+    min-width: 200px;
     background: rgba(255, 255, 255, 0.02);
     border-right: none;
     display: flex;
@@ -131,7 +131,7 @@
 .sidebar-search {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 0;
     padding: 12px 14px;
     background: rgba(0, 0, 0, 0.5);
     border: none;
@@ -255,13 +255,13 @@
 /* Game Items */
 .section-list {
     margin-top: 6px;
-    margin-left: 24px;
+    margin-left: 16px;
     display: flex;
     flex-direction: column;
     gap: 4px;
     align-items: flex-start;
-    width: calc(100% - 24px);
-    padding-left: 12px;
+    width: calc(100% - 16px);
+    padding-left: 8px;
     position: relative;
 }
 
@@ -269,7 +269,7 @@
 .section-list::before {
     content: '';
     position: absolute;
-    left: -17px;
+    left: -9px;
     top: -17px;
     width: 1px;
     height: calc(100%);
@@ -281,7 +281,7 @@
 .section-list::after {
     content: '';
     position: absolute;
-    left: -17px;
+    left: -9px;
     top: -17px;
     width: 1px;
     background: rgba(59, 130, 246, 0.3);
@@ -338,15 +338,16 @@
     width: 100%;
     align-items: flex-start;
     border-left: 3px solid transparent;
+    box-sizing: border-box;
 }
 
 /* Horizontal line connecting each game item to the vertical line */
 .game-item::before {
     content: '';
     position: absolute;
-    left: -30px;
+    left: -17px;
     top: 20px;
-    width: 28px;
+    width: 15px;
     height: 1px;
     background: rgba(255, 255, 255, 0.08);
     z-index: 2;
@@ -357,14 +358,14 @@
 .game-item::after {
     content: '';
     position: absolute;
-    left: -31px;
+    left: -19.25px;
     top: 20px;
     width: 5px;
     height: 5px;
-    background: rgba(77, 73, 73, 0.8);
+    background: rgba(77, 73, 73);
     border-radius: 50%;
     transform: translate(-50%, -50%);
-    z-index: 3;
+    z-index: 5;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
 }
@@ -401,9 +402,9 @@
 .game-item.updating::before {
     content: '';
     position: absolute;
-    left: -16px;
+    left: -17px;
     top: 20px;
-    width: 16px;
+    width: 10px;
     height: 1px;
     background: rgba(255, 255, 255, 0.08);
     z-index: 0;
@@ -451,20 +452,73 @@
         rgba(74, 158, 255, 0.04) 60%, 
         transparent 100%
     );
-    border-left: 3px solid var(--accent-primary);
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: left center;
+    border-left: 3px solid transparent;
     position: relative;
+    box-sizing: border-box;
+    overflow: visible;
+    animation: active-gradient-expand 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
+/* Animated vertical line that expands from center - using box-shadow with clip-path */
+/* The clip-path only affects the element itself, not the pseudo-elements positioned outside */
+.game-item.active {
+    position: relative;
+    box-shadow: inset 3px 0 0 var(--accent-primary);
+    animation: active-line-expand 0.4s cubic-bezier(0.4, 0, 0.2, 1), active-gradient-expand 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes active-line-expand {
+    0% {
+        clip-path: inset(50% 0 50% 0);
+    }
+    100% {
+        clip-path: inset(0 0 0 0);
+    }
+}
+
+@keyframes active-gradient-expand {
+    0% {
+        background-size: 0% 100%;
+    }
+    100% {
+        background-size: 100% 100%;
+    }
+}
+
+/* Horizontal line for active items - keep original position and always visible */
 .game-item.active::before {
-    background: rgba(59, 130, 246, 0.4);
-    z-index: 2;
+    background: rgba(59, 130, 246, 0.4) !important;
+    z-index: 2 !important;
+    left: -17px !important;
+    top: 20px !important;
+    width: 15px !important;
+    height: 1px !important;
+    content: '';
+    position: absolute;
+    transform: none !important;
+    animation: none !important;
+    pointer-events: none;
 }
 
-/* Color connection dot when item is active */
+/* Color connection dot when item is active - ensure it's always visible and not clipped */
 .game-item.active::after {
-    background: var(--accent-primary);
-    box-shadow: 0 0 8px rgba(59, 130, 246, 0.6), 0 0 12px rgba(59, 130, 246, 0.3);
-    z-index: 3;
+    background: var(--accent-primary) !important;
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.6), 0 0 12px rgba(59, 130, 246, 0.3) !important;
+    z-index: 10 !important;
+    position: absolute !important;
+    left: -19.25px !important;
+    top: 20px !important;
+    width: 5px !important;
+    height: 5px !important;
+    border-radius: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    content: '';
+    display: block;
+    pointer-events: none;
+    animation: none !important;
 }
 
 .game-item.active .game-row {
@@ -489,10 +543,24 @@
         rgba(255, 167, 38, 0.04) 60%, 
         transparent 100%
     );
+    background-size: 100% 100%;
+    background-repeat: no-repeat;
+    background-position: left center;
     border-left: 3px solid var(--accent-warning);
     border-top: none;
     border-right: none;
     border-bottom: none;
+    animation: active-gradient-expand 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards, active-border-expand-orange 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-sizing: border-box;
+}
+
+@keyframes active-border-expand-orange {
+    0% {
+        border-left-color: transparent;
+    }
+    100% {
+        border-left-color: var(--accent-warning);
+    }
 }
 
 .game-item.updating.active::before {

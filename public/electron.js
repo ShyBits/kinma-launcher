@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, Menu, ipcMain, dialog, shell, globalShortcut } = require('electron');
+﻿const { app, BrowserWindow, Menu, ipcMain, dialog, shell, globalShortcut, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const isDev = require('electron-is-dev');
@@ -11,6 +11,7 @@ const settingsStore = new Store({ name: 'settings' });
 let mainWindow;
 let authWindow;
 let accountSwitcherWindow; // Track account switcher window
+let adminWindow; // Track admin window
 let pendingMainWindowShow = false; // Flag to show main window after account switcher closes
 
 function getZoomLimits() {
@@ -32,6 +33,13 @@ function createMainWindow() {
     return;
   }
   
+  // IMPORTANT: Check if auth window exists - if so, don't create main window
+  // This prevents main window from being created when user is trying to log in
+  if (authWindow && !authWindow.isDestroyed()) {
+    console.log('⚠️ Auth window exists - not creating main window');
+    return;
+  }
+  
   // Always check for authenticated user before creating main window
   const authUser = settingsStore.get('authUser');
   if (!authUser || !authUser.id) {
@@ -44,9 +52,9 @@ function createMainWindow() {
   }
   
   mainWindow = new BrowserWindow({
-    width: 1350,
-    height: 800,
-    minWidth: 1280,
+    width: 1200,
+    height: 720,
+    minWidth: 1200,
     minHeight: 720,
     webPreferences: {
       nodeIntegration: false,
@@ -83,9 +91,9 @@ function createMainWindow() {
     }
   });
 
-  // Set 16:9 aspect ratio for minimum size constraint
+  // Set 15:9 aspect ratio for minimum size constraint
   try {
-    mainWindow.setAspectRatio(16/9);
+    mainWindow.setAspectRatio(15/9);
   } catch (_) {}
 
   // Zoom functionality removed
@@ -165,13 +173,16 @@ function createAuthWindow() {
   authWindow.loadURL(startUrl);
 
   authWindow.once('ready-to-show', () => {
+    if (authWindow && !authWindow.isDestroyed()) {
     authWindow.center();
     authWindow.show();
     try { authWindow.setAspectRatio(1/1.5); } catch (_) {}
+    }
   });
 
   // Ensure the renderer is on the /auth route (works in dev and prod)
   authWindow.webContents.once('did-finish-load', () => {
+    if (authWindow && !authWindow.isDestroyed()) {
     const navigateToAuth = `
       try {
         if (window.location.pathname !== '/auth') {
@@ -181,10 +192,249 @@ function createAuthWindow() {
       } catch (e) {}
     `;
     authWindow.webContents.executeJavaScript(navigateToAuth).catch(() => {});
+    }
   });
 
   if (isDev) {
+    if (authWindow && !authWindow.isDestroyed()) {
     authWindow.webContents.openDevTools({ mode: 'detach' });
+    }
+  }
+}
+
+// Admin credentials - customize these
+const ADMIN_CREDENTIALS = {
+  email: 'admin@kinma.app',
+  username: 'admin',
+  password: 'admin123' // Change this to your secure password
+};
+
+// Check if current user matches admin credentials
+function isAdminUser(user) {
+  if (!user) return false;
+  
+  // Check email
+  const emailMatch = user.email && user.email.toLowerCase() === ADMIN_CREDENTIALS.email.toLowerCase();
+  
+  // Check username
+  const usernameMatch = (user.username && user.username.toLowerCase() === ADMIN_CREDENTIALS.username.toLowerCase()) ||
+                       (user.name && user.name.toLowerCase() === ADMIN_CREDENTIALS.username.toLowerCase());
+  
+  // Get password from users.json
+  try {
+    const appPath = isDev ? __dirname : path.join(app.getAppPath());
+    let projectRoot = appPath;
+    if (isDev) {
+      projectRoot = path.resolve(appPath, '..');
+    } else {
+      projectRoot = path.join(appPath, '..');
+    }
+    
+    const usersPath = path.join(projectRoot, 'user');
+    const usersFile = path.join(usersPath, 'users.json');
+    
+    if (fs.existsSync(usersFile)) {
+      const users = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+      const userData = users.find(u => u.id === user.id || u.email === user.email);
+      
+      if (userData) {
+        const passwordMatch = userData.password === ADMIN_CREDENTIALS.password;
+        return emailMatch && usernameMatch && passwordMatch;
+      }
+    }
+  } catch (error) {
+    console.error('Error checking admin credentials:', error);
+  }
+  
+  return false;
+}
+
+function createAdminWindow() {
+  // Don't create if admin window already exists and is not destroyed
+  if (adminWindow && !adminWindow.isDestroyed()) {
+    adminWindow.focus();
+    return { success: true };
+  }
+  
+  // Check if current user is admin
+  const authUser = settingsStore.get('authUser');
+  if (!authUser || !isAdminUser(authUser)) {
+    console.log('Cannot create admin window - user is not admin');
+    return { success: false, error: 'Unauthorized: Admin access required' };
+  }
+  
+  adminWindow = new BrowserWindow({
+    width: 1000,
+    height: 600,
+    minWidth: 1000,
+    minHeight: 600,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      enableRemoteModule: false,
+      preload: path.join(__dirname, 'preload.js')
+    },
+    frame: false,
+    titleBarStyle: 'hidden',
+    show: false,
+    icon: path.join(__dirname, 'assets/icon.png')
+  });
+
+  const startUrl = isDev 
+    ? 'http://localhost:3000#/admin-window' 
+    : `file://${path.join(__dirname, '../build/index.html')}#/admin-window`;
+
+  adminWindow.loadURL(startUrl);
+
+  adminWindow.once('ready-to-show', () => {
+    // Verify user is still admin before showing
+    if (adminWindow && !adminWindow.isDestroyed()) {
+      const authUser = settingsStore.get('authUser');
+      if (authUser && isAdminUser(authUser)) {
+        adminWindow.center();
+        adminWindow.show();
+        adminWindow.focus();
+      } else {
+        console.log('Admin window ready but user is no longer admin - closing window');
+        adminWindow.close();
+        adminWindow = null;
+      }
+    }
+  });
+
+  // Ensure the renderer is on the /admin-window route
+  adminWindow.webContents.once('did-finish-load', () => {
+    const navigateToAdmin = `
+      try {
+        if (window.location.hash !== '#/admin-window') {
+          window.location.hash = '/admin-window';
+          window.dispatchEvent(new Event('hashchange'));
+        }
+      } catch (e) {}
+    `;
+    adminWindow.webContents.executeJavaScript(navigateToAdmin).catch(() => {});
+  });
+
+  if (isDev) {
+    adminWindow.webContents.openDevTools({ mode: 'detach' });
+  }
+  
+  return { success: true };
+}
+
+// Helper function to get users from file
+function getUsersFromFile() {
+  try {
+    const appPath = isDev ? __dirname : path.join(app.getAppPath());
+    let projectRoot = appPath;
+    if (isDev) {
+      projectRoot = path.resolve(appPath, '..');
+    } else {
+      projectRoot = path.join(appPath, '..');
+    }
+    
+    const usersPath = path.join(projectRoot, 'user');
+    const usersFile = path.join(usersPath, 'users.json');
+    
+    if (fs.existsSync(usersFile)) {
+      const fileContent = fs.readFileSync(usersFile, 'utf8');
+      return JSON.parse(fileContent);
+    }
+  } catch (error) {
+    console.error('Error reading users file:', error);
+  }
+  return [];
+}
+
+// Helper function to save users to file
+function saveUsersToFile(users) {
+  try {
+    const appPath = isDev ? __dirname : path.join(app.getAppPath());
+    let projectRoot = appPath;
+    if (isDev) {
+      projectRoot = path.resolve(appPath, '..');
+    } else {
+      projectRoot = path.join(appPath, '..');
+    }
+    
+    const usersPath = path.join(projectRoot, 'user');
+    const usersFile = path.join(usersPath, 'users.json');
+    
+    if (!fs.existsSync(usersPath)) {
+      fs.mkdirSync(usersPath, { recursive: true });
+    }
+    
+    fs.writeFileSync(usersFile, JSON.stringify(users, null, 2), 'utf8');
+    return true;
+  } catch (error) {
+    console.error('Error saving users file:', error);
+    return false;
+  }
+}
+
+// Helper function to find and auto-login user
+function findAutoLoginUser() {
+  try {
+    const users = getUsersFromFile();
+    if (!Array.isArray(users) || users.length === 0) {
+      return null;
+    }
+    
+    // Find users with stayLoggedIn: true and isLoggedIn: true
+    const stayLoggedInUsers = users.filter(u => 
+      u.stayLoggedIn === true && 
+      u.isLoggedIn === true
+    );
+    
+    if (stayLoggedInUsers.length === 0) {
+      return null;
+    }
+    
+    // Sort by lastLoginTime (most recent first)
+    stayLoggedInUsers.sort((a, b) => {
+      const timeA = a.lastLoginTime ? new Date(a.lastLoginTime).getTime() : 0;
+      const timeB = b.lastLoginTime ? new Date(b.lastLoginTime).getTime() : 0;
+      return timeB - timeA; // Descending order (most recent first)
+    });
+    
+    return stayLoggedInUsers[0];
+  } catch (error) {
+    console.error('Error finding auto-login user:', error);
+    return null;
+  }
+}
+
+// Helper function to check if there are any logged-in accounts
+function hasLoggedInAccounts() {
+  try {
+    const users = getUsersFromFile();
+    if (!Array.isArray(users) || users.length === 0) {
+      return false;
+    }
+    
+    // Check if there are any users with isLoggedIn: true
+    const loggedInUsers = users.filter(u => u.isLoggedIn === true);
+    return loggedInUsers.length > 0;
+  } catch (error) {
+    console.error('Error checking for logged-in accounts:', error);
+    return false;
+  }
+}
+
+// Helper function to check if there are any accounts that haven't been removed from switcher
+function hasAccountsInSwitcher() {
+  try {
+    const users = getUsersFromFile();
+    if (!Array.isArray(users) || users.length === 0) {
+      return false;
+    }
+    
+    // Check if there are any users that haven't been hidden from switcher
+    const visibleAccounts = users.filter(u => u.hiddenInSwitcher !== true);
+    return visibleAccounts.length > 0;
+  } catch (error) {
+    console.error('Error checking for accounts in switcher:', error);
+    return false;
   }
 }
 
@@ -195,14 +445,84 @@ app.whenReady().then(async () => {
     return;
   }
   
-  // Check for existing auth user
-  let existingUser = settingsStore.get('authUser');
+  // FIRST: Check if there's a user that should be auto-logged in (didn't log out)
+  // This takes priority - if user didn't log out, auto-login them directly
+  const autoLoginUser = findAutoLoginUser();
   
-  // Only create main window if user is authenticated
-  // Otherwise, always show auth window
-  if (existingUser && existingUser.id) {
+  if (autoLoginUser) {
+    // User didn't log out - auto-login them directly to main window
+    const authUserData = {
+      id: autoLoginUser.id,
+      email: autoLoginUser.email,
+      name: autoLoginUser.name || autoLoginUser.username || autoLoginUser.email?.split('@')[0] || 'User'
+    };
+    settingsStore.set('authUser', authUserData);
+    console.log('✅ Auto-logging in with user (didn\'t log out):', authUserData.name || authUserData.email);
     createMainWindow();
+    return;
+  }
+  
+  // SECOND: If no auto-login user, check if there are any accounts in the switcher (not removed)
+  const hasAccounts = hasAccountsInSwitcher();
+  
+  if (hasAccounts) {
+    // There are accounts in the switcher - open account switcher window
+    console.log('Found accounts in switcher - opening account switcher');
+    
+    // Clear authUser from settingsStore to prevent main window from being created
+    // The user will select an account from the account switcher
+    settingsStore.delete('authUser');
+    
+    // Ensure main window is not created
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.close();
+      mainWindow = null;
+    }
+    
+    // Create account switcher window - 30% of screen size in 14:9 format (narrower than 16:9)
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+    // Calculate width based on 30% of screen width, then calculate height for 14:9
+    const accountSwitcherWidth = Math.round(screenWidth * 0.30);
+    const accountSwitcherHeight = Math.round(accountSwitcherWidth * (9 / 14));
+    
+    accountSwitcherWindow = new BrowserWindow({
+      width: accountSwitcherWidth,
+      height: accountSwitcherHeight,
+      resizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        enableRemoteModule: false,
+        preload: path.join(__dirname, 'preload.js')
+      },
+      frame: false,
+      titleBarStyle: 'hidden',
+      show: false,
+      icon: path.join(__dirname, 'assets/icon.png')
+    });
+    
+    const startUrl = isDev 
+      ? 'http://localhost:3000/account-switcher' 
+      : `file://${path.join(__dirname, '../build/index.html')}#/account-switcher`;
+    
+    accountSwitcherWindow.loadURL(startUrl);
+    
+    accountSwitcherWindow.once('ready-to-show', () => {
+      if (accountSwitcherWindow && !accountSwitcherWindow.isDestroyed()) {
+        accountSwitcherWindow.center();
+        accountSwitcherWindow.show();
+        accountSwitcherWindow.focus();
+      }
+    });
+    
+    if (isDev) {
+      accountSwitcherWindow.webContents.openDevTools({ mode: 'detach' });
+    }
   } else {
+    // No accounts in switcher and no auto-login user - show auth window
     createAuthWindow();
   }
 });
@@ -215,14 +535,82 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
-    // Check if user is authenticated before creating main window
-    const authUser = settingsStore.get('authUser');
-    if (authUser && authUser.id) {
-      if (!mainWindow || mainWindow.isDestroyed()) {
-        createMainWindow();
+    // FIRST: Check if there's a user that should be auto-logged in (didn't log out)
+    const autoLoginUser = findAutoLoginUser();
+    
+    if (autoLoginUser) {
+      // User didn't log out - auto-login them directly to main window
+      const authUserData = {
+        id: autoLoginUser.id,
+        email: autoLoginUser.email,
+        name: autoLoginUser.name || autoLoginUser.username || autoLoginUser.email?.split('@')[0] || 'User'
+      };
+      settingsStore.set('authUser', authUserData);
+      console.log('✅ Auto-logging in with user (didn\'t log out):', authUserData.name || authUserData.email);
+      createMainWindow();
+      return;
+    }
+    
+    // SECOND: If no auto-login user, check if there are any accounts in the switcher (not removed)
+    const hasAccounts = hasAccountsInSwitcher();
+    
+    if (hasAccounts) {
+      // There are accounts in the switcher - open account switcher window
+      // Clear authUser to prevent main window from being created
+      settingsStore.delete('authUser');
+      
+      // Ensure main window is not created
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.close();
+        mainWindow = null;
+      }
+      
+      if (!accountSwitcherWindow || accountSwitcherWindow.isDestroyed()) {
+        // Account switcher window - 30% of screen size in 14:9 format
+        const primaryDisplay = screen.getPrimaryDisplay();
+        const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+        // Calculate width based on 30% of screen width, then calculate height for 14:9
+        const accountSwitcherWidth = Math.round(screenWidth * 0.30);
+        const accountSwitcherHeight = Math.round(accountSwitcherWidth * (9 / 14));
+        
+        accountSwitcherWindow = new BrowserWindow({
+          width: accountSwitcherWidth,
+          height: accountSwitcherHeight,
+          resizable: false,
+          maximizable: false,
+          fullscreenable: false,
+          webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            enableRemoteModule: false,
+            preload: path.join(__dirname, 'preload.js')
+          },
+          frame: false,
+          titleBarStyle: 'hidden',
+          show: false,
+          icon: path.join(__dirname, 'assets/icon.png')
+        });
+        
+        const startUrl = isDev 
+          ? 'http://localhost:3000/account-switcher' 
+          : `file://${path.join(__dirname, '../build/index.html')}#/account-switcher`;
+        
+        accountSwitcherWindow.loadURL(startUrl);
+        
+        accountSwitcherWindow.once('ready-to-show', () => {
+          if (accountSwitcherWindow && !accountSwitcherWindow.isDestroyed()) {
+            accountSwitcherWindow.center();
+            accountSwitcherWindow.show();
+            accountSwitcherWindow.focus();
+          }
+        });
+        
+        if (isDev) {
+          accountSwitcherWindow.webContents.openDevTools({ mode: 'detach' });
+        }
       }
     } else {
-      // No authenticated user - show auth window instead
+      // No accounts in switcher and no auto-login user - show auth window
       if (!authWindow || authWindow.isDestroyed()) {
         createAuthWindow();
       }
@@ -316,45 +704,100 @@ ipcMain.handle('close-window', async (event) => {
     // Ignore error
   }
 
-  // If closing account switcher, login with last account and show main window
+  // If closing account switcher, only auto-login if there's a user that is actually logged in
+  // BUT ONLY if no auth window is being opened (check if auth window exists and is visible)
   if (isAccountSwitcher) {
     try {
-      console.log('Account switcher window closing - logging in with last account');
+      console.log('🔄 Account switcher window closing - determining next action');
       
-      // Get last logged-in user directly
-      let lastUser = null;
+      // FIRST: Check if auth window exists - if so, don't do anything
+      // This is the most important check - if auth window exists, user is trying to log in
+      let authWindowExists = false;
       try {
-        const usersFile = path.join(app.getPath('userData'), 'users.json');
-        if (fs.existsSync(usersFile)) {
-          const fileContent = fs.readFileSync(usersFile, 'utf8');
-          const users = JSON.parse(fileContent);
+        // Check the global authWindow variable FIRST (fastest check)
+        if (authWindow && !authWindow.isDestroyed()) {
+          authWindowExists = true;
+          console.log('✅ Auth window variable exists - skipping auto-login');
+        }
+        
+        // Also check all BrowserWindow instances to see if any auth window exists
+        if (!authWindowExists) {
+          const allWindows = BrowserWindow.getAllWindows();
+          for (const win of allWindows) {
+            if (win && !win.isDestroyed() && win !== senderWindow) {
+              try {
+                const url = win.webContents.getURL();
+                if (url && (url.includes('/auth') || url.includes('addAccount=true'))) {
+                  authWindowExists = true;
+                  console.log('✅ Auth window detected in open windows - skipping auto-login');
+                  break;
+                }
+              } catch (e) {
+                // Ignore error checking URL
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error checking for auth window:', e);
+      }
+      
+      // If auth window exists, don't auto-login - just close account switcher
+      if (authWindowExists) {
+        console.log('✅ Auth window is open - NOT opening main window');
+        console.log('✅ Account switcher will close, auth window will remain open');
+        // IMPORTANT: Don't open main window - just close the account switcher
+        // The auth window should handle the login flow
+        return; // Just close the account switcher, don't open main window
+      }
+      
+      // SECOND: Check if authUser exists in settingsStore
+      // If it doesn't exist, don't try to open main window
+      const authUser = settingsStore.get('authUser');
+      if (!authUser || !authUser.id) {
+        console.log('⚠️ No authUser in settingsStore - not opening main window');
+        return; // Just close the account switcher, don't open main window
+      }
+      
+      // THIRD: Only if auth window doesn't exist AND authUser exists, check for logged-in users
+      console.log('⚠️ No auth window detected - checking for logged-in users');
+      
+      // Get users and find one that is actually logged in (isLoggedIn === true)
+      let loggedInUser = null;
+      try {
+        const users = getUsersFromFile();
           
           if (Array.isArray(users) && users.length > 0) {
-            const usersWithLoginTime = users.filter(u => u.lastLoginTime);
+          // Filter for users that are actually logged in
+          const loggedInUsers = users.filter(u => u.isLoggedIn === true);
+          
+          if (loggedInUsers.length > 0) {
+            // Sort by last login time (most recent first)
+            const usersWithLoginTime = loggedInUsers.filter(u => u.lastLoginTime);
             if (usersWithLoginTime.length > 0) {
               usersWithLoginTime.sort((a, b) => {
                 const timeA = new Date(a.lastLoginTime).getTime();
                 const timeB = new Date(b.lastLoginTime).getTime();
                 return timeB - timeA; // Descending order (most recent first)
               });
-              lastUser = usersWithLoginTime[0];
+              loggedInUser = usersWithLoginTime[0];
             } else {
-              lastUser = users[0];
+              loggedInUser = loggedInUsers[0];
             }
           }
         }
       } catch (error) {
-        console.error('Error getting last logged-in user:', error);
+        console.error('Error getting logged-in user:', error);
       }
       
-      if (lastUser) {
-        console.log('Last logged-in user:', lastUser.email || lastUser.username);
+      if (loggedInUser && loggedInUser.isLoggedIn === true) {
+        console.log('Found logged-in user:', loggedInUser.email || loggedInUser.username);
         
         // Set auth user in Electron store
         const authUserData = {
-          id: lastUser.id,
-          email: lastUser.email,
-          name: lastUser.name || lastUser.username || lastUser.email?.split('@')[0] || 'User'
+          id: loggedInUser.id,
+          email: loggedInUser.email,
+          name: loggedInUser.name || loggedInUser.username || loggedInUser.email?.split('@')[0] || 'User'
         };
         settingsStore.set('authUser', authUserData);
         
@@ -381,44 +824,19 @@ ipcMain.handle('close-window', async (event) => {
           });
         }
       } else {
-        console.log('No last logged-in user found - showing auth window');
-        // No user available - close main window and show auth window
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.close();
-          mainWindow = null;
-        }
-        if (!authWindow || authWindow.isDestroyed()) {
-          createAuthWindow();
-        }
+        console.log('No logged-in user found - not opening main window');
+        // No logged-in user - don't open main window or auth window
+        // The auth window should already be open if user clicked on a logged-out account
+        // Just close the account switcher
       }
     } catch (error) {
       console.error('Error handling account switcher close:', error);
-      // Check if user is authenticated before showing main window
-      const authUser = settingsStore.get('authUser');
-      if (authUser && authUser.id) {
-        if (!mainWindow || mainWindow.isDestroyed()) {
-          createMainWindow();
-        } else {
-          if (!mainWindow.isVisible()) {
-            mainWindow.show();
-          }
-          mainWindow.focus();
+      // Don't auto-login on error - let user choose
         }
       } else {
-        // No authenticated user - show auth window instead
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.close();
-          mainWindow = null;
-        }
-        if (!authWindow || authWindow.isDestroyed()) {
-          createAuthWindow();
-        }
-      }
-    }
-  }
-
-  // Close the window
+    // For other windows, just close them
   senderWindow.close();
+  }
 });
 
 ipcMain.handle('resize-window', (event, width, height) => {
@@ -444,6 +862,16 @@ ipcMain.handle('get-window-size', (event) => {
     return { width, height };
   } catch (e) {
     return { width: 600, height: 800 };
+  }
+});
+
+ipcMain.handle('get-screen-size', () => {
+  try {
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width, height } = primaryDisplay.workAreaSize;
+    return { width, height, success: true };
+  } catch (e) {
+    return { width: 1920, height: 1080, success: false };
   }
 });
 
@@ -541,6 +969,27 @@ ipcMain.handle('get-last-logged-in-user', async () => {
 });
 
 ipcMain.handle('auth-success', (event, user) => {
+  // IMPORTANT: If main window is already open and visible, and user is already authenticated,
+  // don't do anything - this prevents interference with normal operation
+  const currentAuthUser = settingsStore.get('authUser');
+  if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && currentAuthUser && currentAuthUser.id === user.id) {
+    console.log('⚠️ Main window already open and user already authenticated - skipping auth-success handler');
+    // Still update user data (login time, etc.) but don't mess with windows
+    try {
+      const users = getUsersFromFile();
+      const userIndex = users.findIndex(u => u.id === user.id);
+      if (userIndex !== -1) {
+        users[userIndex].isLoggedIn = true;
+        users[userIndex].lastLoginTime = new Date().toISOString();
+        users[userIndex].hiddenInSwitcher = false;
+        saveUsersToFile(users);
+      }
+    } catch (error) {
+      console.error('Error updating user data:', error);
+    }
+    return; // Exit early - don't interfere with main window
+  }
+  
   // Ensure we save the auth user in the correct format FIRST, before any window operations
   const authUserData = {
     id: user.id,
@@ -555,6 +1004,30 @@ ipcMain.handle('auth-success', (event, user) => {
     if (!verifyAuthUser || !verifyAuthUser.id) {
       console.error('Failed to set authUser in store');
       return;
+    }
+    
+    // Mark user as logged in in users.json
+    const users = getUsersFromFile();
+    const userIndex = users.findIndex(u => u.id === user.id);
+    if (userIndex !== -1) {
+      users[userIndex].isLoggedIn = true;
+      users[userIndex].lastLoginTime = new Date().toISOString();
+      // IMPORTANT: Clear hiddenInSwitcher flag when user logs in - account should be visible again
+      users[userIndex].hiddenInSwitcher = false;
+      saveUsersToFile(users);
+      console.log('Marked user as logged in and made visible in switcher:', user.email || user.username);
+    } else {
+      // User doesn't exist in users.json - add them
+      const newUser = {
+        ...user,
+        isLoggedIn: true,
+        lastLoginTime: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        hiddenInSwitcher: false // New users should be visible
+      };
+      users.push(newUser);
+      saveUsersToFile(users);
+      console.log('Added new user and marked as logged in:', user.email || user.username);
     }
   } catch (error) {
     console.error('Error setting authUser:', error);
@@ -576,57 +1049,6 @@ ipcMain.handle('auth-success', (event, user) => {
     }
   }
   
-  // Close auth window if it exists (either it's the sender or any auth window)
-  if (authWindow && !authWindow.isDestroyed()) {
-    if (authWindow === senderWindow) {
-      authWindow.close();
-      authWindow = null;
-    } else {
-      // Close any other auth window that might exist
-      authWindow.close();
-      authWindow = null;
-    }
-  }
-  
-  // Also close the sender window if it's an auth window or account switcher (but not main window)
-  if (senderWindow && senderWindow !== mainWindow && !senderWindow.isDestroyed()) {
-    // Check if it's an auth window by checking the URL
-    try {
-      const url = senderWindow.webContents.getURL();
-      if (url.includes('/auth') || url.includes('addAccount=true')) {
-        // Close auth windows
-        senderWindow.close();
-      }
-    } catch (e) {
-      // If we can't check URL, but it's not mainWindow, close it if it's likely an auth window
-      if (senderWindow !== authWindow && senderWindow !== accountSwitcherWindow) {
-        senderWindow.close();
-      }
-    }
-  }
-  
-  // If coming from account switcher, store reference and set flag
-  if (isFromAccountSwitcher && senderWindow && !senderWindow.isDestroyed()) {
-    accountSwitcherWindow = senderWindow;
-    pendingMainWindowShow = true;
-    
-    // Listen for account switcher window to close
-    senderWindow.once('closed', () => {
-      console.log('Account switcher window closed, showing main window');
-      accountSwitcherWindow = null;
-      pendingMainWindowShow = false;
-      
-      // Now show the main window
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        if (!mainWindow.isVisible()) {
-          mainWindow.show();
-          console.log('Main window shown after account switcher closed');
-        }
-        mainWindow.focus();
-      }
-    });
-  }
-  
   // Get the authenticated user (should already be set above)
   const authUser = settingsStore.get('authUser');
   if (!authUser || !authUser.id) {
@@ -634,70 +1056,95 @@ ipcMain.handle('auth-success', (event, user) => {
     return;
   }
   
+  // Function to open main window after all other windows are closed
+  const openMainWindowAfterClose = () => {
+    // IMPORTANT: Don't create or modify main window if it's already open and visible
+    // This prevents interference with normal operation
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+      console.log('⚠️ Main window already open and visible - skipping window operations');
+      return; // Don't do anything - let the main window work normally
+  }
+  
   // Ensure main window exists (only create if it doesn't exist and user is authenticated)
   if (!mainWindow || mainWindow.isDestroyed()) {
     console.log('Creating main window...');
     createMainWindow();
   }
+  };
   
-  // Handle showing the main window
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    if (isFromAccountSwitcher) {
-      // If coming from account switcher, don't show main window yet - wait for account switcher to close
-      console.log('Main window ready but hidden - waiting for account switcher to close');
-      if (mainWindow.isVisible()) {
-        mainWindow.hide();
-      }
-    } else {
-      // Normal flow - show window when ready
-      let windowShown = false;
-      
-      const showMainWindow = () => {
-        // authUser is already verified at the start of this handler
-        // Just show the window if it exists
-        if (mainWindow && !mainWindow.isDestroyed() && !windowShown) {
-          if (!mainWindow.isVisible()) {
+  // Handle showing the main window if it already exists
+  // This ensures the main window is shown properly without interfering with normal operation
+  const showMainWindowIfExists = () => {
+    // Only show the main window if it exists and is not visible
+    // Don't interfere with the main window if it's already visible and working
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
             mainWindow.show();
+      mainWindow.focus();
             console.log('Main window shown');
           }
-          mainWindow.focus();
-          windowShown = true;
+    // If main window is already visible, don't do anything - let it work normally
+  };
+  
+  // Close all windows first, then open main window after they're fully closed
+  let windowsToClose = [];
+  
+  // Collect all windows that need to be closed
+  // IMPORTANT: Never close the main window - only close auth/account switcher windows
+  if (authWindow && !authWindow.isDestroyed() && authWindow !== mainWindow) {
+    windowsToClose.push(authWindow);
+  }
+  
+  if (accountSwitcherWindow && !accountSwitcherWindow.isDestroyed() && accountSwitcherWindow !== mainWindow) {
+    windowsToClose.push(accountSwitcherWindow);
+  }
+  
+  if (senderWindow && senderWindow !== mainWindow && !senderWindow.isDestroyed()) {
+    // Check if sender is an auth or account switcher window
+    // IMPORTANT: Never close the main window - only close auth/account switcher windows
+    try {
+      const url = senderWindow.webContents.getURL();
+      if (url.includes('/auth') || url.includes('addAccount=true') || url.includes('/account-switcher')) {
+        if (!windowsToClose.includes(senderWindow) && senderWindow !== mainWindow) {
+          windowsToClose.push(senderWindow);
         }
-      };
-
-      // Show when ready-to-show event fires (only if window was just created)
-      if (!mainWindow.webContents || mainWindow.webContents.isLoading()) {
-        mainWindow.once('ready-to-show', () => {
-          console.log('Main window ready-to-show event fired');
-          showMainWindow();
-        });
+      }
+    } catch (e) {
+      // If we can't check URL, only add it if it's definitely not mainWindow
+      // Don't add it if we're unsure - better to leave it open than close the main window
+      // Only add if we can verify it's not the main window
+    }
+  }
+  
+  // Close all windows, then open main window after the last one closes
+  if (windowsToClose.length > 0) {
+    let closedCount = 0;
+    const totalWindows = windowsToClose.length;
+    
+    windowsToClose.forEach((win) => {
+      if (win === authWindow) {
+        authWindow = null;
+      }
+      if (win === accountSwitcherWindow) {
+        accountSwitcherWindow = null;
       }
       
-      // Also check if already ready
-      if (mainWindow.webContents) {
-        if (!mainWindow.webContents.isLoading()) {
-          console.log('Main window already loaded, showing immediately');
-          showMainWindow();
-        } else {
-          // Listen for when content finishes loading
-          mainWindow.webContents.once('did-finish-load', () => {
-            console.log('Main window did-finish-load event fired');
-            setTimeout(showMainWindow, 100);
-          });
+      win.once('closed', () => {
+        closedCount++;
+        if (closedCount === totalWindows) {
+          // All windows closed, now open main window
+          console.log('✅ All windows closed - opening main window');
+          openMainWindowAfterClose();
+          // Show the main window if it already exists
+          showMainWindowIfExists();
         }
-      }
-
-      // Fallback to ensure window is shown
-      setTimeout(() => {
-        // authUser is already verified at the start of this handler
-        // Just ensure window is shown if it exists
-        if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
-          console.log('Fallback: showing main window after timeout');
-          mainWindow.show();
-          mainWindow.focus();
-        }
-      }, 500);
-    }
+      });
+      win.close();
+    });
+  } else {
+    // No windows to close, open main window immediately
+    openMainWindowAfterClose();
+    // Show the main window if it already exists
+    showMainWindowIfExists();
   }
 });
 
@@ -711,13 +1158,11 @@ ipcMain.handle('logout', async () => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         try {
           const authUserFromLocalStorage = await mainWindow.webContents.executeJavaScript(
-            'try { const authUser = localStorage.getItem("authUser"); return authUser ? JSON.parse(authUser) : null; } catch (e) { return null; }'
+            '(function() { try { const authUser = localStorage.getItem("authUser"); return authUser ? JSON.parse(authUser) : null; } catch (e) { return null; } })()'
           );
           
           if (authUserFromLocalStorage && authUserFromLocalStorage.id) {
             currentAuthUser = authUserFromLocalStorage;
-            console.log('Found auth user in localStorage:', currentAuthUser.name || currentAuthUser.email);
-            // Also sync it to settingsStore for consistency
             settingsStore.set('authUser', currentAuthUser);
           }
         } catch (error) {
@@ -728,207 +1173,118 @@ ipcMain.handle('logout', async () => {
     
     if (!currentAuthUser || !currentAuthUser.id) {
       console.log('No current user to logout');
-      return;
+      // Still show auth window if no user
+      if (!authWindow || authWindow.isDestroyed()) {
+        createAuthWindow();
+      }
+      return { success: true };
     }
     
     console.log('Logging out from account:', currentAuthUser.name || currentAuthUser.email);
     
-    // Mark current user as logged out in users.json (but don't delete the account)
-    try {
-      const appPath = isDev 
-        ? __dirname
-        : path.join(app.getAppPath());
-      
-      let projectRoot = appPath;
-      if (isDev) {
-        projectRoot = path.resolve(appPath, '..');
-      } else {
-        projectRoot = path.join(appPath, '..');
-      }
-      
-      const usersPath = path.join(projectRoot, 'user');
-      const usersFile = path.join(usersPath, 'users.json');
-      
-      if (fs.existsSync(usersFile)) {
-        const fileContent = fs.readFileSync(usersFile, 'utf8');
-        const users = JSON.parse(fileContent);
-        
+    // Mark current user as logged out (temporary session termination)
+    // IMPORTANT: Only set isLoggedIn: false, NEVER set hiddenInSwitcher: true
+    // Accounts should remain visible in the account switcher until explicitly removed
+    const users = getUsersFromFile();
         const userIndex = users.findIndex(u => u.id === currentAuthUser.id);
         if (userIndex !== -1) {
-          // Mark user as logged out, but keep the account
           users[userIndex].isLoggedIn = false;
-          fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
-          console.log('Marked user as logged out in users.json');
-        }
-      }
-    } catch (error) {
-      console.error('Error updating user login status:', error);
+      // IMPORTANT: Do NOT set hiddenInSwitcher: true here - account should remain visible
+      saveUsersToFile(users);
+      console.log('Marked user as logged out (temporary session termination)');
     }
     
-    // Remove current auth user from both stores
+    // Clear auth user from settingsStore
     settingsStore.delete('authUser');
     
     // Clear localStorage in main window
     if (mainWindow && !mainWindow.isDestroyed()) {
       try {
         await mainWindow.webContents.executeJavaScript(`
+          (function() {
           try {
             localStorage.removeItem('authUser');
-            localStorage.removeItem('developerIntent');
+              window.dispatchEvent(new Event('user-changed'));
           } catch (e) {
             console.error('Error clearing localStorage:', e);
           }
+          })();
         `);
       } catch (error) {
         console.error('Error clearing localStorage:', error);
       }
     }
     
-    // Try to find another logged-in account to switch to (excluding current user)
-    let switchToUser = null;
-    try {
-      const appPath = isDev 
-        ? __dirname
-        : path.join(app.getAppPath());
-      
-      let projectRoot = appPath;
-      if (isDev) {
-        projectRoot = path.resolve(appPath, '..');
-      } else {
-        projectRoot = path.join(appPath, '..');
-      }
-      
-      const usersPath = path.join(projectRoot, 'user');
-      const usersFile = path.join(usersPath, 'users.json');
-      
-      if (fs.existsSync(usersFile)) {
-        const fileContent = fs.readFileSync(usersFile, 'utf8');
-        const users = JSON.parse(fileContent);
-        
-        if (Array.isArray(users) && users.length > 0) {
-          // Filter out current user and only get logged-in users
-          const otherLoggedInUsers = users.filter(u => {
-            if (currentAuthUser && u.id === currentAuthUser.id) {
-              return false; // Exclude current user
-            }
-            // Only include users that are logged in (isLoggedIn !== false)
-            return u.isLoggedIn !== false;
-          });
-          
-          if (otherLoggedInUsers.length > 0) {
-            // Find the most recently logged-in user (excluding current)
-            const usersWithLoginTime = otherLoggedInUsers.filter(u => u.lastLoginTime);
-            if (usersWithLoginTime.length > 0) {
-              // Sort by lastLoginTime (most recent first)
-              usersWithLoginTime.sort((a, b) => {
-                const timeA = new Date(a.lastLoginTime).getTime();
-                const timeB = new Date(b.lastLoginTime).getTime();
-                return timeB - timeA; // Descending order (most recent first)
-              });
-              switchToUser = usersWithLoginTime[0];
-            } else {
-              // No users with login time, use first available logged-in user
-              switchToUser = otherLoggedInUsers[0];
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error finding another account to switch to:', error);
+    // Close main window FIRST, then open account switcher after it's fully closed
+    const openAccountSwitcher = () => {
+      console.log('Opening account switcher window');
+    
+    // Create account switcher window - 30% of screen size in 14:9 format (narrower than 16:9)
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+    // Calculate width based on 30% of screen width, then calculate height for 14:9
+    const accountSwitcherWidth = Math.round(screenWidth * 0.30);
+    const accountSwitcherHeight = Math.round(accountSwitcherWidth * (9 / 14));
+    
+    // Close existing account switcher if it exists
+    if (accountSwitcherWindow && !accountSwitcherWindow.isDestroyed()) {
+      accountSwitcherWindow.close();
+      accountSwitcherWindow = null;
     }
     
-    // If there's another account available, switch to it
-    if (switchToUser) {
-      console.log('Switching to another account:', switchToUser.name || switchToUser.username);
-      
-      // Set auth user for the new account
-      const authUserData = {
-        id: switchToUser.id,
-        email: switchToUser.email,
-        name: switchToUser.name || switchToUser.username || switchToUser.email?.split('@')[0] || 'User'
-      };
-      settingsStore.set('authUser', authUserData);
-      
-      // Update last login time for the switched account
-      try {
-        const appPath = isDev 
-          ? __dirname
-          : path.join(app.getAppPath());
-        
-        let projectRoot = appPath;
-        if (isDev) {
-          projectRoot = path.resolve(appPath, '..');
-        } else {
-          projectRoot = path.join(appPath, '..');
-        }
-        
-        const usersPath = path.join(projectRoot, 'user');
-        const usersFile = path.join(usersPath, 'users.json');
-        
-        if (fs.existsSync(usersFile)) {
-          const fileContent = fs.readFileSync(usersFile, 'utf8');
-          const users = JSON.parse(fileContent);
-          
-          const userIndex = users.findIndex(u => u.id === switchToUser.id);
-          if (userIndex !== -1) {
-            users[userIndex].lastLoginTime = new Date().toISOString();
-            users[userIndex].isLoggedIn = true; // Mark as logged in
-            fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
-          }
-        }
-      } catch (error) {
-        console.error('Error updating last login time:', error);
+    accountSwitcherWindow = new BrowserWindow({
+      width: accountSwitcherWidth,
+      height: accountSwitcherHeight,
+      resizable: false,
+      maximizable: false,
+      fullscreenable: false,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        enableRemoteModule: false,
+        preload: path.join(__dirname, 'preload.js')
+      },
+      frame: false,
+      titleBarStyle: 'hidden',
+      show: false,
+      icon: path.join(__dirname, 'assets/icon.png')
+    });
+    
+    const startUrl = isDev 
+      ? 'http://localhost:3000/account-switcher' 
+      : `file://${path.join(__dirname, '../build/index.html')}#/account-switcher`;
+    
+    accountSwitcherWindow.loadURL(startUrl);
+    
+    accountSwitcherWindow.once('ready-to-show', () => {
+      if (accountSwitcherWindow && !accountSwitcherWindow.isDestroyed()) {
+        accountSwitcherWindow.center();
+        accountSwitcherWindow.show();
+        accountSwitcherWindow.focus();
       }
-      
-      // Update localStorage in main window and dispatch user-changed event
-      // Keep main window open - just switch the account
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        const updateScript = `
-          try {
-            localStorage.setItem('authUser', JSON.stringify(${JSON.stringify(authUserData)}));
-            window.dispatchEvent(new Event('user-changed'));
-          } catch (e) {
-            console.error('Error updating auth user:', e);
-          }
-        `;
-        mainWindow.webContents.executeJavaScript(updateScript).catch(err => {
-          console.error('Error executing update script:', err);
-        });
-        
-        // Ensure main window stays visible and focused
-        if (!mainWindow.isVisible()) {
-          mainWindow.show();
-        }
-        mainWindow.focus();
-      } else {
-        // Main window doesn't exist, create it
-        createMainWindow();
-      }
-    } else {
-      // No other accounts available - close main window and open auth window
-      console.log('No other accounts available - closing main window and opening auth window');
-      
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        // Close main window
-        mainWindow.close();
-        mainWindow = null;
-        
-        // Wait a bit for window to close, then open auth window
-        setTimeout(() => {
-          if (!authWindow || authWindow.isDestroyed()) {
-            createAuthWindow();
-          }
-        }, 300);
-      } else {
-        // Main window doesn't exist, just create auth window
-        if (!authWindow || authWindow.isDestroyed()) {
-          createAuthWindow();
-        }
-      }
+    });
+    
+    if (isDev) {
+      accountSwitcherWindow.webContents.openDevTools({ mode: 'detach' });
     }
+    };
+    
+    // Close main window first, wait for it to fully close, then open account switcher
+      if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.once('closed', () => {
+        mainWindow = null;
+        openAccountSwitcher();
+      });
+      mainWindow.close();
+      } else {
+      // No main window to close, open account switcher immediately
+      openAccountSwitcher();
+        }
+    
+    return { success: true, switched: false };
   } catch (error) {
     console.error('Error during logout:', error);
-    // Fallback: close main window and open auth window
+    // Fallback: show auth window
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.close();
       mainWindow = null;
@@ -936,6 +1292,7 @@ ipcMain.handle('logout', async () => {
     if (!authWindow || authWindow.isDestroyed()) {
       createAuthWindow();
     }
+    return { success: false, error: error.message };
   }
 });
 
@@ -1651,21 +2008,45 @@ ipcMain.handle('clear-all-users', async () => {
   }
 });
 
-// Open a new auth window with the same dimensions as the current window
-ipcMain.handle('open-auth-window', (event) => {
+// Open a new auth window - completely separate from other windows
+ipcMain.handle('open-auth-window', (event, email = '') => {
   try {
     const currentWindow = BrowserWindow.fromWebContents(event.sender);
     if (!currentWindow) {
       return { success: false, error: 'Current window not found' };
     }
     
-    // Get current window dimensions BEFORE closing
-    const [width, height] = currentWindow.getSize();
+    console.log('🔐 Opening auth window for logged-out account');
+    console.log('📧 Email parameter received:', email);
     
-    // Create new auth window with same dimensions BEFORE closing the old one
+    // IMPORTANT: Clear authUser from settingsStore FIRST to prevent main window from being created
+    // This ensures that when the account switcher closes, it won't try to open main window
+    settingsStore.delete('authUser');
+    console.log('✅ Cleared authUser from settingsStore');
+    
+    // IMPORTANT: Close main window if it exists - we don't want it open when opening auth
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      console.log('⚠️ Closing main window - opening auth window instead');
+      mainWindow.close();
+      mainWindow = null;
+    }
+    
+    // Use standard auth window dimensions (not account switcher dimensions)
+    const authWindowWidth = 600;
+    const authWindowHeight = 800;
+    
+    // Close existing auth window if it exists
+    if (authWindow && !authWindow.isDestroyed()) {
+      authWindow.close();
+      authWindow = null;
+    }
+    
+    // Create auth window AFTER current window is fully closed
+    const createAuthWindowAfterClose = () => {
+      // Create new auth window with standard auth dimensions
     const newAuthWindow = new BrowserWindow({
-      width: width,
-      height: height,
+        width: authWindowWidth,
+        height: authWindowHeight,
       resizable: false,
       maximizable: false,
       fullscreenable: false,
@@ -1681,40 +2062,153 @@ ipcMain.handle('open-auth-window', (event) => {
       icon: path.join(__dirname, 'assets/icon.png')
     });
     
+      // Store reference in global authWindow variable IMMEDIATELY
+      // This allows the close-window handler to detect the auth window
+      authWindow = newAuthWindow;
+      console.log('✅ Auth window created and stored in global variable');
+      
+      // Build URL with email parameter if provided
+      // IMPORTANT: Use pathname routing (not hash) since app uses BrowserRouter
+      const emailParam = email ? `&email=${encodeURIComponent(email)}` : '';
     const startUrl = isDev 
-      ? 'http://localhost:3000#/auth?addAccount=true' 
-      : `file://${path.join(__dirname, '../build/index.html')}#/auth?addAccount=true`;
+        ? `http://localhost:3000/auth?addAccount=true${emailParam}` 
+        : `file://${path.join(__dirname, '../build/index.html')}/auth?addAccount=true${emailParam}`;
     
+      console.log('🔐 Loading auth window with URL:', startUrl);
+      console.log('📧 Email param in URL:', emailParam);
+      console.log('📧 Full email value:', email);
     newAuthWindow.loadURL(startUrl);
     
     newAuthWindow.once('ready-to-show', () => {
+        if (newAuthWindow && !newAuthWindow.isDestroyed()) {
       newAuthWindow.center();
       newAuthWindow.show();
       newAuthWindow.focus();
-      
-      // Close the old window after the new one is shown
-      setTimeout(() => {
-        if (currentWindow && !currentWindow.isDestroyed()) {
-          currentWindow.close();
+          console.log('✅ Auth window shown and focused');
         }
-      }, 100);
     });
     
     // Ensure the renderer is on the /auth route with addAccount parameter (works in dev and prod)
     newAuthWindow.webContents.once('did-finish-load', () => {
+        if (newAuthWindow && !newAuthWindow.isDestroyed()) {
+          const emailParam = email ? '&email=' + encodeURIComponent(email) : '';
+          const targetPath = '/auth?addAccount=true' + emailParam;
+          
       const navigateToAuth = `
-        try {
-          if (window.location.pathname !== '/auth' || !window.location.search.includes('addAccount=true')) {
-            window.history.pushState({}, '', '/auth?addAccount=true');
-            window.dispatchEvent(new Event('popstate'));
-          }
-        } catch (e) {}
-      `;
-      newAuthWindow.webContents.executeJavaScript(navigateToAuth).catch(() => {});
+            (function() {
+              try {
+                console.log('[Auth Window] Page loaded - checking current route');
+                const currentPath = window.location.pathname || '';
+                const currentSearch = window.location.search || '';
+                console.log('[Auth Window] Current path:', currentPath);
+                console.log('[Auth Window] Current search:', currentSearch);
+                
+                // Always force navigation to /auth route to ensure we're on the right page
+                const targetPath = '${targetPath}';
+                console.log('[Auth Window] Target path:', targetPath);
+                
+                if (!currentPath.includes('/auth') || !currentSearch.includes('addAccount=true')) {
+                  console.log('[Auth Window] Not on /auth route - navigating now');
+                  window.location.href = targetPath;
+                  
+                  // Verify navigation worked
+                  setTimeout(function() {
+                    const newPath = window.location.pathname || '';
+                    const newSearch = window.location.search || '';
+                    if (!newPath.includes('/auth') || !newSearch.includes('addAccount=true')) {
+                      console.log('[Auth Window] Navigation failed - retrying');
+                      window.location.href = targetPath;
+                      
+                      // Final retry with reload if needed
+                      setTimeout(function() {
+                        const finalPath = window.location.pathname || '';
+                        if (!finalPath.includes('/auth')) {
+                          console.log('[Auth Window] Final retry - reloading page');
+                          window.location.href = targetPath;
+                          setTimeout(function() {
+                            if (!window.location.pathname.includes('/auth')) {
+                              window.location.reload();
+                            }
+                          }, 100);
+                        } else {
+                          console.log('[Auth Window] Successfully navigated to /auth');
+                        }
+                      }, 200);
+                    } else {
+                      console.log('[Auth Window] Successfully navigated to /auth');
+                    }
+                  }, 100);
+                } else {
+                  console.log('[Auth Window] Already on /auth route');
+                }
+              } catch (e) {
+                console.error('[Auth Window] Error navigating to auth:', e);
+              }
+            })();
+          `;
+          
+          // Execute immediately after page loads
+          newAuthWindow.webContents.executeJavaScript(navigateToAuth).catch((err) => {
+            console.error('[Auth Window] Error executing navigation script:', err);
+          });
+          
+          // Also listen for navigation events to prevent redirects
+          newAuthWindow.webContents.on('did-navigate-in-page', (event, url) => {
+            console.log('[Auth Window] Navigated in page to:', url);
+            if (!url.includes('/auth') && !url.includes('addAccount=true')) {
+              console.log('[Auth Window] Detected navigation away from /auth - redirecting back');
+              const emailParam = email ? '&email=' + encodeURIComponent(email) : '';
+              const targetPath = '/auth?addAccount=true' + emailParam;
+              newAuthWindow.webContents.executeJavaScript('window.location.href = "' + targetPath + '";').catch(() => {});
+            }
+          });
+        }
+      });
+      
+      // Also prevent navigation away from /auth route
+      newAuthWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+        // Only allow navigation to /auth route or same origin
+        if (!navigationUrl.includes('/auth') && !navigationUrl.includes('addAccount=true') && !navigationUrl.includes('localhost:3000')) {
+          event.preventDefault();
+          // Force back to auth route
+          const emailParam = email ? '&email=' + encodeURIComponent(email) : '';
+          newAuthWindow.webContents.executeJavaScript(`
+            window.location.hash = '/auth?addAccount=true${emailParam}';
+          `).catch(() => {});
+        }
     });
     
     if (isDev) {
       newAuthWindow.webContents.openDevTools({ mode: 'detach' });
+      }
+    };
+    
+    // Close current window first, wait for it to fully close, then open auth window
+    if (currentWindow && !currentWindow.isDestroyed()) {
+      try {
+        const url = currentWindow.webContents.getURL();
+        if (url.includes('/account-switcher')) {
+          currentWindow.once('closed', () => {
+            console.log('✅ Account switcher closed - opening auth window');
+            createAuthWindowAfterClose();
+          });
+          currentWindow.close();
+        } else {
+          // Not account switcher, close immediately and open auth window
+          currentWindow.close();
+          createAuthWindowAfterClose();
+        }
+      } catch (e) {
+        console.error('Error checking current window URL:', e);
+        // Fallback: close and open immediately
+        if (currentWindow && !currentWindow.isDestroyed()) {
+          currentWindow.close();
+        }
+        createAuthWindowAfterClose();
+      }
+    } else {
+      // No current window to close, open auth window immediately
+      createAuthWindowAfterClose();
     }
     
     return { success: true };
@@ -1731,16 +2225,17 @@ ipcMain.handle('open-account-switcher-window', (event) => {
       return { success: false, error: 'Current window not found' };
     }
     
-    // Get current window dimensions BEFORE closing
-    const [width, height] = currentWindow.getSize();
+    // Account switcher window - 30% of screen size in 14:9 format
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+    const accountSwitcherWidth = Math.round(screenWidth * 0.30);
+    const accountSwitcherHeight = Math.round(accountSwitcherWidth * (9 / 14));
     
-    // Account switcher should always be 700px wide
-    const accountSwitcherWidth = 700;
-    
-    // Create new account switcher window FIRST (before closing old one)
+    // Create account switcher window AFTER current window is fully closed
+    const createAccountSwitcherAfterClose = () => {
     accountSwitcherWindow = new BrowserWindow({
       width: accountSwitcherWidth,
-      height: height,
+        height: accountSwitcherHeight,
       resizable: false, // User cannot resize, but app can resize programmatically
       maximizable: false,
       fullscreenable: false,
@@ -1762,20 +2257,14 @@ ipcMain.handle('open-account-switcher-window', (event) => {
     
     accountSwitcherWindow.loadURL(startUrl);
     
+      // Show window when ready
+      accountSwitcherWindow.once('ready-to-show', () => {
+        if (accountSwitcherWindow && !accountSwitcherWindow.isDestroyed()) {
     // Center the window
     accountSwitcherWindow.center();
-    
-    // Show window when ready, THEN close the old window
-    accountSwitcherWindow.once('ready-to-show', () => {
       accountSwitcherWindow.show();
       accountSwitcherWindow.focus();
-      
-      // Close the old window AFTER the new one is shown
-      setTimeout(() => {
-        if (currentWindow && !currentWindow.isDestroyed()) {
-          currentWindow.close();
         }
-      }, 150);
     });
     
     // Ensure the renderer is on the /account-switcher route
@@ -1790,10 +2279,38 @@ ipcMain.handle('open-account-switcher-window', (event) => {
       `;
       accountSwitcherWindow.webContents.executeJavaScript(navigateToAccountSwitcher);
     });
+      
+      if (isDev) {
+        accountSwitcherWindow.webContents.openDevTools({ mode: 'detach' });
+      }
+    };
+    
+    // Close current window first, wait for it to fully close, then open account switcher
+    if (currentWindow && !currentWindow.isDestroyed()) {
+      currentWindow.once('closed', () => {
+        console.log('✅ Current window closed - opening account switcher');
+        createAccountSwitcherAfterClose();
+      });
+      currentWindow.close();
+    } else {
+      // No current window to close, open account switcher immediately
+      createAccountSwitcherAfterClose();
+    }
     
     return { success: true };
   } catch (error) {
     console.error('Error opening account switcher window:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Open admin window - only if user matches admin credentials
+ipcMain.handle('open-admin-window', (event) => {
+  try {
+    const result = createAdminWindow();
+    return result;
+  } catch (error) {
+    console.error('Error opening admin window:', error);
     return { success: false, error: error.message };
   }
 });

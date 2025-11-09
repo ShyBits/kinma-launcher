@@ -295,8 +295,8 @@ const Profile = ({ navigate }) => {
       const windowWidth = window.innerWidth;
       const clientX = e.clientX !== undefined ? e.clientX : windowWidth;
       const newWidth = windowWidth - clientX;
-      const minWidth = 180;
-      const maxWidth = 400;
+      const minWidth = 200;
+      const maxWidth = 250;
       
       // Clamp to boundaries
       const clampedWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
@@ -317,8 +317,8 @@ const Profile = ({ navigate }) => {
 
     const handleMouseLeave = () => {
       // When mouse leaves window, clamp to boundaries
-      const minWidth = 180;
-      const maxWidth = 400;
+      const minWidth = 200;
+      const maxWidth = 250;
       const currentWidth = profileRightSidebarWidth;
       const clampedWidth = Math.max(minWidth, Math.min(maxWidth, currentWidth));
       if (clampedWidth !== currentWidth) {
@@ -659,6 +659,7 @@ const Profile = ({ navigate }) => {
         <div className="profile-container">
           <div className="profile-view-mode">
             <div className="profile-main-content">
+              <div className="profile-main-content-inner">
             <div className="profile-placeholder">
               <User size={64} />
               <h2>{userName}</h2>
@@ -687,20 +688,23 @@ const Profile = ({ navigate }) => {
                 }}
               />
             )}
+              </div>
           </div>
 
-            {/* Right Sidebar Resizer */}
-            <div 
-              ref={rightSidebarResizeRef}
-              className={`sidebar-resizer ${isRightSidebarResizing ? 'resizing' : ''}`}
-              onMouseDown={handleRightSidebarResizeStart}
-            />
+            {/* Right Sidebar Navigation - Inside Content */}
+            <div className="profile-content-right">
+              {/* Right Sidebar Resizer */}
+              <div 
+                ref={rightSidebarResizeRef}
+                className={`sidebar-resizer ${isRightSidebarResizing ? 'resizing' : ''}`}
+                onMouseDown={handleRightSidebarResizeStart}
+              />
 
-            {/* Right Sidebar Navigation */}
-            <aside 
-              className={`marketplace-sidebar ${isRightSidebarResizing ? 'resizing' : ''}`}
-              style={{ width: profileRightSidebarWidth }}
-            >
+              {/* Right Sidebar Navigation */}
+              <aside 
+                className={`marketplace-sidebar ${isRightSidebarResizing ? 'resizing' : ''}`}
+                style={{ width: profileRightSidebarWidth }}
+              >
               <div className="sidebar-title">Profile</div>
               <nav className="sidebar-nav">
                 {/* Main Section */}
@@ -768,7 +772,8 @@ const Profile = ({ navigate }) => {
                   </button>
             </div>
               </nav>
-            </aside>
+              </aside>
+            </div>
           </div>
         </div>
       </div>

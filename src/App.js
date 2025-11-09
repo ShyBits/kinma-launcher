@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import TitleBar from './components/TitleBar';
 import TopNavigation from './components/TopNavigation';
@@ -18,6 +18,8 @@ import Game from './pages/Game';
 import DeveloperOnboarding from './pages/DeveloperOnboarding';
 import Auth from './pages/Auth';
 import AccountSwitcherPage from './pages/AccountSwitcher';
+import Admin from './pages/Admin';
+import AdminWindow from './pages/AdminWindow';
 import GamePromo from './pages/GamePromo';
 import oauthExample from './config/oauth.config.example.js';
 import './components/AccountSwitcher.css';
@@ -37,9 +39,86 @@ const AppContent = () => {
       return 260;
     }
   });
+  
+  // Window width for responsive sidebar sizing
+  const [windowWidth, setWindowWidth] = useState(() => {
+    return typeof window !== 'undefined' ? window.innerWidth : 1120;
+  });
+  
+  // Track if user has manually resized the sidebar
+  const [hasManuallyResized, setHasManuallyResized] = useState(() => {
+    try {
+      return localStorage.getItem('sidebarManuallyResized') === 'true';
+    } catch (_) {
+      return false;
+    }
+  });
+  
+  // Calculate responsive sidebar width based on window size
+  // Scales between 15-25% of window width, clamped between 200px and 400px
+  const responsiveSidebarWidth = useMemo(() => {
+    const minWidth = 200;
+    const maxWidth = 400;
+    // Scale from 15% (at 1120px) to 25% (at larger windows)
+    const scaleFactor = Math.min(0.25, Math.max(0.15, 0.15 + (windowWidth - 1120) * 0.0001));
+    const calculatedWidth = windowWidth * scaleFactor;
+    return Math.max(minWidth, Math.min(maxWidth, calculatedWidth));
+  }, [windowWidth]);
+  
   const [isResizing, setIsResizing] = useState(false);
   const resizeRef = useRef(null);
   const sidebarRef = useRef(null);
+  
+  // Track window size changes
+  useEffect(() => {
+    const updateWindowSize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+    
+    updateWindowSize();
+    window.addEventListener('resize', updateWindowSize);
+    return () => {
+      window.removeEventListener('resize', updateWindowSize);
+    };
+  }, []);
+  
+  // Auto-adjust sidebar width based on window size
+  useEffect(() => {
+    if (!isResizing && responsiveSidebarWidth) {
+      setSidebarWidth(prevWidth => {
+        // Fixed min/max values for better performance
+        const minWidth = 200;
+        const maxWidth = 400;
+        
+        // If user hasn't manually resized, adjust to responsive width instantly
+        if (!hasManuallyResized) {
+          const newWidth = responsiveSidebarWidth;
+          if (Math.abs(prevWidth - newWidth) > 0.1) {
+            // Update localStorage asynchronously to avoid blocking
+            setTimeout(() => {
+              try {
+                localStorage.setItem('sidebarWidth', newWidth.toString());
+              } catch (_) {}
+            }, 0);
+            return newWidth;
+          }
+        } else {
+          // If manually resized, clamp to fixed max if it exceeds it instantly
+          if (prevWidth > maxWidth) {
+            const clampedWidth = maxWidth;
+            // Update localStorage asynchronously to avoid blocking
+            setTimeout(() => {
+              try {
+                localStorage.setItem('sidebarWidth', clampedWidth.toString());
+              } catch (_) {}
+            }, 0);
+            return clampedWidth;
+          }
+        }
+        return prevWidth;
+      });
+    }
+  }, [windowWidth, responsiveSidebarWidth, isResizing, hasManuallyResized]);
   const [isAccountSwitching, setIsAccountSwitching] = useState(false);
   const [switchingToUser, setSwitchingToUser] = useState(null);
   const navigate = useNavigate();
@@ -61,14 +140,76 @@ const AppContent = () => {
   }, []);
 
   // Redirect to developer onboarding if intent was set during auth
+  // BUT ONLY on initial load, not when navigating between pages
+  const hasCheckedDeveloperIntent = useRef(false);
+  
   useEffect(() => {
+    // Only check once on initial load, not on every navigation
+    if (hasCheckedDeveloperIntent.current) {
+      return;
+    }
+    
+    // Don't redirect if we're on special routes
+    // Check both pathname (for regular routing) and hash (for hash routing)
+    const currentPath = location.pathname;
+    const currentHash = location.hash || '';
+    
+    // Check if we're on special routes (pathname or hash)
+    const isSpecialRoute = 
+      currentPath === '/account-switcher' || 
+      currentPath === '/auth' || 
+      currentPath === '/admin-window' ||
+      currentPath === '/developer-onboarding' ||
+      currentPath.startsWith('/account-switcher') ||
+      currentPath.startsWith('/auth') ||
+      currentPath.startsWith('/admin-window') ||
+      currentPath.startsWith('/developer-onboarding') ||
+      currentHash.includes('/account-switcher') ||
+      currentHash.includes('/auth') ||
+      currentHash.includes('/admin-window') ||
+      currentHash.includes('/developer-onboarding');
+    
+    if (isSpecialRoute) {
+      hasCheckedDeveloperIntent.current = true;
+      return; // Don't redirect if already on special routes
+    }
+    
+    // Also check if addAccount parameter is present (don't redirect if adding account)
     try {
-      const intent = localStorage.getItem('developerIntent');
-      if (intent === 'pending') {
-        navigate('/developer-onboarding');
+      const hashParams = currentHash.includes('?') ? currentHash.split('?')[1] : '';
+      const searchParams = location.search || '';
+      const urlParams = hashParams 
+        ? new URLSearchParams(hashParams)
+        : new URLSearchParams(searchParams);
+      if (urlParams.get('addAccount') === 'true') {
+        hasCheckedDeveloperIntent.current = true;
+        return; // Don't redirect if adding account
       }
     } catch (_) {}
-  }, []);
+    
+    try {
+      // Check user-specific developer intent
+      const { getUserData, getCurrentUserId } = require('./utils/UserDataManager');
+      const userId = getCurrentUserId();
+      if (userId) {
+        const intent = getUserData('developerIntent', 'none', userId);
+        // Only redirect if intent is pending AND we're not already on developer-onboarding
+        if (intent === 'pending' && currentPath !== '/developer-onboarding') {
+          navigate('/developer-onboarding');
+        }
+      } else {
+        // Fallback to localStorage for backward compatibility
+        const intent = localStorage.getItem('developerIntent');
+        // Only redirect if intent is pending AND we're not already on developer-onboarding
+        if (intent === 'pending' && currentPath !== '/developer-onboarding') {
+          navigate('/developer-onboarding');
+        }
+      }
+    } catch (_) {}
+    
+    // Mark as checked so we don't check again on navigation
+    hasCheckedDeveloperIntent.current = true;
+  }, [navigate, location.pathname, location.hash]);
 
   const checkGameStatus = () => {
     setIsGameInstalled(true);
@@ -141,8 +282,9 @@ const AppContent = () => {
     const handleResize = (e) => {
       e.preventDefault();
       const newWidth = e.clientX;
-      const minWidth = 240;
-      const maxWidth = 600;
+      // Fixed min/max values for better performance
+      const minWidth = 200;
+      const maxWidth = 400;
       
       if (newWidth >= minWidth && newWidth <= maxWidth) {
         setSidebarWidth(newWidth);
@@ -151,10 +293,16 @@ const AppContent = () => {
 
     const handleResizeEnd = () => {
       setIsResizing(false);
-      // Save to localStorage only at the end
-      try {
-        localStorage.setItem('sidebarWidth', sidebarWidth.toString());
-      } catch (_) {}
+      // Mark as manually resized and save to localStorage
+      setHasManuallyResized(true);
+      // Use functional update to get the latest width
+      setSidebarWidth(currentWidth => {
+        try {
+          localStorage.setItem('sidebarWidth', currentWidth.toString());
+          localStorage.setItem('sidebarManuallyResized', 'true');
+        } catch (_) {}
+        return currentWidth;
+      });
     };
 
     document.addEventListener('mousemove', handleResize);
@@ -228,7 +376,7 @@ const AppContent = () => {
       ) : (
         <>
           <TitleBar onToggleSidebar={toggleSidebar} navigate={navigate} />
-          {location.pathname !== '/auth' && location.pathname !== '/account-switcher' && (
+          {location.pathname !== '/auth' && location.pathname !== '/account-switcher' && location.pathname !== '/admin-window' && location.hash !== '#/admin-window' && (
         <TopNavigation 
           currentPage={currentPageId}
           setCurrentPage={setCurrentPage}
@@ -246,7 +394,7 @@ const AppContent = () => {
         />
       )}
       <div className="app-layout">
-        {location.pathname !== '/auth' && location.pathname !== '/account-switcher' && location.pathname !== '/game-studio' && location.pathname !== '/game-studio-settings' && (
+        {location.pathname !== '/auth' && location.pathname !== '/account-switcher' && location.pathname !== '/game-studio' && location.pathname !== '/game-studio-settings' && location.pathname !== '/admin-window' && location.hash !== '#/admin-window' && (
           <>
             <SideBar 
               ref={sidebarRef}
@@ -265,7 +413,7 @@ const AppContent = () => {
             />
           </>
         )}
-        <div className="app-content-wrapper" style={{ width: (location.pathname === '/game-studio' || location.pathname === '/game-studio-settings' || location.pathname === '/auth' || location.pathname === '/account-switcher') ? '100%' : 'auto' }}>
+        <div className="app-content-wrapper" style={{ width: (location.pathname === '/game-studio' || location.pathname === '/game-studio-settings' || location.pathname === '/auth' || location.pathname === '/account-switcher' || location.pathname === '/admin-window' || location.hash === '#/admin-window') ? '100%' : 'auto' }}>
           <div className="main-content">
             <Routes>
               <Route path="/" element={<Navigate to="/library" replace />} />
@@ -285,6 +433,8 @@ const AppContent = () => {
               <Route path="/notifications" element={<Notifications />} />
               <Route path="/developer-onboarding" element={<DeveloperOnboarding navigate={navigate} />} />
               <Route path="/game-studio-settings" element={<GameStudioSettings />} />
+              <Route path="/admin" element={<Admin />} />
+              <Route path="/admin-window" element={<AdminWindow />} />
               <Route path="/game/:gameId" element={<Game />} />
             </Routes>
           </div>

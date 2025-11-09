@@ -808,7 +808,6 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
             </button>
 
             <div className="sidebar-search">
-              <Search size={16} />
               <input
                 type="text"
                 placeholder="Search games..."

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Settings as SettingsIcon, DollarSign, Users, Globe, Shield, Mail, Bell, LogOut } from 'lucide-react';
+import { Settings as SettingsIcon, DollarSign, Users, Globe, Shield, Mail, Bell } from 'lucide-react';
 import { getUserData, saveUserData, getUserScopedKey } from '../utils/UserDataManager';
 import './Settings.css';
 
@@ -395,10 +395,6 @@ const GameStudioSettings = () => {
     navigate('/game-studio');
   };
 
-  const handleSwitchToNormalView = () => {
-    navigate('/library');
-  };
-
   return (
     <div className="settings">
       <div className="settings-header">
@@ -422,36 +418,6 @@ const GameStudioSettings = () => {
             );
           })}
           
-          {/* Navigation toggle at bottom of sidebar */}
-          <div style={{ marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
-            <button 
-              onClick={handleSwitchToNormalView}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                width: '100%',
-                padding: '12px 16px',
-                background: 'rgba(0, 212, 255, 0.1)',
-                border: '1px solid var(--accent-primary)',
-                borderRadius: '8px',
-                color: 'var(--accent-primary)',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: 600,
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(0, 212, 255, 0.15)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(0, 212, 255, 0.1)';
-              }}
-            >
-              <LogOut size={18} />
-              Switch to Player View
-            </button>
-          </div>
         </div>
 
         <div className="settings-main">

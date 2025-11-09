@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getUserData, saveUserData, getUserScopedKey } from '../utils/UserDataManager';
+import { getUserData, saveUserData, getUserScopedKey, getCurrentUserId } from '../utils/UserDataManager';
 import { 
   Upload, Plus, Edit, Trash2, Package, Play, X, Box,
   FileText, Image, Settings, ChevronLeft, ChevronRight, Check, X as XIcon, Edit2,
@@ -19,6 +19,43 @@ import ImageUpload from '../components/ImageUpload';
 import CustomVideoPlayer from '../components/CustomVideoPlayer';
 
 const GameStudio = ({ navigate }) => {
+  // Check if user has developer/game studio access
+  useEffect(() => {
+    const checkAccess = () => {
+      const userId = getCurrentUserId();
+      if (!userId) {
+        // No user logged in, redirect to auth
+        navigate('/auth');
+        return;
+      }
+      
+      // Check user-specific developer access
+      const hasDeveloperAccess = getUserData('developerAccess', false, userId);
+      const hasGameStudioAccess = getUserData('gameStudioAccess', false, userId);
+      const accessStatus = getUserData('developerAccessStatus', null, userId);
+      
+      // User needs explicitly granted access (not pending)
+      const hasAccess = (hasDeveloperAccess || hasGameStudioAccess) && accessStatus !== 'pending';
+      
+      if (!hasAccess) {
+        // User doesn't have access, redirect to developer onboarding
+        navigate('/developer-onboarding');
+      }
+    };
+    
+    checkAccess();
+    
+    // Listen for user changes
+    const handleUserChange = () => {
+      checkAccess();
+    };
+    
+    window.addEventListener('user-changed', handleUserChange);
+    return () => {
+      window.removeEventListener('user-changed', handleUserChange);
+    };
+  }, [navigate]);
+  
   // Helper function to load user-specific custom games
   const loadCustomGames = () => {
     try {

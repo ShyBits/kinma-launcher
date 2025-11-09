@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import './AuthModal.css';
 import oauthConfig from '../config/oauth.config.example.js';
+import { saveUserData, getUserData, getCurrentUserId } from '../utils/UserDataManager';
 
 const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, variant = 'modal', onHeightChange }) => {
   const [identifier, setIdentifier] = useState('');
@@ -23,7 +24,18 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
   const [authMode, setAuthMode] = useState('login'); // 'login' or 'register' - explicit mode switch
   const [showOptionalFields, setShowOptionalFields] = useState(false); // Toggle for optional fields visibility
   const [devIntent, setDevIntent] = useState(() => {
-    try { return localStorage.getItem('developerIntent') === 'pending'; } catch (_) { return false; }
+    try { 
+      // Check user-specific developer intent
+      const userId = getCurrentUserId();
+      if (userId) {
+        const intent = getUserData('developerIntent', 'none', userId);
+        return intent === 'pending';
+      }
+      // Fallback to localStorage for backward compatibility
+      return localStorage.getItem('developerIntent') === 'pending'; 
+    } catch (_) { 
+      return false; 
+    }
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
@@ -33,12 +45,134 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
   const footerRef = useRef(null);
   const maxHeightRef = useRef(null); // Track maximum height for consistent window size
 
+  // Check for email parameter in URL and pre-fill it
+  // Check both when isOpen changes AND when URL changes (for page variant)
+  useEffect(() => {
+    if (isOpen) {
+      const checkEmailFromURL = () => {
+        try {
+          // Check both hash and search params (hash routing uses hash, regular routing uses search)
+          const hash = window.location.hash || '';
+          const hashParams = hash.includes('?') ? hash.split('?')[1] : '';
+          const searchParams = window.location.search || '';
+          
+          // Try hash params first (for hash routing), then search params (for regular routing)
+          const urlParams = hashParams 
+            ? new URLSearchParams(hashParams)
+            : new URLSearchParams(searchParams);
+          
+          const emailParam = urlParams.get('email');
+          const isAddAccount = urlParams.get('addAccount') === 'true';
+          
+          // Only log detailed info if email is found or if we're debugging
+          if (emailParam) {
+            console.log('[AuthModal] ✅ Found email in URL:', emailParam);
+            setEmail(emailParam);
+            // Also set identifier field for login form (identifier accepts email, username, or phone)
+            setIdentifier(emailParam);
+            // If email is provided, switch to login mode
+            setAuthMode('login');
+            return true; // Email found and set
+          } else {
+            // Only show error if we're in addAccount mode (meaning we might have expected an email)
+            // But don't show error if it's just the add button (no email expected)
+            // We can't distinguish between "add button" vs "logged out account" from URL alone,
+            // so we'll only log a warning, not an error, and only once
+            if (isAddAccount) {
+              // This is normal for the add button - no email expected
+              // Only log once to avoid spam
+              return false; // No email found, but that's okay for add button
+            }
+            return false; // No email found
+          }
+        } catch (error) {
+          console.error('Error reading email from URL:', error);
+          return false;
+        }
+      };
+      
+      // Check immediately
+      const emailFound = checkEmailFromURL();
+      
+      // Listen for URL changes (for page variant where URL might change after mount)
+      const handleLocationChange = () => {
+        checkEmailFromURL();
+      };
+      
+      // Check on popstate (back/forward navigation)
+      window.addEventListener('popstate', handleLocationChange);
+      
+      // If email not found immediately, check again after delays (URL might be set asynchronously)
+      // But only if we're expecting an email (not just the add button)
+      let timeoutId1, timeoutId2, intervalId, stopPollingTimeout;
+      
+      // Check if we're in addAccount mode - if so, we might be waiting for an email
+      const hash = window.location.hash || '';
+      const hashParams = hash.includes('?') ? hash.split('?')[1] : '';
+      const searchParams = window.location.search || '';
+      const urlParams = hashParams 
+        ? new URLSearchParams(hashParams)
+        : new URLSearchParams(searchParams);
+      const isAddAccount = urlParams.get('addAccount') === 'true';
+      
+      // Only poll for email if we're in addAccount mode (might be a logged-out account)
+      // If no addAccount param, don't poll (regular auth flow)
+      if (!emailFound && isAddAccount) {
+        timeoutId1 = setTimeout(() => {
+          checkEmailFromURL();
+        }, 100);
+        
+        timeoutId2 = setTimeout(() => {
+          checkEmailFromURL();
+        }, 500);
+        
+        // Poll for URL changes (in case URL is set asynchronously) - only if email not found
+        intervalId = setInterval(() => {
+          const found = checkEmailFromURL();
+          if (found) {
+            clearInterval(intervalId);
+          }
+        }, 200);
+        
+        // Stop polling after 5 seconds
+        stopPollingTimeout = setTimeout(() => {
+          if (intervalId) {
+            clearInterval(intervalId);
+          }
+        }, 5000);
+      }
+      
+      return () => {
+        if (timeoutId1) clearTimeout(timeoutId1);
+        if (timeoutId2) clearTimeout(timeoutId2);
+        if (stopPollingTimeout) clearTimeout(stopPollingTimeout);
+        if (intervalId) clearInterval(intervalId);
+        window.removeEventListener('popstate', handleLocationChange);
+      };
+    }
+  }, [isOpen]);
+
   // Reset additional fields when switching auth mode
   useEffect(() => {
     if (authMode === 'login') {
       setConfirmPassword('');
       setFullName('');
-      setEmail('');
+      // Don't reset email if it was pre-filled from URL
+      try {
+        const hash = window.location.hash || '';
+        const hashParams = hash.includes('?') ? hash.split('?')[1] : '';
+        const searchParams = window.location.search || '';
+        const urlParams = hashParams 
+          ? new URLSearchParams(hashParams)
+          : new URLSearchParams(searchParams);
+        const emailParam = urlParams.get('email');
+        if (!emailParam) {
+          setEmail('');
+        }
+      } catch (error) {
+        // If error reading params, clear email
+        setEmail('');
+      }
       setPhone('');
       setDateOfBirth('');
       setAddress('');
@@ -674,8 +808,37 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
       console.error('Error updating last login time:', error);
     }
     
-    try { localStorage.setItem('authUser', JSON.stringify({ id: user.id, email: user.email, name: user.name })); } catch (_) {}
-    try { localStorage.setItem('developerIntent', devIntent ? 'pending' : 'none'); } catch (_) {}
+    // Set auth user in localStorage
+    const authUserData = { id: user.id, email: user.email, name: user.name };
+    try { 
+      localStorage.setItem('authUser', JSON.stringify(authUserData)); 
+    } catch (_) {}
+    
+    // Set auth user in Electron store
+    try {
+      const api = window.electronAPI;
+      if (api?.setAuthUser) {
+        await api.setAuthUser(authUserData);
+      }
+      if (api?.authSuccess) {
+        await api.authSuccess(authUserData);
+      }
+    } catch (error) {
+      console.error('Error setting auth user in Electron:', error);
+    }
+    
+    // Save developer intent to user account
+    if (devIntent && user.id) {
+      saveUserData('developerIntent', 'pending', user.id);
+      saveUserData('developerAccess', false, user.id); // Not yet granted
+      saveUserData('gameStudioAccess', false, user.id); // Not yet granted
+    } else if (user.id) {
+      saveUserData('developerIntent', 'none', user.id);
+    }
+    
+    // Dispatch user-changed event
+    window.dispatchEvent(new Event('user-changed'));
+    
     setSubmitting(false);
     onAuthenticated?.({ user, developerChosen: devIntent });
     onClose?.();
@@ -764,7 +927,16 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
       }
       
       try { localStorage.setItem('authUser', JSON.stringify(user)); } catch (_) {}
-      try { localStorage.setItem('developerIntent', devIntent ? 'pending' : 'none'); } catch (_) {}
+      
+      // Save developer intent to user account
+      if (devIntent && user.id) {
+        saveUserData('developerIntent', 'pending', user.id);
+        saveUserData('developerAccess', false, user.id); // Not yet granted
+        saveUserData('gameStudioAccess', false, user.id); // Not yet granted
+      } else if (user.id) {
+        saveUserData('developerIntent', 'none', user.id);
+      }
+      
       onAuthenticated?.({ user, developerChosen: devIntent });
       onClose?.();
     } catch (_) {
@@ -785,7 +957,10 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
       
       // Save to localStorage
       try { localStorage.setItem('authUser', JSON.stringify({ id: guestUser.id, name: guestUser.name })); } catch (_) {}
-      try { localStorage.setItem('developerIntent', 'none'); } catch (_) {}
+      // Guest users don't have developer access
+      if (guestUser.id) {
+        saveUserData('developerIntent', 'none', guestUser.id);
+      }
       
       // Call the same authentication flow as a normal login
       const api = window.electronAPI;

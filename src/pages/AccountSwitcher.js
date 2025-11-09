@@ -18,11 +18,20 @@ const AccountSwitcherPage = ({ navigate }) => {
           console.log('🔄 AccountSwitcherPage: Pending switch detected on init:', userToSwitch.name || userToSwitch.username);
           // DON'T remove it here - let the component read it first
           
-          // Account switcher should ALWAYS be 700px wide
-          let currentWidth = 700;
-          let currentHeight = 450;
+          // Account switcher should be 30% of screen size in 14:9 format (narrower than 16:9)
+          let currentWidth = 700; // Default fallback
+          let currentHeight = 450; // Default fallback (700 * 9/14)
           
           try {
+            // Get screen size and calculate 30% width, then height for 14:9
+            if (api?.getScreenSize) {
+              const screenSize = await api.getScreenSize();
+              if (screenSize && screenSize.success) {
+                currentWidth = Math.round(screenSize.width * 0.30);
+                currentHeight = Math.round(currentWidth * (9 / 14));
+              }
+            }
+            
             if (api?.resizeWindow) {
               api.resizeWindow(currentWidth, currentHeight);
             }
@@ -45,12 +54,20 @@ const AccountSwitcherPage = ({ navigate }) => {
         }
       }
       
-      // Account switcher should ALWAYS be 700px wide
-      let currentWidth = 700;
-      // Use calculated height based on accounts, not the app window height
-      let currentHeight = 450; // Default initial height
+      // Account switcher should be 30% of screen size in 14:9 format (narrower than 16:9)
+      let currentWidth = 700; // Default fallback
+      let currentHeight = 450; // Default fallback (700 * 9/14)
       
       try {
+        // Get screen size and calculate 30% width, then height for 14:9
+        if (api?.getScreenSize) {
+          const screenSize = await api.getScreenSize();
+          if (screenSize && screenSize.success) {
+            currentWidth = Math.round(screenSize.width * 0.30);
+            currentHeight = Math.round(currentWidth * (9 / 14));
+          }
+        }
+        
         if (api?.resizeWindow) {
           api.resizeWindow(currentWidth, currentHeight);
         }
@@ -70,14 +87,121 @@ const AccountSwitcherPage = ({ navigate }) => {
     setWindowHeight(newHeight);
     const api = window.electronAPI || window.electron;
     try {
-      api?.resizeWindow && api.resizeWindow(600, newHeight);
+      // Get screen size to maintain 30% width, but use calculated height
+      let width = 700; // Default fallback
+      if (api?.getScreenSize) {
+        const screenSize = await api.getScreenSize();
+        if (screenSize && screenSize.success) {
+          width = Math.round(screenSize.width * 0.30);
+        }
+      }
+      // Use the calculated height from the component (based on number of rows)
+      api?.resizeWindow && api.resizeWindow(width, newHeight);
     } catch (_) {}
   };
 
   const switchHandler = async (user) => {
     const api = window.electronAPI;
     try {
-      console.log('🔄 Starting account switch for:', user.email || user.username);
+      console.log('🔄 Starting account switch for user:', user);
+      console.log('🔄 User properties:', { id: user.id, email: user.email, username: user.username, name: user.name });
+      
+      // Check if user is logged in - MUST check before proceeding
+      // Default to false (not logged in) - only set to true if explicitly logged in
+      let userIsLoggedIn = false;
+      let userData = null;
+      try {
+        const result = await api?.getUsers?.();
+        if (result && result.success && Array.isArray(result.users)) {
+          const users = result.users;
+          userData = users.find(u => u.id === user.id);
+          console.log('📋 Found userData:', userData);
+          
+          // Check if user is actively logged in (isLoggedIn === true)
+          // Only proceed if explicitly true - any other value (false, undefined, null) means not logged in
+          if (userData && userData.isLoggedIn === true) {
+            userIsLoggedIn = true;
+            console.log('✅ User is logged in - switching to account and opening main window');
+          } else {
+            // User is logged out, status unclear, or isLoggedIn is not true
+            // Default to opening auth window as escape route
+            console.log('⚠️ User login status unclear or logged out - opening auth window (escape route)');
+            // Use email first, then username, then userData email as fallback
+            // Try all possible sources: user object, userData from file, and all variations
+            const email = user.email || user.username || user.name || userData?.email || userData?.username || userData?.name || '';
+            console.log('📧 Extracted email for auth window:', email);
+            console.log('📧 Email sources:', {
+              'user.email': user.email,
+              'user.username': user.username,
+              'user.name': user.name,
+              'userData?.email': userData?.email,
+              'userData?.username': userData?.username,
+              'userData?.name': userData?.name
+            });
+            
+            // Open auth window with email/username pre-filled
+            // IMPORTANT: Don't close account switcher here - let openAuthWindow handle it
+            const authResult = await api?.openAuthWindow?.(email);
+            if (!authResult || !authResult.success) {
+              console.error('Failed to open auth window, using fallback');
+              // Fallback: navigate to auth with email in URL
+              window.location.hash = email 
+                ? `/auth?addAccount=true&email=${encodeURIComponent(email)}`
+                : '/auth?addAccount=true';
+            }
+            // IMPORTANT: Return early - do NOT proceed with account switch
+            // The auth window will handle closing the account switcher
+            return;
+          }
+        } else {
+          // No user data found or invalid response - open auth window as escape route
+          console.log('⚠️ User data not found or invalid - opening auth window (escape route)');
+          // Use email first, then username as fallback
+          const email = user.email || user.username || '';
+          console.log('📧 Extracted email for auth window:', email, 'from user:', { email: user.email, username: user.username });
+          // Note: openAuthWindow will close the account switcher window automatically
+          const authResult = await api?.openAuthWindow?.(email);
+          if (!authResult || !authResult.success) {
+            window.location.hash = email 
+              ? `/auth?addAccount=true&email=${encodeURIComponent(email)}`
+              : '/auth?addAccount=true';
+          }
+          // Don't call closeWindow() here - openAuthWindow handles closing the account switcher
+          return;
+        }
+      } catch (error) {
+        console.error('❌ Error checking user login status:', error);
+        // On error, default to opening auth window as escape route
+        console.log('⚠️ Error occurred - opening auth window (escape route)');
+        // Use email first, then username as fallback
+        const email = user.email || user.username || '';
+        console.log('📧 Extracted email for auth window:', email, 'from user:', { email: user.email, username: user.username });
+        // Note: openAuthWindow will close the account switcher window automatically
+        const authResult = await api?.openAuthWindow?.(email);
+        if (!authResult || !authResult.success) {
+          window.location.hash = email 
+            ? `/auth?addAccount=true&email=${encodeURIComponent(email)}`
+            : '/auth?addAccount=true';
+        }
+        // Don't call closeWindow() here - openAuthWindow handles closing the account switcher
+        return;
+      }
+      
+      // Only proceed with account switch if user is explicitly logged in
+      // If not logged in, we should have already returned above, but double-check as safety
+      if (!userIsLoggedIn) {
+        console.log('⚠️ User is not logged in - aborting account switch and opening auth window (escape route)');
+        // Final safety check - open auth window if somehow we got here
+        const email = user.email || user.username || '';
+        console.log('📧 Extracted email for auth window:', email, 'from user:', { email: user.email, username: user.username });
+        const authResult = await api?.openAuthWindow?.(email);
+        if (!authResult || !authResult.success) {
+          window.location.hash = email 
+            ? `/auth?addAccount=true&email=${encodeURIComponent(email)}`
+            : '/auth?addAccount=true';
+        }
+        return;
+      }
       
       // Dispatch event to show loading screen FIRST with user data
       window.dispatchEvent(new CustomEvent('account-switcher-login-start', {
@@ -87,7 +211,9 @@ const AccountSwitcherPage = ({ navigate }) => {
       // Wait a moment for loading screen to fully render and be visible
       await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Step 1: Get current user and log them out if they don't have "keep me signed in" enabled
+      // Step 1: Get current user and log them out temporarily (session terminates)
+      // IMPORTANT: Only set isLoggedIn: false, NEVER set hiddenInSwitcher: true
+      // Accounts should remain visible in the account switcher until explicitly removed
       try {
         const result = await api?.getUsers?.();
         if (result && result.success && Array.isArray(result.users)) {
@@ -99,12 +225,12 @@ const AccountSwitcherPage = ({ navigate }) => {
             const currentUserIndex = users.findIndex(u => u.id === currentAuthUser.id);
             if (currentUserIndex !== -1) {
               const currentUser = users[currentUserIndex];
-              // If current user doesn't have "keep me signed in" enabled, log them out
-              if (currentUser.stayLoggedIn !== true) {
-                users[currentUserIndex].isLoggedIn = false;
-                console.log('✅ Logged out previous user (stayLoggedIn not enabled)');
-                await api?.saveUsers?.(users);
-              }
+              // Always log out the previous user when switching (temporary session termination)
+              // This is just a session logout, NOT a removal from the account switcher
+              users[currentUserIndex].isLoggedIn = false;
+              // IMPORTANT: Do NOT set hiddenInSwitcher: true here - account should remain visible
+              console.log('✅ Logged out previous user (temporary session termination)');
+              await api?.saveUsers?.(users);
             }
           }
           
@@ -113,8 +239,10 @@ const AccountSwitcherPage = ({ navigate }) => {
           if (userIndex !== -1) {
             users[userIndex].lastLoginTime = new Date().toISOString();
             users[userIndex].isLoggedIn = true; // Mark as logged in
+            // IMPORTANT: Clear hiddenInSwitcher flag when user logs in - account should be visible again
+            users[userIndex].hiddenInSwitcher = false;
             await api?.saveUsers?.(users);
-            console.log('✅ Updated last login time');
+            console.log('✅ Updated last login time and made account visible');
           }
         }
       } catch (error) {
@@ -143,6 +271,7 @@ const AccountSwitcherPage = ({ navigate }) => {
       }
       
       // Step 5: Call authSuccess to properly handle login and window management
+      // The account switcher window will be closed automatically by authSuccess handler
       try {
         await api?.authSuccess?.(user);
         console.log('✅ Called authSuccess');
@@ -154,97 +283,10 @@ const AccountSwitcherPage = ({ navigate }) => {
         throw error;
       }
       
-      // Step 6: Verify main window is ready and fully loaded before closing account switcher
-      let checkCount = 0;
-      const maxChecks = 75;
-      let consecutiveReadyChecks = 0;
-      const requiredConsecutiveChecks = 3;
+      // Step 6: Account switcher window is closed by authSuccess handler
+      // No need to verify or close manually - electron.js handles it automatically
       
-      const verifyMainWindow = async () => {
-        try {
-          checkCount++;
-          
-          if (checkCount < 10) {
-            setTimeout(verifyMainWindow, 200);
-            return;
-          }
-          
-          const currentAuthUser = await api?.getAuthUser?.();
-          if (!currentAuthUser || currentAuthUser.id !== user.id) {
-            if (checkCount > 35) {
-              console.warn('⚠️ Auth user not set after timeout');
-              window.dispatchEvent(new Event('account-switcher-login-complete'));
-              setTimeout(() => {
-                try {
-                  api?.closeWindow?.();
-                } catch (e) {}
-              }, 500);
-              return;
-            }
-            setTimeout(verifyMainWindow, 200);
-            return;
-          }
-
-          const mainWindowStatus = await api?.isMainWindowReady?.();
-          
-          if (mainWindowStatus && mainWindowStatus.ready && mainWindowStatus.visible) {
-            consecutiveReadyChecks++;
-            
-            if (consecutiveReadyChecks >= requiredConsecutiveChecks) {
-              await new Promise(resolve => setTimeout(resolve, 300));
-              
-              console.log('✅ Main window confirmed ready and visible - login complete');
-              
-              window.dispatchEvent(new Event('account-switcher-login-complete'));
-              
-              setTimeout(() => {
-                try {
-                  api?.closeWindow?.();
-                  console.log('✅ Account switcher window closed');
-                } catch (error) {
-                  console.error('Error closing window:', error);
-                }
-              }, 500);
-              
-              return;
-            } else {
-              setTimeout(verifyMainWindow, 200);
-              return;
-            }
-          } else {
-            consecutiveReadyChecks = 0;
-          }
-
-          if (checkCount >= maxChecks) {
-            console.warn('⚠️ Main window not ready after maximum checks');
-            window.dispatchEvent(new Event('account-switcher-login-complete'));
-            setTimeout(() => {
-              try {
-                api?.closeWindow?.();
-              } catch (e) {}
-            }, 500);
-            return;
-          }
-
-          setTimeout(verifyMainWindow, 200);
-        } catch (error) {
-          console.error('❌ Error checking window state:', error);
-          if (checkCount < maxChecks) {
-            setTimeout(verifyMainWindow, 200);
-          } else {
-            window.dispatchEvent(new Event('account-switcher-login-complete'));
-            setTimeout(() => {
-              try {
-                api?.closeWindow?.();
-              } catch (e) {}
-            }, 500);
-          }
-        }
-      };
-
-      setTimeout(verifyMainWindow, 2000);
-      
-      console.log('✅ Login process initiated');
+      console.log('✅ Login process initiated - account switcher will close automatically');
       
     } catch (error) {
       console.error('❌ Error switching account:', error);
@@ -293,21 +335,41 @@ const AccountSwitcherPage = ({ navigate }) => {
       onAddAccount={async () => {
         const api = window.electronAPI || window.electron;
         try {
-          const result = await api?.openAuthWindow?.();
+          console.log('➕ Add account button clicked - opening auth window');
+          
+          // Open auth window with empty email (new account)
+          // Note: openAuthWindow will close the account switcher window automatically
+          const result = await api?.openAuthWindow?.('');
+          
           if (!result || !result.success) {
-            // Fallback to navigation if window creation fails
-            navigate('/auth');
+            console.error('❌ Failed to open auth window, result:', result);
+            // Fallback: try again or show error
+            console.log('⚠️ Retrying auth window open...');
+            const retryResult = await api?.openAuthWindow?.('');
+            if (!retryResult || !retryResult.success) {
+              console.error('❌ Retry also failed - auth window may not be available');
+            }
+          } else {
+            console.log('✅ Auth window opened successfully');
+            // Don't call closeWindow() here - openAuthWindow handles closing the account switcher
           }
-          // Note: openAuthWindow already handles closing the account switcher window
-          // Don't call closeWindow() here as it may interfere
         } catch (error) {
-          console.error('Error opening auth window:', error);
-          // Fallback to navigation
-          navigate('/auth');
+          console.error('❌ Error opening auth window:', error);
+          // Try one more time as fallback
+          try {
+            const retryResult = await api?.openAuthWindow?.('');
+            if (!retryResult || !retryResult.success) {
+              console.error('❌ Fallback retry also failed');
+            }
+          } catch (retryError) {
+            console.error('❌ Fallback retry error:', retryError);
+          }
         }
       }}
       variant="page"
       onHeightChange={handleHeightChange}
+      windowWidth={windowWidth}
+      windowHeight={windowHeight}
     />
   );
 };

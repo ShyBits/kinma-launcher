@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Minus, Maximize, X, Menu, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import KinmaLogo from './KinmaLogo';
+import { getUserData, getCurrentUserId } from '../utils/UserDataManager';
 import './TitleBar.css';
 
 const TitleBar = ({ onToggleSidebar, navigate }) => {
@@ -10,14 +11,29 @@ const TitleBar = ({ onToggleSidebar, navigate }) => {
   const [canGoForward, setCanGoForward] = useState(false);
   const [activeMenu, setActiveMenu] = useState(null);
   const [isDeveloper, setIsDeveloper] = useState(false);
+  const titleBarMenuJustOpenedRef = useRef(false);
+  const titleBarMenuTimeoutRef = useRef(null);
 
-  // Check if user is a developer
+  // Check if user is a developer (has developer access or game studio access)
   useEffect(() => {
     const checkDeveloperStatus = () => {
       try {
-        const developerIntent = localStorage.getItem('developerIntent');
-        const isDev = developerIntent === 'complete' || developerIntent === 'pending';
-        setIsDeveloper(isDev);
+        const userId = getCurrentUserId();
+        if (userId) {
+          // Check user-specific developer access
+          const hasDeveloperAccess = getUserData('developerAccess', false, userId);
+          const hasGameStudioAccess = getUserData('gameStudioAccess', false, userId);
+          const accessStatus = getUserData('developerAccessStatus', null, userId);
+          
+          // User has developer access only if explicitly granted (not pending)
+          const isDev = (hasDeveloperAccess || hasGameStudioAccess) && accessStatus !== 'pending';
+          setIsDeveloper(isDev);
+        } else {
+          // Fallback to localStorage for backward compatibility
+          const developerIntent = localStorage.getItem('developerIntent');
+          const isDev = developerIntent === 'complete' || developerIntent === 'pending';
+          setIsDeveloper(isDev);
+        }
       } catch (_) {
         setIsDeveloper(false);
       }
@@ -117,30 +133,60 @@ const TitleBar = ({ onToggleSidebar, navigate }) => {
   const isAuth = location.pathname === '/auth';
   const isAccountSwitcher = location.pathname === '/account-switcher';
 
+  // Memoized handlers for title bar menus
+  const handleTitleBarMenuEscape = useCallback((event) => {
+    if (event.key === 'Escape' && activeMenu) {
+      setActiveMenu(null);
+    }
+  }, [activeMenu]);
+
+  const handleTitleBarMenuClickOutside = useCallback((event) => {
+    // Don't close if menu was just opened (prevent immediate closure)
+    if (titleBarMenuJustOpenedRef.current) {
+      return;
+    }
+    
+    if (activeMenu && !event.target.closest('.title-bar-menu-wrapper')) {
+      setActiveMenu(null);
+    }
+  }, [activeMenu]);
+
   // Close menus when clicking outside or pressing Escape
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (activeMenu && !event.target.closest('.title-bar-menu-wrapper')) {
-        setActiveMenu(null);
+    if (!activeMenu) {
+      titleBarMenuJustOpenedRef.current = false;
+      if (titleBarMenuTimeoutRef.current) {
+        clearTimeout(titleBarMenuTimeoutRef.current);
+        titleBarMenuTimeoutRef.current = null;
       }
-    };
-
-    const handleEscape = (event) => {
-      if (event.key === 'Escape' && activeMenu) {
-        setActiveMenu(null);
-      }
-    };
-
-    if (activeMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('keydown', handleEscape);
+      return;
     }
 
+    // Mark menu as just opened and set flag to prevent immediate closure
+    titleBarMenuJustOpenedRef.current = true;
+    if (titleBarMenuTimeoutRef.current) {
+      clearTimeout(titleBarMenuTimeoutRef.current);
+    }
+    titleBarMenuTimeoutRef.current = setTimeout(() => {
+      titleBarMenuJustOpenedRef.current = false;
+    }, 100); // 100ms delay before allowing click outside to close
+
+    // Add event listeners with delay to prevent immediate closure
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('mousedown', handleTitleBarMenuClickOutside);
+      document.addEventListener('keydown', handleTitleBarMenuEscape);
+    }, 100);
+
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
+      clearTimeout(timeoutId);
+      if (titleBarMenuTimeoutRef.current) {
+        clearTimeout(titleBarMenuTimeoutRef.current);
+        titleBarMenuTimeoutRef.current = null;
+      }
+      document.removeEventListener('mousedown', handleTitleBarMenuClickOutside);
+      document.removeEventListener('keydown', handleTitleBarMenuEscape);
     };
-  }, [activeMenu]);
+  }, [activeMenu, handleTitleBarMenuEscape, handleTitleBarMenuClickOutside]);
 
   const handleMenuClick = (menuName) => {
     setActiveMenu(activeMenu === menuName ? null : menuName);

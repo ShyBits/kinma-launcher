@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Settings, Users, MessageSquare, ShoppingCart, Bell, User, Plus, Minus, CreditCard, Coins, Store, Globe, Menu,
-  BarChart3, Package, FileText, Upload, TrendingUp, DollarSign, Download, Check, RefreshCw, AlertCircle, Info, Gift, X, ShoppingBag, Award
+  BarChart3, Package, FileText, Upload, TrendingUp, DollarSign, Download, Check, RefreshCw, AlertCircle, Info, Gift, X, ShoppingBag, Award, Building2, LogOut
 } from 'lucide-react';
 import AuthModal from './AuthModal';
-import { getUserData } from '../utils/UserDataManager';
+import { getUserData, saveUserData, getCurrentUserId } from '../utils/UserDataManager';
 import { loadNotifications, saveNotifications, subscribeToNotifications, markNotificationAsRead as markRead, markAllNotificationsAsRead as markAllRead, deleteNotification as deleteNotif } from '../utils/NotificationManager';
 import './TopNavigation.css';
 
@@ -102,6 +102,8 @@ const TopNavigation = ({
   const profileMenuRef = useRef(null);
   const profileButtonRef = useRef(null);
   const profileHeaderRef = useRef(null);
+  const profileMenuJustOpenedRef = useRef(false);
+  const profileMenuTimeoutRef = useRef(null);
   const [availableUsers, setAvailableUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [showQuickSwitchMenu, setShowQuickSwitchMenu] = useState(false);
@@ -112,6 +114,12 @@ const TopNavigation = ({
   const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
   const notificationDropdownRef = useRef(null);
   const notificationButtonRef = useRef(null);
+  const notificationMenuJustOpenedRef = useRef(false);
+  const notificationMenuTimeoutRef = useRef(null);
+  const studioMenuJustOpenedRef = useRef(false);
+  const studioMenuTimeoutRef = useRef(null);
+  const balanceMenuJustOpenedRef = useRef(false);
+  const balanceMenuTimeoutRef = useRef(null);
   
   // Get preview icon component
   const getPreviewIcon = (iconType) => {
@@ -241,6 +249,42 @@ const TopNavigation = ({
   // Check if we're in Game Studio
   const isGameStudio = location?.pathname === '/game-studio' || location?.pathname === '/game-studio-settings';
   
+  // Check if user has game studio access
+  const [hasGameStudioAccess, setHasGameStudioAccess] = useState(false);
+  useEffect(() => {
+    const checkAccess = () => {
+      try {
+        const userId = getCurrentUserId();
+        if (userId) {
+          const hasDeveloperAccess = getUserData('developerAccess', false, userId);
+          const hasStudioAccess = getUserData('gameStudioAccess', false, userId);
+          const accessStatus = getUserData('developerAccessStatus', null, userId);
+          
+          // User has access only if explicitly granted (not pending)
+          // Don't show switch button if status is pending
+          const hasAccess = (hasDeveloperAccess || hasStudioAccess) && accessStatus !== 'pending';
+          setHasGameStudioAccess(hasAccess);
+        } else {
+          setHasGameStudioAccess(false);
+        }
+      } catch (_) {
+        setHasGameStudioAccess(false);
+      }
+    };
+    
+    checkAccess();
+    
+    // Listen for user changes
+    const handleUserChange = () => {
+      checkAccess();
+    };
+    
+    window.addEventListener('user-changed', handleUserChange);
+    return () => {
+      window.removeEventListener('user-changed', handleUserChange);
+    };
+  }, []);
+  
   const handleAmountChange = (delta) => {
     setTopUpAmount(prev => Math.max(0, prev + delta));
   };
@@ -249,38 +293,64 @@ const TopNavigation = ({
     setTopUpAmount(amount);
   };
 
-  // Handle click outside and Escape key to close balance menu
-  useEffect(() => {
-    const handleEscape = (event) => {
-      if (event.key === 'Escape' && showBalanceMenu) {
-        setShowBalanceMenu(false);
-      }
-    };
-
-    const handleClickOutside = (event) => {
-      const target = event.target;
-      const isBalanceButton = target.closest('.nav-balance');
-      const isMenu = balanceMenuRef.current && balanceMenuRef.current.contains(target);
-      
-      if (!isBalanceButton && !isMenu && balanceMenuRef.current) {
-        setShowBalanceMenu(false);
-      }
-    };
-
-    if (showBalanceMenu) {
-      document.addEventListener('keydown', handleEscape);
-      // Use setTimeout to avoid immediate closure when opening
-      const timeoutId = setTimeout(() => {
-        document.addEventListener('mousedown', handleClickOutside);
-      }, 0);
-
-      return () => {
-        document.removeEventListener('keydown', handleEscape);
-        clearTimeout(timeoutId);
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
+  // Memoized handlers for balance menu
+  const handleBalanceMenuEscape = useCallback((event) => {
+    if (event.key === 'Escape' && showBalanceMenu) {
+      setShowBalanceMenu(false);
     }
   }, [showBalanceMenu]);
+
+  const handleBalanceMenuClickOutside = useCallback((event) => {
+    // Don't close if menu was just opened (prevent immediate closure)
+    if (balanceMenuJustOpenedRef.current) {
+      return;
+    }
+    
+    const target = event.target;
+    const isBalanceButton = target.closest('.nav-balance');
+    const isMenu = balanceMenuRef.current && balanceMenuRef.current.contains(target);
+    
+    if (!isBalanceButton && !isMenu && balanceMenuRef.current) {
+      setShowBalanceMenu(false);
+    }
+  }, []);
+
+  // Handle click outside and Escape key to close balance menu
+  useEffect(() => {
+    if (!showBalanceMenu) {
+      balanceMenuJustOpenedRef.current = false;
+      if (balanceMenuTimeoutRef.current) {
+        clearTimeout(balanceMenuTimeoutRef.current);
+        balanceMenuTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    // Mark menu as just opened and set flag to prevent immediate closure
+    balanceMenuJustOpenedRef.current = true;
+    if (balanceMenuTimeoutRef.current) {
+      clearTimeout(balanceMenuTimeoutRef.current);
+    }
+    balanceMenuTimeoutRef.current = setTimeout(() => {
+      balanceMenuJustOpenedRef.current = false;
+    }, 100); // 100ms delay before allowing click outside to close
+
+    // Add event listeners with delay to prevent immediate closure
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('keydown', handleBalanceMenuEscape);
+      document.addEventListener('mousedown', handleBalanceMenuClickOutside);
+    }, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (balanceMenuTimeoutRef.current) {
+        clearTimeout(balanceMenuTimeoutRef.current);
+        balanceMenuTimeoutRef.current = null;
+      }
+      document.removeEventListener('keydown', handleBalanceMenuEscape);
+      document.removeEventListener('mousedown', handleBalanceMenuClickOutside);
+    };
+  }, [showBalanceMenu, handleBalanceMenuEscape, handleBalanceMenuClickOutside]);
 
   // Handle Escape key and click outside for transaction menu
   useEffect(() => {
@@ -412,38 +482,64 @@ const TopNavigation = ({
     setShowNotificationDropdown(prev => !prev);
   };
 
+  // Memoized handlers for notification dropdown
+  const handleNotificationDropdownEscape = useCallback((event) => {
+    if (event.key === 'Escape' && showNotificationDropdown) {
+      setShowNotificationDropdown(false);
+    }
+  }, [showNotificationDropdown]);
+
+  const handleNotificationDropdownClickOutside = useCallback((event) => {
+    // Don't close if menu was just opened (prevent immediate closure)
+    if (notificationMenuJustOpenedRef.current) {
+      return;
+    }
+    
+    const target = event.target;
+    const isButton = notificationButtonRef.current && notificationButtonRef.current.contains(target);
+    const isDropdown = notificationDropdownRef.current && notificationDropdownRef.current.contains(target);
+    
+    if (!isButton && !isDropdown) {
+      setShowNotificationDropdown(false);
+    }
+  }, []);
+
   // Handle click outside notification dropdown
   useEffect(() => {
-    if (!showNotificationDropdown) return;
-
-    const handleClickOutside = (event) => {
-      const target = event.target;
-      const isButton = notificationButtonRef.current && notificationButtonRef.current.contains(target);
-      const isDropdown = notificationDropdownRef.current && notificationDropdownRef.current.contains(target);
-      
-      if (!isButton && !isDropdown) {
-        setShowNotificationDropdown(false);
+    if (!showNotificationDropdown) {
+      notificationMenuJustOpenedRef.current = false;
+      if (notificationMenuTimeoutRef.current) {
+        clearTimeout(notificationMenuTimeoutRef.current);
+        notificationMenuTimeoutRef.current = null;
       }
-    };
+      return;
+    }
 
-    const handleEscape = (event) => {
-      if (event.key === 'Escape') {
-        setShowNotificationDropdown(false);
-      }
-    };
+    // Mark menu as just opened and set flag to prevent immediate closure
+    notificationMenuJustOpenedRef.current = true;
+    if (notificationMenuTimeoutRef.current) {
+      clearTimeout(notificationMenuTimeoutRef.current);
+    }
+    notificationMenuTimeoutRef.current = setTimeout(() => {
+      notificationMenuJustOpenedRef.current = false;
+    }, 100); // 100ms delay before allowing click outside to close
 
-    // Use setTimeout to avoid immediate closure when opening
+    // Add event listeners with delay to prevent immediate closure
     const timeoutId = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('keydown', handleEscape);
-    }, 0);
+      document.addEventListener('mousedown', handleNotificationDropdownClickOutside);
+      document.addEventListener('keydown', handleNotificationDropdownEscape);
+    }, 100);
 
     return () => {
       clearTimeout(timeoutId);
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
+      if (notificationMenuTimeoutRef.current) {
+        clearTimeout(notificationMenuTimeoutRef.current);
+        notificationMenuTimeoutRef.current = null;
+      }
+      document.removeEventListener('mousedown', handleNotificationDropdownClickOutside);
+      document.removeEventListener('keydown', handleNotificationDropdownEscape);
     };
-  }, [showNotificationDropdown]);
+  }, [showNotificationDropdown, handleNotificationDropdownEscape, handleNotificationDropdownClickOutside]);
 
   // Create fake notification for testing
   const createFakeNotification = () => {
@@ -550,35 +646,61 @@ const TopNavigation = ({
   // Unified outside-click/Escape handling for Game Studio dropdowns
   const publishingWrapperRef = useRef(null);
   
+  const handleStudioMenuEscape = useCallback((event) => {
+    if (event.key === 'Escape' && openStudioMenu) {
+      setOpenStudioMenu(null);
+    }
+  }, [openStudioMenu]);
+
+  const handleStudioMenuClickOutside = useCallback((event) => {
+    // Don't close if menu was just opened (prevent immediate closure)
+    if (studioMenuJustOpenedRef.current) {
+      return;
+    }
+    
+    const target = event.target;
+    const wrappers = [analyticsWrapperRef.current, publishingWrapperRef.current, contentWrapperRef.current, reportsWrapperRef.current];
+    const clickedInside = wrappers.some((ref) => ref && ref.contains(target));
+    if (!clickedInside) {
+      setOpenStudioMenu(null);
+    }
+  }, []);
+  
   useEffect(() => {
-    if (!openStudioMenu) return;
-
-    const handleEscape = (event) => {
-      if (event.key === 'Escape') {
-        setOpenStudioMenu(null);
+    if (!openStudioMenu) {
+      studioMenuJustOpenedRef.current = false;
+      if (studioMenuTimeoutRef.current) {
+        clearTimeout(studioMenuTimeoutRef.current);
+        studioMenuTimeoutRef.current = null;
       }
-    };
+      return;
+    }
 
-    const handleClickOutside = (event) => {
-      const target = event.target;
-      const wrappers = [analyticsWrapperRef.current, publishingWrapperRef.current, contentWrapperRef.current, reportsWrapperRef.current];
-      const clickedInside = wrappers.some((ref) => ref && ref.contains(target));
-      if (!clickedInside) {
-        setOpenStudioMenu(null);
-      }
-    };
+    // Mark menu as just opened and set flag to prevent immediate closure
+    studioMenuJustOpenedRef.current = true;
+    if (studioMenuTimeoutRef.current) {
+      clearTimeout(studioMenuTimeoutRef.current);
+    }
+    studioMenuTimeoutRef.current = setTimeout(() => {
+      studioMenuJustOpenedRef.current = false;
+    }, 100); // 100ms delay before allowing click outside to close
 
-    document.addEventListener('keydown', handleEscape);
+    // Add event listeners with delay to prevent immediate closure
     const timeoutId = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-    }, 0);
+      document.addEventListener('keydown', handleStudioMenuEscape);
+      document.addEventListener('mousedown', handleStudioMenuClickOutside);
+    }, 100);
 
     return () => {
-      document.removeEventListener('keydown', handleEscape);
       clearTimeout(timeoutId);
-      document.removeEventListener('mousedown', handleClickOutside);
+      if (studioMenuTimeoutRef.current) {
+        clearTimeout(studioMenuTimeoutRef.current);
+        studioMenuTimeoutRef.current = null;
+      }
+      document.removeEventListener('keydown', handleStudioMenuEscape);
+      document.removeEventListener('mousedown', handleStudioMenuClickOutside);
     };
-  }, [openStudioMenu]);
+  }, [openStudioMenu, handleStudioMenuEscape, handleStudioMenuClickOutside]);
 
   const handleNavigation = (pageId) => {
     setCurrentPage(pageId);
@@ -602,57 +724,89 @@ const TopNavigation = ({
   const handleAuthenticated = ({ user, developerChosen }) => {
     setAuthUser(user);
     try { localStorage.setItem('authUser', JSON.stringify(user)); } catch (_) {}
-    if (developerChosen) {
-      try { localStorage.setItem('developerIntent', 'pending'); } catch (_) {}
+    if (developerChosen && user.id) {
+      // Save developer intent to user account
+      saveUserData('developerIntent', 'pending', user.id);
+      saveUserData('developerAccess', false, user.id); // Not yet granted
+      saveUserData('gameStudioAccess', false, user.id); // Not yet granted
       navigate('/developer-onboarding');
     }
   };
 
   const handleLogout = async () => {
     try {
-      // Call logout API - it will handle switching to last account or showing auth window
-      await (window.electronAPI?.logout?.());
+      // Call logout API - it will handle switching to another account or showing auth window
+      const result = await (window.electronAPI?.logout?.());
+      
+      if (!result || !result.success) {
+        console.error('Logout failed:', result?.error);
+        // Fallback: clear local state and navigate to auth
+        setAuthUser(null);
+        try { localStorage.removeItem('authUser'); } catch (_) {}
+        navigate('/auth');
+        return;
+      }
       
       // Wait a moment for the backend to process
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
       
       // Check if we're still logged in (switched to another account)
       const updatedAuthUser = (() => {
-        try { const u = localStorage.getItem('authUser'); return u ? JSON.parse(u) : null; } catch (_) { return null; }
+        try { 
+          const u = localStorage.getItem('authUser'); 
+          return u ? JSON.parse(u) : null; 
+        } catch (_) { 
+          return null; 
+        }
       })();
       
-      if (updatedAuthUser) {
+      if (result.switched && updatedAuthUser && updatedAuthUser.id) {
         // User was switched to another account
         setAuthUser(updatedAuthUser);
         // Dispatch user-changed event to reload user-specific data
         window.dispatchEvent(new Event('user-changed'));
+        // Don't navigate - stay on current page
       } else {
         // No other account - user will be logged out and auth window shown
         setAuthUser(null);
         try { localStorage.removeItem('authUser'); } catch (_) {}
-        try { localStorage.removeItem('developerIntent'); } catch (_) {}
+        // Navigate to auth page to ensure clean state
+        navigate('/auth');
       }
     } catch (error) {
       console.error('Error during logout:', error);
-      // Fallback: clear local state
+      // Fallback: clear local state and navigate to auth
       setAuthUser(null);
       try { localStorage.removeItem('authUser'); } catch (_) {}
-      try { localStorage.removeItem('developerIntent'); } catch (_) {}
+      navigate('/auth');
     }
   };
 
   // Update user level when user changes
+  // IMPORTANT: Always delay updates to prevent menu closures during user changes
   useEffect(() => {
     const handleUserChanged = () => {
-      const updatedAuthUser = (() => {
-        try { const u = localStorage.getItem('authUser'); return u ? JSON.parse(u) : null; } catch (_) { return null; }
-      })();
-      if (updatedAuthUser) {
-        setAuthUser(updatedAuthUser);
-        setAvatarError(false); // Reset avatar error when user changes
-        const userStats = getUserData('userStats', null);
-        setUserLevel(userStats?.level || 1);
-      }
+      // Always delay the update to prevent re-renders that close menus
+      // This ensures menus stay open during login/account switching
+      setTimeout(() => {
+        const updatedAuthUser = (() => {
+          try { const u = localStorage.getItem('authUser'); return u ? JSON.parse(u) : null; } catch (_) { return null; }
+        })();
+        if (updatedAuthUser) {
+          // Only update if user actually changed to prevent unnecessary re-renders
+          // Use functional update to preserve menu state during re-renders
+          setAuthUser(prev => {
+            if (prev?.id === updatedAuthUser.id && prev?.email === updatedAuthUser.email) {
+              return prev; // No change, don't update - this prevents re-renders that close menus
+            }
+            return updatedAuthUser;
+          });
+          // Only update avatar error and level if user actually changed
+          setAvatarError(false);
+          const userStats = getUserData('userStats', null);
+          setUserLevel(userStats?.level || 1);
+        }
+      }, 150); // Small delay to allow menus to stay open
     };
 
     window.addEventListener('user-changed', handleUserChanged);
@@ -669,7 +823,7 @@ const TopNavigation = ({
     return () => {
       window.removeEventListener('user-changed', handleUserChanged);
     };
-  }, [authUser]);
+  }, [authUser]); // Only depend on authUser, not menu states
 
   // Load available users when menu opens
   useEffect(() => {
@@ -835,8 +989,11 @@ const TopNavigation = ({
       try {
         await api?.authSuccess?.(user);
         
-        // Dispatch user-changed event
-        window.dispatchEvent(new Event('user-changed'));
+        // Dispatch user-changed event with a small delay to prevent menu closures
+        // This allows menus to stay open during account switching
+        setTimeout(() => {
+          window.dispatchEvent(new Event('user-changed'));
+        }, 100);
       } catch (error) {
         console.error('Error calling authSuccess:', error);
       }
@@ -887,6 +1044,8 @@ const TopNavigation = ({
         if (userIndex !== -1) {
           users[userIndex].lastLoginTime = new Date().toISOString();
           users[userIndex].isLoggedIn = true; // Mark as logged in
+          // IMPORTANT: Clear hiddenInSwitcher flag when user logs in - account should be visible again
+          users[userIndex].hiddenInSwitcher = false;
           await api?.saveUsers?.(users);
         }
       }
@@ -901,8 +1060,11 @@ const TopNavigation = ({
       await api?.setAuthUser?.(user);
       await api?.authSuccess?.(user);
       
-      // Dispatch user-changed event
-      window.dispatchEvent(new Event('user-changed'));
+      // Dispatch user-changed event with a small delay to prevent menu closures
+      // This allows menus to stay open during account switching
+      setTimeout(() => {
+        window.dispatchEvent(new Event('user-changed'));
+      }, 100);
       setAuthUser(authUserData);
     } catch (error) {
       console.error('Error switching account:', error);
@@ -918,15 +1080,43 @@ const TopNavigation = ({
     return name.substring(0, 2).toUpperCase();
   };
 
+  // Memoized handlers for profile menu
+  const handleProfileMenuEscape = useCallback((e) => {
+    if (e.key === 'Escape' && showProfileMenu) {
+      setShowProfileMenu(false);
+    }
+  }, [showProfileMenu]);
+
+  const handleProfileMenuClickOutside = useCallback((e) => {
+    // Don't close if menu was just opened (prevent immediate closure)
+    if (profileMenuJustOpenedRef.current) {
+      return;
+    }
+    
+    if (profileMenuRef.current && !profileMenuRef.current.contains(e.target) &&
+        profileButtonRef.current && !profileButtonRef.current.contains(e.target)) {
+      setShowProfileMenu(false);
+    }
+  }, []);
+
   useEffect(() => {
-    if (!showProfileMenu) return;
-    const onKey = (e) => { if (e.key === 'Escape') setShowProfileMenu(false); };
-    const onClick = (e) => {
-      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target) &&
-          profileButtonRef.current && !profileButtonRef.current.contains(e.target)) {
-        setShowProfileMenu(false);
+    if (!showProfileMenu) {
+      profileMenuJustOpenedRef.current = false;
+      if (profileMenuTimeoutRef.current) {
+        clearTimeout(profileMenuTimeoutRef.current);
+        profileMenuTimeoutRef.current = null;
       }
-    };
+      return;
+    }
+
+    // Mark menu as just opened and set flag to prevent immediate closure
+    profileMenuJustOpenedRef.current = true;
+    if (profileMenuTimeoutRef.current) {
+      clearTimeout(profileMenuTimeoutRef.current);
+    }
+    profileMenuTimeoutRef.current = setTimeout(() => {
+      profileMenuJustOpenedRef.current = false;
+    }, 100); // 100ms delay before allowing click outside to close
     
     // Adjust menu position to center it below the button
     const adjustPosition = () => {
@@ -975,13 +1165,22 @@ const TopNavigation = ({
       setTimeout(adjustPosition, 0);
     });
     
-    document.addEventListener('keydown', onKey);
-    document.addEventListener('mousedown', onClick);
+    // Add event listeners with delay to prevent immediate closure
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('keydown', handleProfileMenuEscape);
+      document.addEventListener('mousedown', handleProfileMenuClickOutside);
+    }, 100);
+    
     return () => {
-      document.removeEventListener('keydown', onKey);
-      document.removeEventListener('mousedown', onClick);
+      clearTimeout(timeoutId);
+      if (profileMenuTimeoutRef.current) {
+        clearTimeout(profileMenuTimeoutRef.current);
+        profileMenuTimeoutRef.current = null;
+      }
+      document.removeEventListener('keydown', handleProfileMenuEscape);
+      document.removeEventListener('mousedown', handleProfileMenuClickOutside);
     };
-  }, [showProfileMenu]);
+  }, [showProfileMenu, handleProfileMenuEscape, handleProfileMenuClickOutside]);
 
   // Quick switch menu handlers
   useEffect(() => {
@@ -1153,6 +1352,36 @@ const TopNavigation = ({
                 </div>
               )}
             </div>
+            
+            <div className="nav-separator" />
+            
+            {/* Switch to Player View Button - Only in Game Studio */}
+            <button 
+              className="nav-item nav-item-with-text"
+              onClick={() => navigate('/library')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '8px 12px',
+                background: 'rgba(0, 212, 255, 0.1)',
+                border: '1px solid var(--accent-primary)',
+                borderRadius: '8px',
+                color: 'var(--accent-primary)',
+                cursor: 'pointer',
+                fontSize: '14px',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(0, 212, 255, 0.15)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(0, 212, 255, 0.1)';
+              }}
+            >
+              <LogOut size={18} />
+              <span>Player View</span>
+            </button>
             
             <div className="nav-separator" />
             
@@ -1397,6 +1626,39 @@ const TopNavigation = ({
         ) : (
           /* Regular navigation - Right side items */
           <>
+            {/* Game Studio Switch Button - Only show if user has access */}
+            {hasGameStudioAccess && (
+              <>
+                <button 
+                  className="nav-item nav-item-with-text"
+                  onClick={() => navigate('/game-studio')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 12px',
+                    background: 'rgba(0, 212, 255, 0.1)',
+                    border: '1px solid var(--accent-primary)',
+                    borderRadius: '8px',
+                    color: 'var(--accent-primary)',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(0, 212, 255, 0.15)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(0, 212, 255, 0.1)';
+                  }}
+                >
+                  <Building2 size={18} />
+                  <span>Studio View</span>
+                </button>
+                <div className="nav-separator" />
+              </>
+            )}
+            
             {/* Notification Button */}
             {authUser && (
               <div 
@@ -1788,7 +2050,7 @@ const TopNavigation = ({
 
                     <div className="profile-menu-actions">
                       <button 
-                        className="profile-menu-action-btn"
+                        className="profile-menu-action-btn add-funds"
                         onClick={(e) => { 
                           e.stopPropagation();
                           setShowBalanceMenu(true);

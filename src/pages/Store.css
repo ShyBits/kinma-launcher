@@ -328,9 +328,19 @@
   right: 0;
   bottom: 0;
   z-index: 1;
+  overflow: hidden;
+}
+
+.featured-images-container {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  position: relative;
 }
 
 .featured-image {
+  flex: 0 0 100%;
   width: 100%;
   height: 100%;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -373,16 +383,31 @@
   flex-direction: row;
   align-items: center;
   justify-content: flex-start;
-  padding: clamp(6px, calc(var(--banner-height, 250px) * 0.05), 40px) 0;
-  padding-left: clamp(16px, calc(var(--banner-height, 250px) * 0.35), 140px);
+  padding: 0;
   z-index: 2;
   max-width: none;
-  gap: clamp(10px, calc(var(--banner-height, 250px) * 0.05), 24px);
+  gap: 0;
   /* No transition delay for padding/gap resizing - instant response */
-  transition: padding 0s, gap 0s;
+  transition: transform 0.5s ease-in-out;
   box-sizing: border-box;
   flex-wrap: nowrap;
   overflow: hidden;
+  width: calc(100% * var(--banner-count, 1));
+}
+
+.featured-content-wrapper {
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  padding: clamp(6px, calc(var(--banner-height, 250px) * 0.05), 40px) 0;
+  padding-left: clamp(16px, calc(var(--banner-height, 250px) * 0.35), 140px);
+  gap: clamp(10px, calc(var(--banner-height, 250px) * 0.05), 24px);
+  box-sizing: border-box;
+  position: relative;
 }
 
 .featured-content-left {
@@ -2006,14 +2031,30 @@
 }
 
 .banner-cta { flex-direction: column; align-items: flex-start; }
-.banner-free-text {
-  color: #ffffff; 
+.banner-game-name {
+  color: #ffffff;
   font-weight: 700;
   /* Scale font size based on card width - smaller when card is small */
-  font-size: clamp(12px, calc((var(--content-width, 1090px) * 0.12) * 0.12), 16px);
+  font-size: clamp(14px, calc((var(--content-width, 1090px) * 0.12) * 0.14), 18px);
+  margin-bottom: 2px;
+  line-height: 1.2;
+  /* No delay for font-size resizing - instant response */
+  transition: font-size 0s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8), 0 1px 4px rgba(0, 0, 0, 0.6);
+}
+.banner-free-text {
+  color: #ffffff; 
+  font-weight: 400;
+  /* Scale font size based on card width - smaller when card is small */
+  font-size: clamp(11px, calc((var(--content-width, 1090px) * 0.12) * 0.11), 15px);
   margin-left: 2px;
   /* No delay for font-size resizing - instant response */
   transition: font-size 0s;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8), 0 1px 4px rgba(0, 0, 0, 0.6);
 }
 
 /* Hover hint indicator - subtle icon only */

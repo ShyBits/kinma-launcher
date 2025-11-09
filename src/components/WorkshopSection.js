@@ -4,7 +4,7 @@ import steamAPI from '../utils/SteamAPI';
 import { getAllUsersData, getUserData, saveUserData } from '../utils/UserDataManager';
 import './WorkshopSection.css';
 
-const WorkshopSection = ({ gameId }) => {
+const WorkshopSection = ({ gameId, contentWidth = 1020 }) => {
   const [workshopItems, setWorkshopItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -191,7 +191,10 @@ const WorkshopSection = ({ gameId }) => {
   };
 
   return (
-    <div className="workshop-section">
+    <div 
+      className="workshop-section"
+      style={{ '--content-width': `${contentWidth}px` }}
+    >
       <div className="workshop-header">
         <div className="workshop-title-section">
           <Package size={24} />

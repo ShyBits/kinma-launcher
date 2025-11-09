@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Settings as SettingsIcon, Monitor, Volume2, Wifi, Shield, Palette, Globe, Building } from 'lucide-react';
+import { Settings as SettingsIcon, Monitor, Volume2, Wifi, Shield, Palette, Globe } from 'lucide-react';
 import './Settings.css';
 
 const Settings = () => {
@@ -514,7 +514,7 @@ const Settings = () => {
           })}
           
           {/* Developer onboarding shortcut */}
-          <div style={{ marginTop: '16px' }}>
+          <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <button 
               onClick={() => navigate('/developer-onboarding')}
               style={{
@@ -541,38 +541,49 @@ const Settings = () => {
             >
               Continue Developer Setup
             </button>
-          </div>
-          
-          {/* Game Studio toggle at bottom of sidebar */}
-          <div style={{ marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid rgba(255, 255, 255, 0.1)' }}>
+            
+            {/* Admin Panel Button */}
             <button 
-              onClick={() => navigate('/game-studio')}
+              onClick={async () => {
+                try {
+                  const api = window.electronAPI;
+                  if (api?.openAdminWindow) {
+                    const result = await api.openAdminWindow();
+                    if (!result.success) {
+                      alert('Unauthorized: Admin access required');
+                    }
+                  }
+                } catch (error) {
+                  console.error('Error opening admin window:', error);
+                }
+              }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
                 width: '100%',
-                padding: '12px 16px',
-                background: 'rgba(0, 212, 255, 0.1)',
-                border: '1px solid var(--accent-primary)',
+                padding: '10px 14px',
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.35)',
                 borderRadius: '8px',
-                color: 'var(--accent-primary)',
+                color: '#ef4444',
                 cursor: 'pointer',
-                fontSize: '14px',
+                fontSize: '13px',
                 fontWeight: 600,
                 transition: 'all 0.2s ease'
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(0, 212, 255, 0.15)';
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(0, 212, 255, 0.1)';
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)';
               }}
             >
-              <Building size={18} />
-              Switch to Studio View
+              <SettingsIcon size={18} />
+              Open Admin Panel
             </button>
           </div>
+          
         </div>
 
         <div className="settings-main">

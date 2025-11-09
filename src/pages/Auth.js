@@ -19,7 +19,8 @@ const clearAllUsers = async () => {
     try {
       localStorage.removeItem('users');
       localStorage.removeItem('authUser');
-      localStorage.removeItem('developerIntent');
+      // Note: User-specific developer access is stored per user, so we don't need to clear it here
+      // It will be loaded when the user logs in again
       
       // Also check and remove any other user-related keys
       const keysToRemove = [];
@@ -81,29 +82,62 @@ const Auth = ({ navigate }) => {
       try { forceAuth = await api?.isForceAuth?.(); } catch (_) {}
       
       // Check if this is an "add account" scenario (opened from account switcher)
-      const isAddAccount = new URLSearchParams(window.location.search).get('addAccount') === 'true';
+      // Check both hash and search params (hash routing uses hash, regular routing uses search)
+      const hash = window.location.hash || '';
+      const hashParams = hash.includes('?') ? hash.split('?')[1] : '';
+      const searchParams = window.location.search || '';
+      const urlParams = hashParams 
+        ? new URLSearchParams(hashParams)
+        : new URLSearchParams(searchParams);
+      const isAddAccount = urlParams.get('addAccount') === 'true';
       
       // Skip auto-login if this is an "add account" scenario
       if (!isAddAccount) {
         // Check for existing auth user - if authenticated, redirect to library
         try {
           const saved = await api?.getAuthUser?.();
+          // Also check if user is actually logged in (not in intermediate state)
           if (saved && saved.id && !forceAuth) {
-            navigate('/library');
-            return;
+            // Verify user is actually logged in by checking users.json
+            try {
+              const usersResult = await api?.getUsers?.();
+              if (usersResult && usersResult.success && Array.isArray(usersResult.users)) {
+                const user = usersResult.users.find(u => u.id === saved.id);
+                // Only redirect if user exists and is actually logged in
+                if (user && user.isLoggedIn === true) {
+                  navigate('/library');
+                  return;
+                } else {
+                  // User exists but is not logged in - clear intermediate state
+                  try {
+                    localStorage.removeItem('authUser');
+                    await api?.setAuthUser?.(null);
+                  } catch (_) {}
+                }
+              } else {
+                // No users found - clear intermediate state
+                try {
+                  localStorage.removeItem('authUser');
+                  await api?.setAuthUser?.(null);
+                } catch (_) {}
+              }
+            } catch (_) {
+              // If we can't verify, still try to navigate (fallback)
+              navigate('/library');
+              return;
+            }
           }
         } catch (_) {}
         
-        // Check for users with "stay logged in" enabled
+        // Check for users with "stay logged in" enabled and isLoggedIn: true
         if (!forceAuth) {
           try {
             const usersResult = await api?.getUsers?.();
             if (usersResult && usersResult.success && Array.isArray(usersResult.users)) {
-              // Find users with stayLoggedIn: true who haven't explicitly logged out
-              // (isLoggedIn can be true or undefined, but not false)
+              // Find users with stayLoggedIn: true and isLoggedIn: true
               const stayLoggedInUsers = usersResult.users.filter(u => 
                 u.stayLoggedIn === true && 
-                u.isLoggedIn !== false
+                u.isLoggedIn === true
               );
               
               if (stayLoggedInUsers.length > 0) {
@@ -132,6 +166,8 @@ const Auth = ({ navigate }) => {
                   if (userIndex !== -1) {
                     usersResult.users[userIndex].lastLoginTime = new Date().toISOString();
                     usersResult.users[userIndex].isLoggedIn = true;
+                    // IMPORTANT: Clear hiddenInSwitcher flag when user logs in - account should be visible again
+                    usersResult.users[userIndex].hiddenInSwitcher = false;
                     await api?.saveUsers?.(usersResult.users);
                   }
                   
@@ -223,5 +259,4 @@ const Auth = ({ navigate }) => {
 };
 
 export default Auth;
-
 

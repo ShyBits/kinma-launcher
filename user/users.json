@@ -1,5 +1,27 @@
 [
   {
+    "id": "admin",
+    "username": "admin",
+    "email": "admin@kinma.app",
+    "password": "admin123",
+    "name": "admin",
+    "fullName": "Administrator",
+    "phone": "",
+    "dateOfBirth": "",
+    "gender": "none",
+    "address": "",
+    "city": "",
+    "zipCode": "",
+    "country": "",
+    "acceptTerms": true,
+    "devIntent": false,
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "lastLoginTime": "2025-11-09T03:19:44.665Z",
+    "isLoggedIn": false,
+    "stayLoggedIn": true,
+    "hiddenInSwitcher": false
+  },
+  {
     "id": "1762123181059",
     "username": "child123",
     "email": "child@gmail.com",
@@ -16,9 +38,32 @@
     "acceptTerms": true,
     "devIntent": false,
     "createdAt": "2025-11-02T22:39:41.059Z",
-    "lastLoginTime": "2025-11-05T00:30:42.939Z",
-    "isLoggedIn": true,
-    "stayLoggedIn": true
+    "lastLoginTime": "2025-11-08T22:54:42.145Z",
+    "isLoggedIn": false,
+    "stayLoggedIn": true,
+    "hiddenInSwitcher": true
+  },
+  {
+    "id": "1762645255757",
+    "username": "fdwef",
+    "email": "fwfwfewf@gmail.com",
+    "password": "123456",
+    "name": "fdwef",
+    "fullName": "",
+    "phone": "",
+    "dateOfBirth": "",
+    "gender": "none",
+    "address": "",
+    "city": "",
+    "zipCode": "",
+    "country": "",
+    "acceptTerms": true,
+    "devIntent": true,
+    "stayLoggedIn": true,
+    "createdAt": "2025-11-08T23:40:55.757Z",
+    "lastLoginTime": "2025-11-08T23:40:55.759Z",
+    "isLoggedIn": false,
+    "hiddenInSwitcher": true
   },
   {
     "id": "1762117457524",
@@ -37,9 +82,10 @@
     "acceptTerms": true,
     "devIntent": false,
     "createdAt": "2025-11-02T21:04:17.524Z",
-    "lastLoginTime": "2025-11-07T06:49:14.849Z",
+    "lastLoginTime": "2025-11-09T03:26:01.731Z",
     "isLoggedIn": true,
-    "stayLoggedIn": true
+    "stayLoggedIn": true,
+    "hiddenInSwitcher": false
   },
   {
     "id": "1762272498548",
@@ -59,7 +105,8 @@
     "devIntent": false,
     "createdAt": "2025-11-04T16:08:18.548Z",
     "lastLoginTime": "2025-11-04T16:17:15.667Z",
-    "isLoggedIn": false
+    "isLoggedIn": false,
+    "hiddenInSwitcher": true
   },
   {
     "id": "1762114226851",
@@ -78,9 +125,10 @@
     "acceptTerms": true,
     "devIntent": false,
     "createdAt": "2025-11-02T20:10:26.851Z",
-    "lastLoginTime": "2025-11-06T00:25:39.964Z",
-    "isLoggedIn": true,
-    "stayLoggedIn": true
+    "lastLoginTime": "2025-11-09T01:53:33.676Z",
+    "isLoggedIn": false,
+    "stayLoggedIn": true,
+    "hiddenInSwitcher": false
   },
   {
     "id": "1762272000103",
@@ -100,7 +148,8 @@
     "devIntent": false,
     "createdAt": "2025-11-04T16:00:00.103Z",
     "lastLoginTime": "2025-11-04T16:17:18.424Z",
-    "isLoggedIn": false
+    "isLoggedIn": false,
+    "hiddenInSwitcher": true
   },
   {
     "id": "1762271889398",
@@ -120,7 +169,8 @@
     "devIntent": false,
     "createdAt": "2025-11-04T15:58:09.398Z",
     "lastLoginTime": "2025-11-04T16:17:10.821Z",
-    "isLoggedIn": false
+    "isLoggedIn": false,
+    "hiddenInSwitcher": true
   },
   {
     "id": "1762272132277",
@@ -140,6 +190,7 @@
     "devIntent": false,
     "createdAt": "2025-11-04T16:02:12.277Z",
     "lastLoginTime": "2025-11-04T16:17:17.070Z",
-    "isLoggedIn": false
+    "isLoggedIn": false,
+    "hiddenInSwitcher": true
   }
 ]

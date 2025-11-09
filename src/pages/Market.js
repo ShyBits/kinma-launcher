@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ShoppingCart, Plus, ShoppingBag, Eye, EyeOff, Grid, List, ArrowLeft, Crown, TrendingUp, TrendingDown, Zap, Clock, Star, Users, Flame, ArrowRight, Sparkles, BarChart3, DollarSign, TrendingUp as TrendingUpIcon, PieChart, Target, Award, Activity, ArrowUpRight, ArrowDownRight, FileText, CheckCircle2, UserPlus, Search } from 'lucide-react';
+import { ShoppingCart, Plus, ShoppingBag, Eye, EyeOff, Grid, List, ArrowLeft, Crown, TrendingUp, TrendingDown, Zap, Clock, Star, Users, Flame, ArrowRight, Sparkles, BarChart3, DollarSign, TrendingUp as TrendingUpIcon, PieChart, Target, Award, Activity, ArrowUpRight, ArrowDownRight, FileText, CheckCircle2, UserPlus, Search, X, ChevronLeft } from 'lucide-react';
 import { getUserData, saveUserData, getAllUsersData } from '../utils/UserDataManager';
 import './Market.css';
 
@@ -45,6 +45,11 @@ const Market = () => {
   const [petitionSearchQuery, setPetitionSearchQuery] = useState('');
   const [selectedPetitionGame, setSelectedPetitionGame] = useState(null);
   
+  // Window width for responsive sidebar sizing
+  const [windowWidth, setWindowWidth] = useState(() => {
+    return typeof window !== 'undefined' ? window.innerWidth : 1120;
+  });
+
   // Right sidebar resizing state
   const [marketRightSidebarWidth, setMarketRightSidebarWidth] = useState(() => {
     try {
@@ -55,6 +60,29 @@ const Market = () => {
     }
   });
   
+  // Track if sidebar is collapsed
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('marketSidebarCollapsed') === 'true';
+    } catch (_) {
+      return false;
+    }
+  });
+  
+  // Collapsed sidebar width (minimal space)
+  const COLLAPSED_WIDTH = 40;
+  
+  // Calculate responsive sidebar width based on window size
+  // Scales between 15-25% of window width, clamped between 200px and 250px
+  const responsiveSidebarWidth = useMemo(() => {
+    const minWidth = 200;
+    const maxWidth = 250;
+    // Scale from 15% (at 1120px) to 25% (at larger windows)
+    const scaleFactor = Math.min(0.25, Math.max(0.15, 0.15 + (windowWidth - 1120) * 0.0001));
+    const calculatedWidth = windowWidth * scaleFactor;
+    return Math.max(minWidth, Math.min(maxWidth, calculatedWidth));
+  }, [windowWidth]);
+  
   // Content width for smart resizing (similar to Store)
   const [contentWidth, setContentWidth] = useState(() => {
     // Default to 1020px (1280px min app width - 260px sidebar)
@@ -62,6 +90,10 @@ const Market = () => {
   });
   
   useEffect(() => {
+    const updateWindowSize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+    
     const updateContentWidth = () => {
       // Calculate available content width (window width - left sidebar - right sidebar)
       // Try to get left sidebar width from localStorage, fallback to 260
@@ -76,17 +108,93 @@ const Market = () => {
       setContentWidth(newContentWidth);
     };
     
+    updateWindowSize();
     updateContentWidth();
-    window.addEventListener('resize', updateContentWidth);
+    window.addEventListener('resize', () => {
+      updateWindowSize();
+      updateContentWidth();
+    });
     // Listen for sidebar resize events
     window.addEventListener('sidebar-resize', updateContentWidth);
     return () => {
+      window.removeEventListener('resize', updateWindowSize);
       window.removeEventListener('resize', updateContentWidth);
       window.removeEventListener('sidebar-resize', updateContentWidth);
     };
   }, [marketRightSidebarWidth]);
-  const [isRightSidebarResizing, setIsRightSidebarResizing] = useState(false);
-  const rightSidebarResizeRef = useRef(null);
+
+  // Calculate banner height based on content width (maintain aspect ratio)
+  // Use 20% of content width, clamped between 180px and 600px
+  // Lower minimum allows banner to shrink more on smaller windows
+  const bannerHeight = Math.max(180, Math.min(600, contentWidth * 0.20));
+
+  // Calculate responsive sizes for sidebar elements - fixed sizes for buttons to avoid delay
+  const sidebarStyles = React.useMemo(() => {
+    // Badge width scales with sidebar width (12-20% of sidebar width, clamped between 40-80px)
+    // Badge height is fixed at 30px
+    const badgeWidth = Math.max(70, Math.min(80, marketRightSidebarWidth * 0.16));
+    const badgeHeight = 30; // Fixed height
+    return {
+      // Title styles - fixed size
+      titleFontSize: 24,
+      titlePadding: {
+        vertical: 20,
+        horizontal: 20,
+        bottom: 18
+      },
+      // Nav styles - fixed
+      navPadding: 20,
+      navGap: 26,
+      // Main item styles - fixed sizes (no delay)
+      mainItemFontSize: 14,
+      mainItemPadding: {
+        vertical: 12,
+        horizontal: 20
+      },
+      mainItemIconSize: 18,
+      // Section title styles - fixed
+      sectionTitleFontSize: 10,
+      sectionTitlePadding: {
+        horizontal: 20,
+        bottom: 6
+      },
+      // Nav item styles - fixed sizes (no delay)
+      navItemFontSize: 14,
+      navItemPadding: {
+        vertical: 10,
+        horizontal: 20
+      },
+      navItemGap: 10,
+      navItemIconSize: 16,
+      // Badge styles - rectangle, width scales with sidebar width, height is fixed
+      badgeWidth: badgeWidth,
+      badgeHeight: badgeHeight,
+      badgePadding: 0, // No padding
+      badgeFontSize: 11, // Fixed font size
+      badgeBorderRadius: 0, // Square corners
+      // Section padding - fixed
+      sectionPaddingBottom: 13
+    };
+  }, [marketRightSidebarWidth]);
+
+  // Auto-adjust sidebar width based on window size
+  useEffect(() => {
+    if (responsiveSidebarWidth) {
+      setMarketRightSidebarWidth(prevWidth => {
+        const newWidth = responsiveSidebarWidth;
+        if (Math.abs(prevWidth - newWidth) > 0.1) {
+          // Update localStorage asynchronously to avoid blocking
+          setTimeout(() => {
+            try {
+              localStorage.setItem('marketRightSidebarWidth', newWidth.toString());
+            } catch (_) {}
+          }, 0);
+          return newWidth;
+        }
+        return prevWidth;
+      });
+    }
+  }, [windowWidth, responsiveSidebarWidth]);
   
   // Investments data loaded from account-separated storage
   const [investments] = useState(() => {
@@ -246,24 +354,12 @@ const Market = () => {
   }, [customGames, petitions, marketDataCache]);
 
   // Get games with markets and games without markets
-  const gamesWithMarkets = allGamesData.filter(g => g.hasMarket !== false);
+  const gamesWithMarketsRaw = allGamesData.filter(g => g.hasMarket !== false);
   const gamesWithoutMarkets = allGamesData.filter(g => g.hasMarket === false);
-
-  // Sort games by 24h trend for trending view
-  const trendingGames = React.useMemo(() => {
-    return [...gamesWithMarkets].sort((a, b) => {
-      const parseTrend = (trend) => {
-        if (!trend || trend === '+0%') return 0;
-        const match = trend.match(/[+-]?(\d+\.?\d*)/);
-        return match ? parseFloat(match[0]) : 0;
-      };
-      return parseTrend(b.marketTrend) - parseTrend(a.marketTrend);
-    });
-  }, [gamesWithMarkets]);
-
-  // Sort games by volume for top markets view
-  const topMarketsGames = React.useMemo(() => {
-    return [...gamesWithMarkets].sort((a, b) => {
+  
+  // Calculate ranks for browse view (by volume) - games with same stats get same rank
+  const gamesWithMarkets = React.useMemo(() => {
+    const sorted = [...gamesWithMarketsRaw].sort((a, b) => {
       const parseVolume = (volume) => {
         if (!volume || volume === '$0') return 0;
         const numStr = volume.replace(/[^0-9.]/g, '');
@@ -271,7 +367,133 @@ const Market = () => {
       };
       return parseVolume(b.totalVolume) - parseVolume(a.totalVolume);
     });
-  }, [gamesWithMarkets]);
+    
+    // Assign ranks dynamically - games with same stats get same rank, but first one gets better rank number
+    let currentRank = 1;
+    let previousValue = null;
+    let firstInGroupIndex = 0;
+    
+    sorted.forEach((game, index) => {
+      const parseVolume = (volume) => {
+        if (!volume || volume === '$0') return 0;
+        const numStr = volume.replace(/[^0-9.]/g, '');
+        return parseFloat(numStr) || 0;
+      };
+      const currentValue = parseVolume(game.totalVolume);
+      
+      if (index === 0) {
+        // First game always gets rank 1
+        game.marketRank = 1;
+        previousValue = currentValue;
+        currentRank = 1;
+        firstInGroupIndex = 0;
+      } else if (currentValue === previousValue) {
+        // Same value as previous - first in group has better rank, others get incrementing ranks
+        // First game in group keeps its rank, others get rank based on position
+        game.marketRank = sorted[firstInGroupIndex].marketRank + (index - firstInGroupIndex);
+      } else {
+        // New unique value - gets next rank (position in list)
+        currentRank = index + 1;
+        game.marketRank = currentRank;
+        previousValue = currentValue;
+        firstInGroupIndex = index;
+      }
+    });
+    
+    return sorted;
+  }, [gamesWithMarketsRaw]);
+
+  // Sort games by 24h trend for trending view
+  const trendingGames = React.useMemo(() => {
+    const sorted = [...gamesWithMarketsRaw].sort((a, b) => {
+      const parseTrend = (trend) => {
+        if (!trend || trend === '+0%') return 0;
+        const match = trend.match(/[+-]?(\d+\.?\d*)/);
+        return match ? parseFloat(match[0]) : 0;
+      };
+      return parseTrend(b.marketTrend) - parseTrend(a.marketTrend);
+    });
+    
+    // Assign ranks dynamically - games with same stats get same rank, but first one gets better rank number
+    let currentRank = 1;
+    let previousValue = null;
+    let firstInGroupIndex = 0;
+    
+    sorted.forEach((game, index) => {
+      const parseTrend = (trend) => {
+        if (!trend || trend === '+0%') return 0;
+        const match = trend.match(/[+-]?(\d+\.?\d*)/);
+        return match ? parseFloat(match[0]) : 0;
+      };
+      const currentValue = parseTrend(game.marketTrend);
+      
+      if (index === 0) {
+        // First game always gets rank 1
+        game.marketRank = 1;
+        previousValue = currentValue;
+        currentRank = 1;
+        firstInGroupIndex = 0;
+      } else if (currentValue === previousValue) {
+        // Same value as previous - first in group has better rank, others get incrementing ranks
+        // First game in group keeps its rank, others get rank based on position
+        game.marketRank = sorted[firstInGroupIndex].marketRank + (index - firstInGroupIndex);
+      } else {
+        // New unique value - gets next rank (position in list)
+        currentRank = index + 1;
+        game.marketRank = currentRank;
+        previousValue = currentValue;
+        firstInGroupIndex = index;
+      }
+    });
+    
+    return sorted;
+  }, [gamesWithMarketsRaw]);
+
+  // Sort games by volume for top markets view
+  const topMarketsGames = React.useMemo(() => {
+    const sorted = [...gamesWithMarketsRaw].sort((a, b) => {
+      const parseVolume = (volume) => {
+        if (!volume || volume === '$0') return 0;
+        const numStr = volume.replace(/[^0-9.]/g, '');
+        return parseFloat(numStr) || 0;
+      };
+      return parseVolume(b.totalVolume) - parseVolume(a.totalVolume);
+    });
+    
+    // Assign ranks dynamically - games with same stats get same rank, but first one gets better rank number
+    let currentRank = 1;
+    let previousValue = null;
+    let firstInGroupIndex = 0;
+    
+    sorted.forEach((game, index) => {
+      const parseVolume = (volume) => {
+        if (!volume || volume === '$0') return 0;
+        const numStr = volume.replace(/[^0-9.]/g, '');
+        return parseFloat(numStr) || 0;
+      };
+      const currentValue = parseVolume(game.totalVolume);
+      
+      if (index === 0) {
+        // First game always gets rank 1
+        game.marketRank = 1;
+        previousValue = currentValue;
+        currentRank = 1;
+        firstInGroupIndex = 0;
+      } else if (currentValue === previousValue) {
+        // Same value as previous - first in group has better rank, others get incrementing ranks
+        // First game in group keeps its rank, others get rank based on position
+        game.marketRank = sorted[firstInGroupIndex].marketRank + (index - firstInGroupIndex);
+      } else {
+        // New unique value - gets next rank (position in list)
+        currentRank = index + 1;
+        game.marketRank = currentRank;
+        previousValue = currentValue;
+        firstInGroupIndex = index;
+      }
+    });
+    
+    return sorted;
+  }, [gamesWithMarketsRaw]);
 
   // Auto-select game based on URL parameter
   useEffect(() => {
@@ -524,70 +746,6 @@ const Market = () => {
     setPetitionSearchQuery('');
   };
 
-  // Right sidebar resize handlers
-  const handleRightSidebarResizeStart = (e) => {
-    setIsRightSidebarResizing(true);
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  useEffect(() => {
-    if (!isRightSidebarResizing) return;
-
-    const handleResize = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const windowWidth = window.innerWidth;
-      const clientX = e.clientX !== undefined ? e.clientX : windowWidth;
-      const newWidth = windowWidth - clientX;
-      const minWidth = 180;
-      const maxWidth = 400;
-      
-      // Clamp to boundaries
-      const clampedWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
-      setMarketRightSidebarWidth(clampedWidth);
-    };
-
-    const handleResizeEnd = (e) => {
-      if (e) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-      setIsRightSidebarResizing(false);
-      // Save to localStorage only at the end
-      try {
-        localStorage.setItem('marketRightSidebarWidth', marketRightSidebarWidth.toString());
-      } catch (_) {}
-    };
-
-    const handleMouseLeave = () => {
-      // When mouse leaves window, clamp to boundaries
-      const minWidth = 180;
-      const maxWidth = 400;
-      const currentWidth = marketRightSidebarWidth;
-      const clampedWidth = Math.max(minWidth, Math.min(maxWidth, currentWidth));
-      if (clampedWidth !== currentWidth) {
-        setMarketRightSidebarWidth(clampedWidth);
-      }
-    };
-
-    // Use capture phase to ensure we catch events even outside the window
-    document.addEventListener('mousemove', handleResize, true);
-    document.addEventListener('mouseup', handleResizeEnd, true);
-    window.addEventListener('mouseup', handleResizeEnd, true);
-    window.addEventListener('mouseleave', handleMouseLeave);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    return () => {
-      document.removeEventListener('mousemove', handleResize, true);
-      document.removeEventListener('mouseup', handleResizeEnd, true);
-      window.removeEventListener('mouseup', handleResizeEnd, true);
-      window.removeEventListener('mouseleave', handleMouseLeave);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-  }, [isRightSidebarResizing, marketRightSidebarWidth]);
 
   // Get all games for petition creation (only games without markets)
   const allGamesForPetition = React.useMemo(() => {
@@ -615,7 +773,10 @@ const Market = () => {
         <div className="marketplace-content">
           {/* Live Activity Ticker - Always at top (except browse) */}
           {marketView !== 'browse' && (
-            <div className="marketplace-ticker">
+            <div 
+              className="marketplace-ticker"
+              style={{ '--content-width': `${contentWidth}px` }}
+            >
               <div className="ticker-label">
                 <Zap size={14} />
                 <span>Live Activity</span>
@@ -645,11 +806,28 @@ const Market = () => {
 
           {/* Stats View */}
           {marketView === 'stats' && (
-          <div className="marketplace-stats-view">
-            <div className="stats-view-header">
-              <h2 className="stats-view-title">Analytics</h2>
-              <p className="stats-view-subtitle">Trading performance overview</p>
+          <>
+            {/* Marketplace Hero Section */}
+            <div 
+              className="marketplace-hero"
+              style={{ 
+                '--content-width': `${contentWidth}px`,
+                '--banner-height': `${bannerHeight}px`,
+                height: `${bannerHeight}px`
+              }}
+            >
+              <div className="marketplace-hero-content">
+                <div className="marketplace-hero-left">
+                  <h1 className="marketplace-hero-title">Trading Performance</h1>
+                  <p className="marketplace-hero-subtitle">Track your market activity, investments, and trading statistics.</p>
+                </div>
+              </div>
             </div>
+            
+            <div 
+              className="marketplace-stats-view"
+              style={{ '--content-width': `${contentWidth}px` }}
+            >
             
             {/* Performance Overview */}
             <div className="stats-overview-section">
@@ -766,19 +944,33 @@ const Market = () => {
               </div>
             </div>
           </div>
+          </>
         )}
 
         {/* Watchlist Section */}
         {marketView === 'favorites' && watchedGames.size > 0 ? (
-          <div className="watchlist-container">
-            <div className="watchlist-header">
-              <div className="watchlist-header-content">
-                <div className="watchlist-header-left">
-                  <h2 className="watchlist-title">Watchlist</h2>
-                  <p className="watchlist-subtitle">{watchedGames.size} {watchedGames.size === 1 ? 'game' : 'games'} being tracked</p>
+          <>
+            {/* Marketplace Hero Section */}
+            <div 
+              className="marketplace-hero"
+              style={{ 
+                '--content-width': `${contentWidth}px`,
+                '--banner-height': `${bannerHeight}px`,
+                height: `${bannerHeight}px`
+              }}
+            >
+              <div className="marketplace-hero-content">
+                <div className="marketplace-hero-left">
+                  <h1 className="marketplace-hero-title">Tracked Markets</h1>
+                  <p className="marketplace-hero-subtitle">Monitor {watchedGames.size} {watchedGames.size === 1 ? 'market' : 'markets'} for price trends and analytics.</p>
                 </div>
               </div>
             </div>
+            
+            <div 
+              className="watchlist-container"
+              style={{ '--content-width': `${contentWidth}px` }}
+            >
             
             <div className="watchlist-grid">
               {[...watchedGames].map(gameId => {
@@ -967,30 +1159,56 @@ const Market = () => {
               })}
             </div>
           </div>
+          </>
         ) : marketView === 'favorites' && watchedGames.size === 0 ? (
-          <div className="watchlist-empty">
-            <div className="watchlist-empty-icon">
-              <Eye size={48} />
+          <>
+            {/* Marketplace Hero Section */}
+            <div 
+              className="marketplace-hero"
+              style={{ 
+                '--content-width': `${contentWidth}px`,
+                '--banner-height': `${bannerHeight}px`,
+                height: `${bannerHeight}px`
+              }}
+            >
+              <div className="marketplace-hero-content">
+                <div className="marketplace-hero-left">
+                  <h1 className="marketplace-hero-title">Tracked Markets</h1>
+                  <p className="marketplace-hero-subtitle">Add games to your watchlist to track market trends and analytics.</p>
+                </div>
+              </div>
             </div>
-            <h3 className="watchlist-empty-title">No watched games</h3>
-            <p className="watchlist-empty-text">Add games to your watchlist to track market trends and analytics</p>
-          </div>
+            
+            <div 
+              className="watchlist-empty"
+              style={{ '--content-width': `${contentWidth}px` }}
+            >
+              <div className="watchlist-empty-icon">
+                <Eye size={48} />
+              </div>
+              <h3 className="watchlist-empty-title">No watched games</h3>
+              <p className="watchlist-empty-text">Add games to your watchlist to track market trends and analytics</p>
+            </div>
+          </>
         ) : (
             <>
               {/* Petitions View */}
               {marketView === 'petitions' && (
                 <div className="petitions-view-container">
-                  {/* Petitions Hero Section */}
-                  <div className="petitions-hero">
-                    <div className="petitions-hero-content">
-                      <div className="petitions-hero-left">
-                        <div className="petitions-hero-badge">
-                          <FileText size={16} />
-                          <span>Community Petitions</span>
-                        </div>
-                        <h1 className="petitions-hero-title">Support Marketplace Access</h1>
-                        <p className="petitions-hero-subtitle">Games without marketplace support need your voice. Sign petitions to show developers that you want trading features enabled for these games.</p>
-                        <div className="petitions-hero-stats">
+                  {/* Marketplace Hero Section */}
+                  <div 
+                    className="marketplace-hero"
+                    style={{ 
+                      '--content-width': `${contentWidth}px`,
+                      '--banner-height': `${bannerHeight}px`,
+                      height: `${bannerHeight}px`
+                    }}
+                  >
+                    <div className="marketplace-hero-content">
+                      <div className="marketplace-hero-left">
+                        <h1 className="marketplace-hero-title">Support Marketplace Access</h1>
+                        <p className="marketplace-hero-subtitle">Games without marketplace support need your voice. Sign petitions to show developers that you want trading features enabled for these games.</p>
+                        <div className="marketplace-hero-stats">
                           <div className="hero-stat">
                             <div className="hero-stat-value">{gamesWithoutMarkets.length}</div>
                             <div className="hero-stat-label">Active Petitions</div>
@@ -1009,9 +1227,9 @@ const Market = () => {
                           </div>
                         </div>
                       </div>
-                      <div className="petitions-hero-action">
+                      <div className="marketplace-hero-right">
                         <button 
-                          className="create-petition-btn"
+                          className="featured-deal-btn"
                           onClick={() => setShowCreatePetitionForm(!showCreatePetitionForm)}
                         >
                           <Plus size={18} />
@@ -1023,7 +1241,10 @@ const Market = () => {
 
                   {/* Create Petition Form - Centered */}
                   {showCreatePetitionForm && (
-                    <div className="create-petition-form-container">
+                    <div 
+                      className="create-petition-form-container"
+                      style={{ '--content-width': `${contentWidth}px` }}
+                    >
                       <div className="create-petition-form">
                         <div className="create-petition-form-header">
                           <h2>Create New Petition</h2>
@@ -1123,7 +1344,10 @@ const Market = () => {
 
                   {/* Petitions Grid */}
                   {gamesWithoutMarkets.length > 0 ? (
-                    <div className="petitions-grid">
+                    <div 
+                      className="petitions-grid"
+                      style={{ '--content-width': `${contentWidth}px` }}
+                    >
                       {gamesWithoutMarkets.map(game => {
                         const petitionData = petitions[game.id] || {};
                         const signatures = petitionData.signatures || 0;
@@ -1206,7 +1430,10 @@ const Market = () => {
                       })}
                     </div>
                   ) : (
-                    <div className="petitions-empty">
+                    <div 
+                      className="petitions-empty"
+                      style={{ '--content-width': `${contentWidth}px` }}
+                    >
                       <FileText size={48} style={{ opacity: 0.3, marginBottom: '16px' }} />
                       <h3>No active petitions</h3>
                       <p>All games currently have marketplace support enabled</p>
@@ -1222,13 +1449,16 @@ const Market = () => {
                   {marketView === 'browse' && (
                     <>
                       {/* Marketplace Hero Section */}
-                      <div className="marketplace-hero">
+                      <div 
+                        className="marketplace-hero"
+                        style={{ 
+                          '--content-width': `${contentWidth}px`,
+                          '--banner-height': `${bannerHeight}px`,
+                          height: `${bannerHeight}px`
+                        }}
+                      >
                         <div className="marketplace-hero-content">
                           <div className="marketplace-hero-left">
-                            <div className="marketplace-hero-badge">
-                              <Sparkles size={16} />
-                              <span>Live Marketplace</span>
-                            </div>
                             <h1 className="marketplace-hero-title">Discover & Trade</h1>
                             <p className="marketplace-hero-subtitle">Browse thousands of items across all games. Buy, sell, and invest in the biggest gaming marketplace.</p>
                             <div className="marketplace-hero-stats">
@@ -1249,7 +1479,7 @@ const Market = () => {
                           <div className="marketplace-hero-right">
                             <div className="marketplace-featured-deal">
                               <div className="featured-deal-badge">
-                                <Flame size={14} />
+                                <Flame className="deal-badge-icon" />
                                 <span>Hot Deal</span>
                               </div>
                               <div className="featured-deal-content">
@@ -1258,7 +1488,7 @@ const Market = () => {
                                 <div className="featured-deal-desc">Premium items & exclusive bundles</div>
                                 <button className="featured-deal-btn">
                                   Shop Now
-                                  <ArrowRight size={16} />
+                                  <ArrowRight className="deal-btn-icon" />
                                 </button>
                               </div>
                             </div>
@@ -1268,7 +1498,10 @@ const Market = () => {
 
                       {/* Live Activity Ticker - Browse view */}
                       {marketView === 'browse' && (
-                        <div className="marketplace-ticker">
+                        <div 
+                          className="marketplace-ticker"
+                          style={{ '--content-width': `${contentWidth}px` }}
+                        >
                           <div className="ticker-label">
                             <Zap size={14} />
                             <span>Live Activity</span>
@@ -1299,13 +1532,16 @@ const Market = () => {
                   )}
 
                   {marketView === 'featured' && (
-                    <div className="marketplace-hero">
+                    <div 
+                      className="marketplace-hero"
+                      style={{ 
+                        '--content-width': `${contentWidth}px`,
+                        '--banner-height': `${bannerHeight}px`,
+                        height: `${bannerHeight}px`
+                      }}
+                    >
                       <div className="marketplace-hero-content">
                         <div className="marketplace-hero-left">
-                          <div className="marketplace-hero-badge">
-                            <BarChart3 size={16} />
-                            <span>Top Markets</span>
-                          </div>
                           <h1 className="marketplace-hero-title">Highest Volume Markets</h1>
                           <p className="marketplace-hero-subtitle">Discover the most active marketplaces ranked by total trading volume.</p>
                         </div>
@@ -1314,13 +1550,16 @@ const Market = () => {
                   )}
 
                   {marketView === 'trending' && (
-                    <div className="marketplace-hero">
+                    <div 
+                      className="marketplace-hero"
+                      style={{ 
+                        '--content-width': `${contentWidth}px`,
+                        '--banner-height': `${bannerHeight}px`,
+                        height: `${bannerHeight}px`
+                      }}
+                    >
                       <div className="marketplace-hero-content">
                         <div className="marketplace-hero-left">
-                          <div className="marketplace-hero-badge">
-                            <TrendingUp size={16} />
-                            <span>Trending Now</span>
-                          </div>
                           <h1 className="marketplace-hero-title">24h Market Trends</h1>
                           <p className="marketplace-hero-subtitle">Markets with the biggest price movements in the last 24 hours.</p>
                         </div>
@@ -1399,85 +1638,215 @@ const Market = () => {
           )}
         </div>
 
-        {/* Right Sidebar Resizer */}
+        {/* Right Sidebar Navigation - Inside Content */}
         <div 
-          ref={rightSidebarResizeRef}
-          className={`sidebar-resizer ${isRightSidebarResizing ? 'resizing' : ''}`}
-          onMouseDown={handleRightSidebarResizeStart}
-        />
-
-        {/* Right Sidebar Navigation */}
-        <aside 
-          className={`marketplace-sidebar ${isRightSidebarResizing ? 'resizing' : ''}`}
-          style={{ width: marketRightSidebarWidth }}
+          className="marketplace-content-right"
+          style={{ 
+            '--window-width': windowWidth,
+            '--sidebar-scale': Math.max(0.8, Math.min(1.2, windowWidth / 1120))
+          }}
         >
-          <div className="sidebar-title">Market</div>
-          <nav className="sidebar-nav">
-            {/* Main Section - Browse */}
-            <div className="sidebar-nav-section sidebar-nav-main">
-              <button 
-                className={`sidebar-nav-item sidebar-nav-main-item ${marketView === 'browse' ? 'active' : ''}`}
-                onClick={() => setMarketView('browse')}
+          {/* Right Sidebar Navigation */}
+          <aside 
+            className={`marketplace-sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}
+            style={{ 
+              width: isSidebarCollapsed ? COLLAPSED_WIDTH : marketRightSidebarWidth
+            }}
+          >
+            {!isSidebarCollapsed && (
+              <div 
+                className="sidebar-title"
+                style={{
+                  fontSize: `${sidebarStyles.titleFontSize}px`,
+                  padding: `${sidebarStyles.titlePadding.vertical}px ${sidebarStyles.titlePadding.horizontal}px ${sidebarStyles.titlePadding.bottom}px ${sidebarStyles.titlePadding.horizontal}px`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '8px'
+                }}
               >
-                <ShoppingBag size={20} />
-                <span>Browse</span>
-              </button>
-            </div>
-            
-            <div className="sidebar-nav-section">
-              <h3 className="sidebar-section-title">Marketplace</h3>
-              <button 
-                className={`sidebar-nav-item ${marketView === 'featured' ? 'active' : ''}`}
-                onClick={() => setMarketView('featured')}
+                <span>Market</span>
+                <button
+                  className="sidebar-close-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsSidebarCollapsed(true);
+                    try {
+                      localStorage.setItem('marketSidebarCollapsed', 'true');
+                    } catch (_) {}
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'rgba(255, 255, 255, 0.6)',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: '4px',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                    e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)';
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+            {isSidebarCollapsed && (
+              <div 
+                className="sidebar-collapsed-header"
+                style={{
+                  padding: '20px 8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer'
+                }}
+                onClick={() => {
+                  setIsSidebarCollapsed(false);
+                  try {
+                    localStorage.setItem('marketSidebarCollapsed', 'false');
+                  } catch (_) {}
+                }}
               >
-                <BarChart3 size={18} />
-                <span>Top Markets</span>
-              </button>
-              <button 
-                className={`sidebar-nav-item ${marketView === 'trending' ? 'active' : ''}`}
-                onClick={() => setMarketView('trending')}
+                <ChevronLeft size={20} style={{ color: 'rgba(255, 255, 255, 0.6)' }} />
+              </div>
+            )}
+            {!isSidebarCollapsed && (
+              <nav 
+                className="sidebar-nav"
+                style={{
+                  padding: `${sidebarStyles.navPadding}px 0`,
+                  gap: `${sidebarStyles.navGap}px`
+                }}
               >
-                <TrendingUp size={18} />
-                <span>Trending</span>
-              </button>
-            </div>
-            
-            <div className="sidebar-nav-section">
-              <h3 className="sidebar-section-title">My Activity</h3>
-              <button 
-                className={`sidebar-nav-item ${marketView === 'favorites' ? 'active' : ''}`}
-                onClick={() => setMarketView('favorites')}
-              >
-                <Eye size={18} />
-                <span>Watchlist</span>
-                {watchedGames.size > 0 && (
-                  <span className="sidebar-badge">{watchedGames.size}</span>
-                )}
-              </button>
-              <button 
-                className={`sidebar-nav-item ${marketView === 'stats' ? 'active' : ''}`}
-                onClick={() => setMarketView('stats')}
-              >
-                <BarChart3 size={18} />
-                <span>Analytics</span>
-              </button>
-            </div>
-            
-            <div className="sidebar-nav-section">
-              <h3 className="sidebar-section-title">Community</h3>
-              <button 
-                className={`sidebar-nav-item ${marketView === 'petitions' ? 'active' : ''}`}
-                onClick={() => setMarketView('petitions')}
-              >
-                <Users size={18} />
-                <span>Petitions</span>
-                {gamesWithoutMarkets.length > 0 && (
-                  <span className="sidebar-badge">{gamesWithoutMarkets.length}</span>
-                )}
-              </button>
-            </div>
-          </nav>
-        </aside>
+                {/* Main Section - Browse */}
+                <div 
+                  className="sidebar-nav-section sidebar-nav-main"
+                  style={{
+                    paddingBottom: `${sidebarStyles.sectionPaddingBottom}px`
+                  }}
+                >
+                  <button 
+                    className={`sidebar-nav-item sidebar-nav-main-item ${marketView === 'browse' ? 'active' : ''}`}
+                    onClick={() => setMarketView('browse')}
+                    style={{
+                      fontSize: `${sidebarStyles.mainItemFontSize}px`,
+                      padding: `${sidebarStyles.mainItemPadding.vertical}px ${sidebarStyles.mainItemPadding.horizontal}px`
+                    }}
+                  >
+                    <ShoppingBag size={sidebarStyles.mainItemIconSize} />
+                    <span>Browse</span>
+                  </button>
+                </div>
+                
+                <div className="sidebar-nav-section">
+                  <h3 
+                    className="sidebar-section-title"
+                    style={{
+                      fontSize: `${sidebarStyles.sectionTitleFontSize}px`,
+                      padding: `0 ${sidebarStyles.sectionTitlePadding.horizontal}px ${sidebarStyles.sectionTitlePadding.bottom}px ${sidebarStyles.sectionTitlePadding.horizontal}px`
+                    }}
+                  >
+                    Marketplace
+                  </h3>
+                  <button 
+                    className={`sidebar-nav-item ${marketView === 'featured' ? 'active' : ''}`}
+                    onClick={() => setMarketView('featured')}
+                    style={{
+                      fontSize: `${sidebarStyles.navItemFontSize}px`,
+                      padding: `${sidebarStyles.navItemPadding.vertical}px ${sidebarStyles.navItemPadding.horizontal}px`,
+                      gap: `${sidebarStyles.navItemGap}px`
+                    }}
+                  >
+                    <BarChart3 size={sidebarStyles.navItemIconSize} />
+                    <span>Top Markets</span>
+                  </button>
+                  <button 
+                    className={`sidebar-nav-item ${marketView === 'trending' ? 'active' : ''}`}
+                    onClick={() => setMarketView('trending')}
+                    style={{
+                      fontSize: `${sidebarStyles.navItemFontSize}px`,
+                      padding: `${sidebarStyles.navItemPadding.vertical}px ${sidebarStyles.navItemPadding.horizontal}px`,
+                      gap: `${sidebarStyles.navItemGap}px`
+                    }}
+                  >
+                    <TrendingUp size={sidebarStyles.navItemIconSize} />
+                    <span>Trending</span>
+                  </button>
+                </div>
+                
+                <div className="sidebar-nav-section">
+                  <h3 
+                    className="sidebar-section-title"
+                    style={{
+                      fontSize: `${sidebarStyles.sectionTitleFontSize}px`,
+                      padding: `0 ${sidebarStyles.sectionTitlePadding.horizontal}px ${sidebarStyles.sectionTitlePadding.bottom}px ${sidebarStyles.sectionTitlePadding.horizontal}px`
+                    }}
+                  >
+                    My Activity
+                  </h3>
+                  <button 
+                    className={`sidebar-nav-item ${marketView === 'favorites' ? 'active' : ''}`}
+                    onClick={() => setMarketView('favorites')}
+                    style={{
+                      fontSize: `${sidebarStyles.navItemFontSize}px`,
+                      padding: `${sidebarStyles.navItemPadding.vertical}px ${sidebarStyles.navItemPadding.horizontal}px`,
+                      gap: `${sidebarStyles.navItemGap}px`
+                    }}
+                  >
+                    <Eye size={sidebarStyles.navItemIconSize} />
+                    <span>Watchlist</span>
+                  </button>
+                  <button 
+                    className={`sidebar-nav-item ${marketView === 'stats' ? 'active' : ''}`}
+                    onClick={() => setMarketView('stats')}
+                    style={{
+                      fontSize: `${sidebarStyles.navItemFontSize}px`,
+                      padding: `${sidebarStyles.navItemPadding.vertical}px ${sidebarStyles.navItemPadding.horizontal}px`,
+                      gap: `${sidebarStyles.navItemGap}px`
+                    }}
+                  >
+                    <BarChart3 size={sidebarStyles.navItemIconSize} />
+                    <span>Analytics</span>
+                  </button>
+                </div>
+                
+                <div className="sidebar-nav-section">
+                  <h3 
+                    className="sidebar-section-title"
+                    style={{
+                      fontSize: `${sidebarStyles.sectionTitleFontSize}px`,
+                      padding: `0 ${sidebarStyles.sectionTitlePadding.horizontal}px ${sidebarStyles.sectionTitlePadding.bottom}px ${sidebarStyles.sectionTitlePadding.horizontal}px`
+                    }}
+                  >
+                    Community
+                  </h3>
+                  <button 
+                    className={`sidebar-nav-item ${marketView === 'petitions' ? 'active' : ''}`}
+                    onClick={() => setMarketView('petitions')}
+                    style={{
+                      fontSize: `${sidebarStyles.navItemFontSize}px`,
+                      padding: `${sidebarStyles.navItemPadding.vertical}px ${sidebarStyles.navItemPadding.horizontal}px`,
+                      gap: `${sidebarStyles.navItemGap}px`
+                    }}
+                  >
+                    <Users size={sidebarStyles.navItemIconSize} />
+                    <span>Petitions</span>
+                  </button>
+                </div>
+              </nav>
+            )}
+          </aside>
+        </div>
 
       </div>
     );
@@ -1724,7 +2093,217 @@ const Market = () => {
             <span>Sell Item</span>
           </button>
         </div>
-      </div>
+        </div>
+
+        {/* Right Sidebar Navigation - Inside Content */}
+        <div 
+          className="marketplace-content-right"
+          style={{ 
+            '--window-width': windowWidth,
+            '--sidebar-scale': Math.max(0.8, Math.min(1.2, windowWidth / 1120))
+          }}
+        >
+          {/* Right Sidebar Navigation */}
+          <aside 
+            className={`marketplace-sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}
+            style={{ 
+              width: isSidebarCollapsed ? COLLAPSED_WIDTH : marketRightSidebarWidth
+            }}
+          >
+            {!isSidebarCollapsed && (
+              <div 
+                className="sidebar-title"
+                style={{
+                  fontSize: `${sidebarStyles.titleFontSize}px`,
+                  padding: `${sidebarStyles.titlePadding.vertical}px ${sidebarStyles.titlePadding.horizontal}px ${sidebarStyles.titlePadding.bottom}px ${sidebarStyles.titlePadding.horizontal}px`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '8px'
+                }}
+              >
+                <span>Market</span>
+                <button
+                  className="sidebar-close-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsSidebarCollapsed(true);
+                    try {
+                      localStorage.setItem('marketSidebarCollapsed', 'true');
+                    } catch (_) {}
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'rgba(255, 255, 255, 0.6)',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: '4px',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                    e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)';
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )}
+            {isSidebarCollapsed && (
+              <div 
+                className="sidebar-collapsed-header"
+                style={{
+                  padding: '20px 8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer'
+                }}
+                onClick={() => {
+                  setIsSidebarCollapsed(false);
+                  try {
+                    localStorage.setItem('marketSidebarCollapsed', 'false');
+                  } catch (_) {}
+                }}
+              >
+                <ChevronLeft size={20} style={{ color: 'rgba(255, 255, 255, 0.6)' }} />
+              </div>
+            )}
+            {!isSidebarCollapsed && (
+              <nav 
+                className="sidebar-nav"
+                style={{
+                  padding: `${sidebarStyles.navPadding}px 0`,
+                  gap: `${sidebarStyles.navGap}px`
+                }}
+              >
+                {/* Main Section - Browse */}
+                <div 
+                  className="sidebar-nav-section sidebar-nav-main"
+                  style={{
+                    paddingBottom: `${sidebarStyles.sectionPaddingBottom}px`
+                  }}
+                >
+                  <button 
+                    className={`sidebar-nav-item sidebar-nav-main-item ${marketView === 'browse' ? 'active' : ''}`}
+                    onClick={() => setMarketView('browse')}
+                    style={{
+                      fontSize: `${sidebarStyles.mainItemFontSize}px`,
+                      padding: `${sidebarStyles.mainItemPadding.vertical}px ${sidebarStyles.mainItemPadding.horizontal}px`
+                    }}
+                  >
+                    <ShoppingBag size={sidebarStyles.mainItemIconSize} />
+                    <span>Browse</span>
+                  </button>
+                </div>
+                
+                <div className="sidebar-nav-section">
+                  <h3 
+                    className="sidebar-section-title"
+                    style={{
+                      fontSize: `${sidebarStyles.sectionTitleFontSize}px`,
+                      padding: `0 ${sidebarStyles.sectionTitlePadding.horizontal}px ${sidebarStyles.sectionTitlePadding.bottom}px ${sidebarStyles.sectionTitlePadding.horizontal}px`
+                    }}
+                  >
+                    Marketplace
+                  </h3>
+                  <button 
+                    className={`sidebar-nav-item ${marketView === 'featured' ? 'active' : ''}`}
+                    onClick={() => setMarketView('featured')}
+                    style={{
+                      fontSize: `${sidebarStyles.navItemFontSize}px`,
+                      padding: `${sidebarStyles.navItemPadding.vertical}px ${sidebarStyles.navItemPadding.horizontal}px`,
+                      gap: `${sidebarStyles.navItemGap}px`
+                    }}
+                  >
+                    <BarChart3 size={sidebarStyles.navItemIconSize} />
+                    <span>Top Markets</span>
+                  </button>
+                  <button 
+                    className={`sidebar-nav-item ${marketView === 'trending' ? 'active' : ''}`}
+                    onClick={() => setMarketView('trending')}
+                    style={{
+                      fontSize: `${sidebarStyles.navItemFontSize}px`,
+                      padding: `${sidebarStyles.navItemPadding.vertical}px ${sidebarStyles.navItemPadding.horizontal}px`,
+                      gap: `${sidebarStyles.navItemGap}px`
+                    }}
+                  >
+                    <TrendingUp size={sidebarStyles.navItemIconSize} />
+                    <span>Trending</span>
+                  </button>
+                </div>
+                
+                <div className="sidebar-nav-section">
+                  <h3 
+                    className="sidebar-section-title"
+                    style={{
+                      fontSize: `${sidebarStyles.sectionTitleFontSize}px`,
+                      padding: `0 ${sidebarStyles.sectionTitlePadding.horizontal}px ${sidebarStyles.sectionTitlePadding.bottom}px ${sidebarStyles.sectionTitlePadding.horizontal}px`
+                    }}
+                  >
+                    My Activity
+                  </h3>
+                  <button 
+                    className={`sidebar-nav-item ${marketView === 'favorites' ? 'active' : ''}`}
+                    onClick={() => setMarketView('favorites')}
+                    style={{
+                      fontSize: `${sidebarStyles.navItemFontSize}px`,
+                      padding: `${sidebarStyles.navItemPadding.vertical}px ${sidebarStyles.navItemPadding.horizontal}px`,
+                      gap: `${sidebarStyles.navItemGap}px`
+                    }}
+                  >
+                    <Eye size={sidebarStyles.navItemIconSize} />
+                    <span>Watchlist</span>
+                  </button>
+                  <button 
+                    className={`sidebar-nav-item ${marketView === 'stats' ? 'active' : ''}`}
+                    onClick={() => setMarketView('stats')}
+                    style={{
+                      fontSize: `${sidebarStyles.navItemFontSize}px`,
+                      padding: `${sidebarStyles.navItemPadding.vertical}px ${sidebarStyles.navItemPadding.horizontal}px`,
+                      gap: `${sidebarStyles.navItemGap}px`
+                    }}
+                  >
+                    <BarChart3 size={sidebarStyles.navItemIconSize} />
+                    <span>Analytics</span>
+                  </button>
+                </div>
+                
+                <div className="sidebar-nav-section">
+                  <h3 
+                    className="sidebar-section-title"
+                    style={{
+                      fontSize: `${sidebarStyles.sectionTitleFontSize}px`,
+                      padding: `0 ${sidebarStyles.sectionTitlePadding.horizontal}px ${sidebarStyles.sectionTitlePadding.bottom}px ${sidebarStyles.sectionTitlePadding.horizontal}px`
+                    }}
+                  >
+                    Community
+                  </h3>
+                  <button 
+                    className={`sidebar-nav-item ${marketView === 'petitions' ? 'active' : ''}`}
+                    onClick={() => setMarketView('petitions')}
+                    style={{
+                      fontSize: `${sidebarStyles.navItemFontSize}px`,
+                      padding: `${sidebarStyles.navItemPadding.vertical}px ${sidebarStyles.navItemPadding.horizontal}px`,
+                      gap: `${sidebarStyles.navItemGap}px`
+                    }}
+                  >
+                    <Users size={sidebarStyles.navItemIconSize} />
+                    <span>Petitions</span>
+                  </button>
+                </div>
+              </nav>
+            )}
+          </aside>
+        </div>
       </div>
 
       {/* Sell Modal */}

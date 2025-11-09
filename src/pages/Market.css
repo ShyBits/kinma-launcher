@@ -9,8 +9,8 @@
 /* Marketplace Sidebar Navigation */
 .marketplace-sidebar {
   width: 260px;
-  min-width: 180px;
-  max-width: 400px;
+  min-width: 200px;
+  /* max-width removed - controlled by JavaScript resize handler */
   background: rgba(15, 17, 21, 0.95);
   border-left: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
@@ -22,6 +22,49 @@
   backdrop-filter: blur(20px);
   flex-shrink: 0;
   transition: width 0s;
+  /* CSS variables will be set via inline style */
+}
+
+.marketplace-sidebar.collapsed {
+  min-width: 40px;
+  max-width: 40px;
+}
+
+.marketplace-content-right .sidebar-resizer {
+  flex-shrink: 0;
+  position: relative;
+  width: 8px;
+  min-width: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  cursor: col-resize;
+  z-index: 200;
+  transition: background 0.2s ease;
+  margin-left: -4px;
+  pointer-events: auto;
+  height: 100%;
+}
+
+.marketplace-content-right .sidebar-resizer:hover {
+  background: rgba(59, 130, 246, 0.5);
+}
+
+.marketplace-content-right .sidebar-resizer.resizing {
+  background: rgba(59, 130, 246, 0.8);
+}
+
+.marketplace-content-right .sidebar-resizer::before {
+  content: '';
+  position: absolute;
+  left: -4px;
+  right: -4px;
+  top: 0;
+  bottom: 0;
+  background: transparent;
+  pointer-events: auto;
+}
+
+.marketplace-content-right .sidebar-resizer:hover::before {
+  background: rgba(59, 130, 246, 0.3);
 }
 
 .marketplace-sidebar.resizing {
@@ -46,8 +89,13 @@
 }
 
 .sidebar-title {
-  padding: 24px 24px 20px 24px;
-  font-size: 22px;
+  /* Responsive padding: scales with window width */
+  /* Vertical: 2.1% of window width (min: 20px, max: 28px) */
+  /* Horizontal: 2.1% of window width (min: 20px, max: 28px) */
+  padding: clamp(20px, calc(var(--window-width, 1120px) * 0.021), 28px) clamp(20px, calc(var(--window-width, 1120px) * 0.021), 28px) clamp(18px, calc(var(--window-width, 1120px) * 0.018), 24px) clamp(20px, calc(var(--window-width, 1120px) * 0.021), 28px);
+  /* Responsive font-size: scales with window width */
+  /* 1.96% of window width (min: 18px, max: 26px) */
+  font-size: clamp(18px, calc(var(--window-width, 1120px) * 0.0196), 26px);
   font-weight: 800;
   color: var(--text-primary);
   letter-spacing: -0.3px;
@@ -56,10 +104,14 @@
 }
 
 .sidebar-nav {
-  padding: 24px 0;
+  /* Responsive padding: scales with window width */
+  /* Vertical: 2.1% of window width (min: 20px, max: 28px) */
+  padding: clamp(20px, calc(var(--window-width, 1120px) * 0.021), 28px) 0;
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  /* Responsive gap: scales with window width */
+  /* 2.86% of window width (min: 24px, max: 40px) */
+  gap: clamp(24px, calc(var(--window-width, 1120px) * 0.0286), 40px);
 }
 
 .sidebar-nav-section {
@@ -70,39 +122,60 @@
 
 .sidebar-nav-section.sidebar-nav-main {
   margin-bottom: 8px;
-  padding-bottom: 16px;
+  /* Responsive padding-bottom: scales with window width */
+  /* 1.43% of window width (min: 12px, max: 20px) */
+  padding-bottom: clamp(12px, calc(var(--window-width, 1120px) * 0.0143), 20px);
 }
 
 .sidebar-nav-main-item {
-  font-size: 15px;
+  /* Responsive font-size: scales with window width */
+  /* 1.34% of window width (min: 13px, max: 18px) */
+  font-size: clamp(13px, calc(var(--window-width, 1120px) * 0.0134), 18px);
   font-weight: 600;
-  padding: 14px 24px;
+  /* Responsive padding: scales with window width */
+  /* Vertical: 1.25% of window width (min: 12px, max: 18px) */
+  /* Horizontal: 2.1% of window width (min: 20px, max: 28px) */
+  padding: clamp(12px, calc(var(--window-width, 1120px) * 0.0125), 18px) clamp(20px, calc(var(--window-width, 1120px) * 0.021), 28px);
 }
 
 .sidebar-nav-main-item svg {
-  width: 20px;
-  height: 20px;
+  /* Responsive icon size: scales with window width */
+  /* 1.79% of window width (min: 18px, max: 24px) */
+  width: clamp(18px, calc(var(--window-width, 1120px) * 0.0179), 24px);
+  height: clamp(18px, calc(var(--window-width, 1120px) * 0.0179), 24px);
 }
 
 .sidebar-section-title {
-  font-size: 11px;
+  /* Responsive font-size: scales with window width */
+  /* 0.98% of window width (min: 10px, max: 13px) */
+  font-size: clamp(10px, calc(var(--window-width, 1120px) * 0.0098), 13px);
   font-weight: 700;
   color: rgba(255, 255, 255, 0.4);
   text-transform: uppercase;
   letter-spacing: 1px;
-  padding: 0 24px 8px 24px;
+  /* Responsive padding: scales with window width */
+  /* Horizontal: 2.1% of window width (min: 20px, max: 28px) */
+  /* Bottom: 0.71% of window width (min: 6px, max: 10px) */
+  padding: 0 clamp(20px, calc(var(--window-width, 1120px) * 0.021), 28px) clamp(6px, calc(var(--window-width, 1120px) * 0.0071), 10px) clamp(20px, calc(var(--window-width, 1120px) * 0.021), 28px);
   margin: 0;
 }
 
 .sidebar-nav-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 24px;
+  /* Responsive gap: scales with window width */
+  /* 1.07% of window width (min: 10px, max: 14px) */
+  gap: clamp(10px, calc(var(--window-width, 1120px) * 0.0107), 14px);
+  /* Responsive padding: scales with window width */
+  /* Vertical: 1.07% of window width (min: 10px, max: 14px) */
+  /* Horizontal: 2.1% of window width (min: 20px, max: 28px) */
+  padding: clamp(10px, calc(var(--window-width, 1120px) * 0.0107), 14px) clamp(20px, calc(var(--window-width, 1120px) * 0.021), 28px);
   background: transparent;
   border: none;
   color: rgba(255, 255, 255, 0.6);
-  font-size: 14px;
+  /* Responsive font-size: scales with window width */
+  /* 1.25% of window width (min: 12px, max: 16px) */
+  font-size: clamp(12px, calc(var(--window-width, 1120px) * 0.0125), 16px);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -138,8 +211,10 @@
 }
 
 .sidebar-nav-item svg {
-  width: 18px;
-  height: 18px;
+  /* Responsive icon size: scales with window width */
+  /* 1.61% of window width (min: 16px, max: 20px) */
+  width: clamp(16px, calc(var(--window-width, 1120px) * 0.0161), 20px);
+  height: clamp(16px, calc(var(--window-width, 1120px) * 0.0161), 20px);
   opacity: 0.7;
   transition: all 0.2s ease;
   flex-shrink: 0;
@@ -207,20 +282,29 @@
 }
 
 .sidebar-badge {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
+  flex-shrink: 0;
   background: rgba(74, 158, 255, 0.2);
   border: 1px solid rgba(74, 158, 255, 0.3);
-  border-radius: 10px;
   color: #4a9eff;
-  font-size: 11px;
   font-weight: 700;
-  margin-left: auto;
+  box-sizing: border-box;
+  text-align: center;
+  vertical-align: middle;
+  /* Size, padding, border-radius, and font-size are set via inline styles */
+}
+
+.sidebar-badge > span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
   line-height: 1;
+  margin: 0;
+  padding: 0;
 }
 
 .sidebar-nav-item.active .sidebar-badge {
@@ -236,15 +320,37 @@
   flex-direction: column;
   overflow-y: auto;
   min-width: 0;
+  position: relative;
+}
+
+.marketplace-content-right {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  flex-shrink: 0;
+  position: relative;
+  margin-left: auto;
 }
 
 /* Marketplace Hero Section */
 .marketplace-hero {
   background: linear-gradient(135deg, rgba(74, 158, 255, 0.15) 0%, rgba(138, 92, 246, 0.15) 100%);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 60px 40px;
+  width: 100%;
+  min-height: 180px;
+  max-height: 600px;
+  flex-shrink: 0;
+  /* Responsive padding: scales proportionally with banner height to maintain border distances */
+  /* Vertical padding: 10% of banner height (min: 18px at 180px, max: 60px at 600px) */
+  /* Horizontal padding: 24% of banner height (min: 43px at 180px, max: 144px at 600px) */
+  padding: clamp(18px, calc(var(--banner-height, 180px) * 0.10), 60px) clamp(43px, calc(var(--banner-height, 180px) * 0.24), 144px);
   position: relative;
   overflow: hidden;
+  /* No delay for height/padding resizing - instant response */
+  transition: height 0s, padding 0s;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
 }
 
 .marketplace-hero::before {
@@ -263,36 +369,81 @@
 .marketplace-hero-content {
   max-width: 1400px;
   margin: 0 auto;
+  width: 100%;
   display: grid;
-  grid-template-columns: 1fr 400px;
-  gap: 60px;
+  /* Responsive grid: right column scales proportionally with banner height */
+  /* Right column: 40% of banner height (min: 72px at 180px, max: 240px at 600px) */
+  --hero-right-width: clamp(72px, calc(var(--banner-height, 180px) * 0.40), 240px);
+  grid-template-columns: 1fr var(--hero-right-width);
+  /* Responsive gap: scales proportionally with banner height (12% of height) */
+  /* Gap: 12% of banner height (min: 22px at 180px, max: 72px at 600px) */
+  gap: clamp(22px, calc(var(--banner-height, 180px) * 0.12), 72px);
   align-items: center;
   position: relative;
   z-index: 1;
+  /* No delay for gap/grid resizing - instant response */
+  transition: gap 0s, grid-template-columns 0s;
+  box-sizing: border-box;
+}
+
+/* Stack on smaller screens */
+@media (max-width: 1000px) {
+  .marketplace-hero-content {
+    grid-template-columns: 1fr;
+    /* Responsive gap: scales proportionally with banner height (6% of height) */
+    gap: clamp(15px, calc(var(--banner-height, 180px) * 0.06), 36px);
+  }
+  
+  .marketplace-hero-right {
+    justify-content: flex-start;
+  }
 }
 
 .marketplace-hero-left {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  /* Responsive gap: scales proportionally with banner height (6% of height) */
+  /* Gap: 6% of banner height (min: 11px at 180px, max: 36px at 600px) */
+  gap: clamp(11px, calc(var(--banner-height, 180px) * 0.06), 36px);
+  /* No delay for gap resizing - instant response */
+  transition: gap 0s;
+  box-sizing: border-box;
 }
 
 .marketplace-hero-badge {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
+  /* Responsive gap: scales proportionally with banner height (2.4% of height) */
+  gap: clamp(6px, calc(var(--banner-height, 180px) * 0.024), 14.4px);
+  /* Responsive padding: scales proportionally with banner height */
+  /* Vertical: 1.6% of height (min: 4px at 250px, max: 9.6px at 600px) */
+  /* Horizontal: 4% of height (min: 10px at 250px, max: 24px at 600px) */
+  padding: clamp(4px, calc(var(--banner-height, 180px) * 0.016), 9.6px) clamp(10px, calc(var(--banner-height, 180px) * 0.04), 24px);
   background: rgba(74, 158, 255, 0.2);
   border: 1px solid rgba(74, 158, 255, 0.3);
   border-radius: 20px;
   color: #4a9eff;
-  font-size: 13px;
+  /* Responsive font size: scales proportionally with banner height (3.2% of height) */
+  font-size: clamp(8px, calc(var(--banner-height, 180px) * 0.032), 19.2px);
   font-weight: 600;
   width: fit-content;
+  /* No delay for size properties - instant resizing */
+  transition: background 0.3s ease, color 0.3s ease, padding 0s, font-size 0s, gap 0s;
+  line-height: 1.1;
+}
+
+.marketplace-hero-badge .badge-icon {
+  /* Responsive icon size: scales proportionally with banner height (4.8% of height) */
+  width: clamp(12px, calc(var(--banner-height, 180px) * 0.048), 28.8px);
+  height: clamp(12px, calc(var(--banner-height, 180px) * 0.048), 28.8px);
+  flex-shrink: 0;
+  /* No delay for size resizing - instant response */
+  transition: width 0s, height 0s;
 }
 
 .marketplace-hero-title {
-  font-size: 48px;
+  /* Responsive font size: scales proportionally with banner height (16% of height) */
+  font-size: clamp(24px, calc(var(--banner-height, 180px) * 0.16), 96px);
   font-weight: 800;
   color: #ffffff;
   margin: 0;
@@ -301,39 +452,59 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  /* No delay for font size resizing - instant response */
+  transition: font-size 0s;
+  letter-spacing: -0.5px;
 }
 
 .marketplace-hero-subtitle {
-  font-size: 18px;
+  /* Responsive font size: scales proportionally with banner height (5.6% of height) */
+  font-size: clamp(12px, calc(var(--banner-height, 180px) * 0.056), 33.6px);
   color: rgba(255, 255, 255, 0.7);
   margin: 0;
   line-height: 1.6;
+  /* No delay for font size resizing - instant response */
+  transition: font-size 0s;
 }
 
 .marketplace-hero-stats {
   display: flex;
-  gap: 40px;
-  margin-top: 8px;
+  /* Responsive gap: scales proportionally with banner height (12% of height) */
+  gap: clamp(20px, calc(var(--banner-height, 180px) * 0.12), 72px);
+  /* Responsive margin-top: scales proportionally with banner height (1.6% of height) */
+  margin-top: clamp(4px, calc(var(--banner-height, 180px) * 0.016), 9.6px);
+  /* No delay for gap resizing - instant response */
+  transition: gap 0s, margin-top 0s;
 }
 
 .hero-stat {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  /* Responsive gap: scales proportionally with banner height (1.2% of height) */
+  gap: clamp(3px, calc(var(--banner-height, 180px) * 0.012), 7.2px);
+  /* No delay for gap resizing - instant response */
+  transition: gap 0s;
 }
 
 .hero-stat-value {
-  font-size: 32px;
+  /* Responsive font size: scales proportionally with banner height (9.6% of height) */
+  font-size: clamp(20px, calc(var(--banner-height, 180px) * 0.096), 57.6px);
   font-weight: 700;
   color: #ffffff;
+  /* No delay for font size resizing - instant response */
+  transition: font-size 0s;
+  line-height: 1.2;
 }
 
 .hero-stat-label {
-  font-size: 13px;
+  /* Responsive font size: scales proportionally with banner height (4% of height) */
+  font-size: clamp(10px, calc(var(--banner-height, 180px) * 0.04), 24px);
   color: rgba(255, 255, 255, 0.6);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   font-weight: 600;
+  /* No delay for font size resizing - instant response */
+  transition: font-size 0s;
 }
 
 .marketplace-hero-right {
@@ -346,10 +517,14 @@
   background: linear-gradient(135deg, rgba(74, 158, 255, 0.2) 0%, rgba(138, 92, 246, 0.2) 100%);
   border: 2px solid rgba(74, 158, 255, 0.3);
   border-radius: 20px;
-  padding: 32px;
+  /* Responsive padding: scales proportionally with banner height (8% of height) */
+  padding: clamp(16px, calc(var(--banner-height, 180px) * 0.08), 48px);
   width: 100%;
   position: relative;
   overflow: hidden;
+  /* No delay for padding resizing - instant response */
+  transition: padding 0s, transform 0.3s ease, box-shadow 0.3s ease;
+  box-sizing: border-box;
 }
 
 .marketplace-featured-deal::before {
@@ -371,15 +546,33 @@
 .featured-deal-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  /* Responsive gap: scales proportionally with banner height (1.6% of height) */
+  gap: clamp(4px, calc(var(--banner-height, 180px) * 0.016), 9.6px);
+  /* Responsive padding: scales proportionally with banner height */
+  /* Vertical: 1.6% of height (min: 4px at 250px, max: 9.6px at 600px) */
+  /* Horizontal: 3.2% of height (min: 8px at 250px, max: 19.2px at 600px) */
+  padding: clamp(4px, calc(var(--banner-height, 180px) * 0.016), 9.6px) clamp(8px, calc(var(--banner-height, 180px) * 0.032), 19.2px);
   background: rgba(255, 107, 0, 0.2);
   border: 1px solid rgba(255, 107, 0, 0.4);
   border-radius: 12px;
   color: #ff6b00;
-  font-size: 12px;
+  /* Responsive font size: scales proportionally with banner height (3.2% of height) */
+  font-size: clamp(8px, calc(var(--banner-height, 180px) * 0.032), 19.2px);
   font-weight: 600;
-  margin-bottom: 20px;
+  /* Responsive margin: scales proportionally with banner height (6.4% of height) */
+  margin-bottom: clamp(12px, calc(var(--banner-height, 180px) * 0.064), 38.4px);
+  /* No delay for size properties - instant resizing */
+  transition: background 0.3s ease, color 0.3s ease, padding 0s, font-size 0s, margin-bottom 0s, gap 0s;
+  line-height: 1.1;
+}
+
+.featured-deal-badge .deal-badge-icon {
+  /* Responsive icon size: scales proportionally with banner height (4% of height) */
+  width: clamp(10px, calc(var(--banner-height, 180px) * 0.04), 24px);
+  height: clamp(10px, calc(var(--banner-height, 180px) * 0.04), 24px);
+  flex-shrink: 0;
+  /* No delay for size resizing - instant response */
+  transition: width 0s, height 0s;
 }
 
 .featured-deal-content {
@@ -388,42 +581,72 @@
 }
 
 .featured-deal-title {
-  font-size: 16px;
+  /* Responsive font size: scales proportionally with banner height (4.8% of height) */
+  font-size: clamp(12px, calc(var(--banner-height, 180px) * 0.048), 28.8px);
   color: rgba(255, 255, 255, 0.8);
-  margin-bottom: 8px;
+  /* Responsive margin-bottom: scales proportionally with banner height (2.4% of height) */
+  margin-bottom: clamp(6px, calc(var(--banner-height, 180px) * 0.024), 14.4px);
   font-weight: 500;
+  /* No delay for font size resizing - instant response */
+  transition: font-size 0s, margin-bottom 0s;
 }
 
 .featured-deal-discount {
-  font-size: 36px;
+  /* Responsive font size: scales proportionally with banner height (11.2% of height) */
+  font-size: clamp(24px, calc(var(--banner-height, 180px) * 0.112), 67.2px);
   font-weight: 800;
   color: #ffffff;
-  margin-bottom: 12px;
+  /* Responsive margin-bottom: scales proportionally with banner height (3.2% of height) */
+  margin-bottom: clamp(8px, calc(var(--banner-height, 180px) * 0.032), 19.2px);
   background: linear-gradient(135deg, #ff6b00 0%, #ffa500 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  /* No delay for font size resizing - instant response */
+  transition: font-size 0s, margin-bottom 0s;
+  line-height: 1.2;
 }
 
 .featured-deal-desc {
-  font-size: 14px;
+  /* Responsive font size: scales proportionally with banner height (4% of height) */
+  font-size: clamp(11px, calc(var(--banner-height, 180px) * 0.04), 24px);
   color: rgba(255, 255, 255, 0.6);
-  margin-bottom: 24px;
+  /* Responsive margin: scales proportionally with banner height (8% of height) */
+  margin-bottom: clamp(12px, calc(var(--banner-height, 180px) * 0.08), 48px);
+  /* No delay for font size/margin resizing - instant response */
+  transition: font-size 0s, margin-bottom 0s;
+  line-height: 1.4;
 }
 
 .featured-deal-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 24px;
+  /* Responsive gap: scales proportionally with banner height (2.4% of height) */
+  gap: clamp(6px, calc(var(--banner-height, 180px) * 0.024), 14.4px);
+  /* Responsive padding: scales proportionally with banner height */
+  /* Vertical: 3.2% of height (min: 8px at 250px, max: 19.2px at 600px) */
+  /* Horizontal: 6.4% of height (min: 14px at 250px, max: 38.4px at 600px) */
+  padding: clamp(8px, calc(var(--banner-height, 180px) * 0.032), 19.2px) clamp(14px, calc(var(--banner-height, 180px) * 0.064), 38.4px);
   background: linear-gradient(135deg, #4a9eff 0%, #8b5cf6 100%);
   border: none;
   border-radius: 12px;
   color: #ffffff;
-  font-size: 14px;
+  /* Responsive font size: scales proportionally with banner height (4% of height) */
+  font-size: clamp(11px, calc(var(--banner-height, 180px) * 0.04), 24px);
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  /* No delay for size properties - instant resizing, but keep smooth transitions for hover effects */
+  transition: transform 0.3s ease, box-shadow 0.3s ease, padding 0s, font-size 0s, gap 0s;
+  line-height: 1.2;
+}
+
+.featured-deal-btn .deal-btn-icon {
+  /* Responsive icon size: scales proportionally with banner height (4.8% of height) */
+  width: clamp(12px, calc(var(--banner-height, 180px) * 0.048), 28.8px);
+  height: clamp(12px, calc(var(--banner-height, 180px) * 0.048), 28.8px);
+  flex-shrink: 0;
+  /* No delay for size resizing - instant response */
+  transition: width 0s, height 0s;
 }
 
 .featured-deal-btn:hover {
@@ -434,12 +657,23 @@
 /* Live Activity Ticker */
 .marketplace-ticker {
   background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 16px 40px;
+  /* Responsive padding: scales proportionally with content width */
+  /* Vertical: 1.2% of content width (min: 12px, max: 16px) */
+  /* Horizontal: 3.2% of content width (min: 32px, max: 48px) */
+  padding: clamp(12px, calc(var(--content-width, 1020px) * 0.012), 16px) clamp(32px, calc(var(--content-width, 1020px) * 0.032), 48px);
   display: flex;
   align-items: center;
   gap: 24px;
   overflow: hidden;
+  width: 100%;
+  box-sizing: border-box;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  /* No delay for padding resizing - instant response */
+  transition: padding 0s;
 }
 
 .ticker-label {
@@ -500,7 +734,7 @@
 .marketplace-section {
   flex: 1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   overflow: hidden;
   min-width: 0;
 }
@@ -892,31 +1126,16 @@
 
 /* Stats View */
 .marketplace-stats-view {
-  padding: 48px 56px;
-  max-width: 1200px;
+  /* Responsive padding: scales proportionally with content width */
+  /* Vertical: 3.2% of content width (min: 32px, max: 56px) */
+  /* Horizontal: 4.8% of content width (min: 48px, max: 64px) */
+  padding: clamp(32px, calc(var(--content-width, 1020px) * 0.032), 56px) clamp(48px, calc(var(--content-width, 1020px) * 0.048), 64px);
+  max-width: 1400px;
   margin: 0 auto;
   width: 100%;
-}
-
-.stats-view-header {
-  margin-bottom: 48px;
-  padding-bottom: 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.stats-view-title {
-  font-size: 28px;
-  font-weight: 600;
-  color: #ffffff;
-  margin: 0 0 8px 0;
-  letter-spacing: -0.3px;
-}
-
-.stats-view-subtitle {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.5);
-  margin: 0;
-  font-weight: 400;
+  box-sizing: border-box;
+  /* No delay for padding resizing - instant response */
+  transition: padding 0s;
 }
 
 /* Stats Sections */
@@ -1050,112 +1269,20 @@
   color: #ef4444;
 }
 
-/* Petitions Section */
-.petitions-hero {
-  padding: 48px 56px;
-  background: rgba(255, 255, 255, 0.02);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.petitions-hero-content {
-  max-width: 1200px;
-  margin: 0 auto;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 32px;
-}
-
-.petitions-hero-left {
-  max-width: 800px;
-}
-
-.petitions-hero-action {
-  flex-shrink: 0;
-}
-
-.create-petition-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 24px;
-  background: rgba(74, 158, 255, 0.1);
-  border: 1px solid rgba(74, 158, 255, 0.3);
-  color: #4a9eff;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.create-petition-btn:hover {
-  background: rgba(74, 158, 255, 0.2);
-  border-color: rgba(74, 158, 255, 0.5);
-}
-
-@media (max-width: 768px) {
-  .petitions-hero-content {
-    flex-direction: column;
-  }
-  
-  .petitions-hero-action {
-    width: 100%;
-  }
-  
-  .create-petition-btn {
-    width: 100%;
-    justify-content: center;
-  }
-}
-
-.petitions-hero-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: rgba(74, 158, 255, 0.1);
-  border: 1px solid rgba(74, 158, 255, 0.2);
-  color: #4a9eff;
-  font-size: 12px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 24px;
-}
-
-.petitions-hero-title {
-  font-size: 36px;
-  font-weight: 700;
-  color: #ffffff;
-  margin: 0 0 16px 0;
-  line-height: 1.2;
-}
-
-.petitions-hero-subtitle {
-  font-size: 16px;
-  color: rgba(255, 255, 255, 0.6);
-  margin: 0 0 32px 0;
-  line-height: 1.6;
-}
-
-.petitions-hero-stats {
-  display: flex;
-  gap: 48px;
-}
-
-@media (max-width: 768px) {
-  .petitions-hero-stats {
-    flex-direction: column;
-    gap: 24px;
-  }
-}
+/* Petitions Section - Now uses marketplace-hero, so remove old styles */
 
 /* Create Petition Form Container - Centered */
 .create-petition-form-container {
   display: flex;
   justify-content: center;
-  padding: 40px 56px;
+  /* Responsive padding: scales proportionally with content width */
+  /* Vertical: 3.2% of content width (min: 32px, max: 48px) */
+  /* Horizontal: 4.8% of content width (min: 48px, max: 64px) */
+  padding: clamp(32px, calc(var(--content-width, 1020px) * 0.032), 48px) clamp(48px, calc(var(--content-width, 1020px) * 0.048), 64px);
   animation: fadeInUp 0.3s ease;
+  box-sizing: border-box;
+  /* No delay for padding resizing - instant response */
+  transition: padding 0s;
 }
 
 .create-petition-form {
@@ -1164,30 +1291,44 @@
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
-  padding: 32px;
+  /* Responsive padding: scales proportionally with content width */
+  /* 3.14% of content width (min: 28px, max: 36px) */
+  padding: clamp(28px, calc(var(--content-width, 1020px) * 0.0314), 36px);
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  /* Responsive gap: scales proportionally with content width */
+  /* 2.35% of content width (min: 20px, max: 28px) */
+  gap: clamp(20px, calc(var(--content-width, 1020px) * 0.0235), 28px);
+  transition: padding 0s, gap 0s;
 }
 
 .create-petition-form-header {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  /* Responsive gap: scales proportionally with content width */
+  /* 0.78% of content width (min: 6px, max: 10px) */
+  gap: clamp(6px, calc(var(--content-width, 1020px) * 0.0078), 10px);
+  transition: gap 0s;
 }
 
 .create-petition-form-header h2 {
-  font-size: 24px;
+  /* Responsive font-size: scales proportionally with content width */
+  /* 2.35% of content width (min: 22px, max: 28px) */
+  font-size: clamp(22px, calc(var(--content-width, 1020px) * 0.0235), 28px);
   font-weight: 600;
   color: #ffffff;
   margin: 0;
+  transition: font-size 0s;
 }
 
 .create-petition-form .create-petition-description {
-  font-size: 14px;
+  /* Responsive font-size: scales proportionally with content width */
+  /* 1.37% of content width (min: 13px, max: 16px) */
+  font-size: clamp(13px, calc(var(--content-width, 1020px) * 0.0137), 16px);
   color: rgba(255, 255, 255, 0.6);
   margin: 0;
   line-height: 1.5;
+  transition: font-size 0s;
 }
 
 .create-petition-form .petition-games-list {
@@ -1220,7 +1361,13 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 24px;
-  padding: 40px 56px;
+  /* Responsive padding: scales proportionally with content width */
+  /* Vertical: 3.2% of content width (min: 32px, max: 48px) */
+  /* Horizontal: 4.8% of content width (min: 48px, max: 64px) */
+  padding: clamp(32px, calc(var(--content-width, 1020px) * 0.032), 48px) clamp(48px, calc(var(--content-width, 1020px) * 0.048), 64px);
+  box-sizing: border-box;
+  /* No delay for padding resizing - instant response */
+  transition: padding 0s;
 }
 
 @media (max-width: 768px) {
@@ -1392,8 +1539,14 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 80px 40px;
+  /* Responsive padding: scales proportionally with content width */
+  /* Vertical: 6.4% of content width (min: 64px, max: 80px) */
+  /* Horizontal: 3.2% of content width (min: 32px, max: 48px) */
+  padding: clamp(64px, calc(var(--content-width, 1020px) * 0.064), 80px) clamp(32px, calc(var(--content-width, 1020px) * 0.032), 48px);
   text-align: center;
+  box-sizing: border-box;
+  /* No delay for padding resizing - instant response */
+  transition: padding 0s;
 }
 
 .petitions-empty h3 {
@@ -1690,20 +1843,30 @@
 
 .create-petition-actions {
   display: flex;
-  gap: 12px;
+  /* Responsive gap: scales proportionally with content width */
+  /* 1.18% of content width (min: 10px, max: 14px) */
+  gap: clamp(10px, calc(var(--content-width, 1020px) * 0.0118), 14px);
   justify-content: flex-end;
-  padding-top: 16px;
+  /* Responsive padding-top: scales proportionally with content width */
+  /* 1.57% of content width (min: 14px, max: 18px) */
+  padding-top: clamp(14px, calc(var(--content-width, 1020px) * 0.0157), 18px);
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   transform: translateZ(0);
+  transition: gap 0s, padding 0s;
 }
 
 .create-petition-cancel-btn,
 .create-petition-submit-btn {
-  padding: 10px 24px;
-  font-size: 14px;
+  /* Responsive padding: scales proportionally with content width */
+  /* Vertical: 0.98% of content width (min: 8px, max: 12px) */
+  /* Horizontal: 2.35% of content width (min: 20px, max: 28px) */
+  padding: clamp(8px, calc(var(--content-width, 1020px) * 0.0098), 12px) clamp(20px, calc(var(--content-width, 1020px) * 0.0235), 28px);
+  /* Responsive font-size: scales proportionally with content width */
+  /* 1.37% of content width (min: 13px, max: 16px) */
+  font-size: clamp(13px, calc(var(--content-width, 1020px) * 0.0137), 16px);
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s ease, padding 0s, font-size 0s;
   border: 1px solid;
   transform: translateZ(0);
   will-change: transform, background-color, border-color;
@@ -1747,40 +1910,17 @@
   flex-direction: column;
 }
 
-.watchlist-header {
-  padding: 32px 40px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.watchlist-header-content {
-  max-width: 100%;
-}
-
-.watchlist-header-left {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.watchlist-title {
-  font-size: 28px;
-  font-weight: 600;
-  color: #ffffff;
-  margin: 0;
-  letter-spacing: -0.5px;
-}
-
-.watchlist-subtitle {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.5);
-  margin: 0;
-}
-
 .watchlist-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 16px;
-  padding: 24px 40px 40px;
+  /* Responsive padding: scales proportionally with content width */
+  /* Vertical: 2.4% of content width (min: 24px, max: 40px) */
+  /* Horizontal: 3.2% of content width (min: 32px, max: 48px) */
+  padding: clamp(24px, calc(var(--content-width, 1020px) * 0.024), 40px) clamp(32px, calc(var(--content-width, 1020px) * 0.032), 48px);
+  box-sizing: border-box;
+  /* No delay for padding resizing - instant response */
+  transition: padding 0s;
 }
 
 @media (min-width: 1200px) {
@@ -2183,8 +2323,14 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 120px 40px;
+  /* Responsive padding: scales proportionally with content width */
+  /* Vertical: 9.6% of content width (min: 96px, max: 120px) */
+  /* Horizontal: 3.2% of content width (min: 32px, max: 48px) */
+  padding: clamp(96px, calc(var(--content-width, 1020px) * 0.096), 120px) clamp(32px, calc(var(--content-width, 1020px) * 0.032), 48px);
   text-align: center;
+  box-sizing: border-box;
+  /* No delay for padding resizing - instant response */
+  transition: padding 0s;
 }
 
 .watchlist-empty-icon {
@@ -2282,10 +2428,20 @@
 
 .games-selection-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 24px;
-  padding: 32px 40px 40px 40px;
+  /* Responsive grid: scales with content width */
+  /* Min card width: 12% of content width (min: 150px, max: 200px) */
+  /* Max columns: 5 */
+  grid-template-columns: repeat(auto-fill, minmax(clamp(150px, calc(var(--content-width, 1020px) * 0.12), 200px), 1fr));
+  /* Responsive gap: scales with content width (2.4% of width, min: 16px, max: 32px) */
+  gap: clamp(16px, calc(var(--content-width, 1020px) * 0.024), 32px);
+  /* Responsive padding: scales with content width */
+  /* Vertical: 2.4% of width (min: 24px, max: 40px) */
+  /* Horizontal: 3.2% of width (min: 32px, max: 48px) */
+  padding: clamp(24px, calc(var(--content-width, 1020px) * 0.024), 40px) clamp(32px, calc(var(--content-width, 1020px) * 0.032), 48px);
   width: 100%;
+  box-sizing: border-box;
+  /* No delay for gap/padding resizing - instant response */
+  transition: gap 0s, padding 0s;
 }
 
 @media (min-width: 1200px) {
@@ -2306,6 +2462,9 @@
   flex-direction: column;
   cursor: pointer;
   transition: all 0.2s ease;
+  /* Responsive sizing - cards scale with grid */
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* Special outline for top 3 games */
@@ -2351,27 +2510,35 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 20px;
+  /* Responsive gap: scales with content width (2% of width, min: 12px, max: 24px) */
+  gap: clamp(12px, calc(var(--content-width, 1020px) * 0.02), 24px);
   position: relative;
   overflow: hidden;
+  /* No delay for gap resizing - instant response */
+  transition: gap 0s;
 }
 
 .game-select-watch-btn {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  /* Responsive position: scales with content width */
+  /* Top/Right: 1.2% of content width (min: 8px, max: 16px) */
+  top: clamp(8px, calc(var(--content-width, 1020px) * 0.012), 16px);
+  right: clamp(8px, calc(var(--content-width, 1020px) * 0.012), 16px);
   z-index: 20;
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
   border: none;
   cursor: pointer;
-  padding: 8px;
+  /* Responsive padding: scales with content width (0.8% of width, min: 6px, max: 10px) */
+  padding: clamp(6px, calc(var(--content-width, 1020px) * 0.008), 10px);
   border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
   color: rgba(255, 255, 255, 0.9);
+  /* No delay for position/padding resizing - instant response */
+  transition: all 0.2s ease, top 0s, right 0s, padding 0s;
 }
 
 .game-select-watch-btn:hover {
@@ -2412,18 +2579,24 @@
 }
 
 .game-select-name {
-  font-size: 20px;
+  /* Responsive font size: scales with content width (2% of width, min: 16px, max: 24px) */
+  font-size: clamp(16px, calc(var(--content-width, 1020px) * 0.02), 24px);
   font-weight: 700;
   color: #ffffff;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
   margin: 0;
+  /* No delay for font size resizing - instant response */
+  transition: font-size 0s;
 }
 
 .game-select-action {
-  font-size: 13px;
+  /* Responsive font size: scales with content width (1.3% of width, min: 11px, max: 15px) */
+  font-size: clamp(11px, calc(var(--content-width, 1020px) * 0.013), 15px);
   color: rgba(255, 255, 255, 0.8);
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
   margin: 0;
+  /* No delay for font size resizing - instant response */
+  transition: font-size 0s;
 }
 
 .game-select-card:hover {
@@ -2434,7 +2607,10 @@
 /* Market Info Bar */
 .game-select-market-bar {
   background: rgba(0, 0, 0, 0.8);
-  padding: 14px 30px;
+  /* Responsive padding: scales with content width */
+  /* Vertical: 1.4% of width (min: 10px, max: 18px) */
+  /* Horizontal: 3% of width (min: 20px, max: 36px) */
+  padding: clamp(10px, calc(var(--content-width, 1020px) * 0.014), 18px) clamp(20px, calc(var(--content-width, 1020px) * 0.03), 36px);
   width: 100%;
   display: flex;
   align-items: center;
@@ -2442,48 +2618,78 @@
   position: relative;
   z-index: 10;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
+  /* No delay for padding resizing - instant response */
+  transition: padding 0s;
+  box-sizing: border-box;
 }
 
 .game-select-market-stat {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  /* Responsive gap: scales with content width (0.3% of width, min: 2px, max: 4px) */
+  gap: clamp(2px, calc(var(--content-width, 1020px) * 0.003), 4px);
   align-items: center;
   flex: 1;
   min-width: 0;
+  /* No delay for gap resizing - instant response */
+  transition: gap 0s;
 }
 
 .game-select-market-stat:not(:last-child) {
   border-right: 1px solid rgba(255, 255, 255, 0.05);
-  padding-right: 24px;
+  /* Responsive padding-right: scales with content width (2.4% of width, min: 16px, max: 28px) */
+  padding-right: clamp(16px, calc(var(--content-width, 1020px) * 0.024), 28px);
+  /* No delay for padding resizing - instant response */
+  transition: padding-right 0s;
 }
 
 .game-select-market-stat:not(:first-child) {
-  padding-left: 24px;
+  /* Responsive padding-left: scales with content width (2.4% of width, min: 16px, max: 28px) */
+  padding-left: clamp(16px, calc(var(--content-width, 1020px) * 0.024), 28px);
+  /* No delay for padding resizing - instant response */
+  transition: padding-left 0s;
 }
 
 .game-select-market-stat-value {
-  font-size: 16px;
+  /* Responsive font size: scales with content width (1.6% of width, min: 12px, max: 20px) */
+  font-size: clamp(12px, calc(var(--content-width, 1020px) * 0.016), 20px);
   font-weight: 700;
   color: #ffffff;
   line-height: 1;
   display: flex;
   align-items: center;
+  /* No delay for font size resizing - instant response */
+  transition: font-size 0s;
 }
 
 .game-select-market-stat-label {
-  font-size: 8px;
+  /* Responsive font size: scales with content width (0.8% of width, min: 7px, max: 10px) */
+  font-size: clamp(7px, calc(var(--content-width, 1020px) * 0.008), 10px);
   color: rgba(255, 255, 255, 0.4);
   text-transform: uppercase;
   letter-spacing: 0.8px;
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
+  /* No delay for font size resizing - instant response */
+  transition: font-size 0s;
 }
 
 .game-select-icon {
   font-size: 64px;
   opacity: 0.3;
+}
+
+.game-select-bottom-content {
+  position: absolute;
+  /* Responsive position: scales with content width */
+  /* Bottom/Left/Right: 1.2% of content width (min: 8px, max: 16px) */
+  bottom: clamp(8px, calc(var(--content-width, 1020px) * 0.012), 16px);
+  left: clamp(8px, calc(var(--content-width, 1020px) * 0.012), 16px);
+  right: clamp(8px, calc(var(--content-width, 1020px) * 0.012), 16px);
+  z-index: 2;
+  /* No delay for position resizing - instant response */
+  transition: bottom 0s, left 0s, right 0s;
 }
 
 /* Add gradient overlay for better text readability */
@@ -2635,6 +2841,7 @@
   background: var(--bg-primary);
   width: 100%;
   min-width: 0;
+  position: relative;
 }
 
 /* Market Stats Bar */
@@ -2940,43 +3147,69 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 24px;
+  /* Responsive padding: scales proportionally with content width */
+  /* Vertical: 5.9% of content width (min: 50px, max: 70px) */
+  /* Horizontal: 2.35% of content width (min: 20px, max: 28px) */
+  padding: clamp(50px, calc(var(--content-width, 1020px) * 0.059), 70px) clamp(20px, calc(var(--content-width, 1020px) * 0.0235), 28px);
   text-align: center;
+  transition: padding 0s;
 }
 
 .empty-state-icon {
-  font-size: 64px;
-  margin-bottom: 16px;
+  /* Responsive font-size: scales proportionally with content width */
+  /* 6.27% of content width (min: 56px, max: 72px) */
+  font-size: clamp(56px, calc(var(--content-width, 1020px) * 0.0627), 72px);
+  /* Responsive margin-bottom: scales proportionally with content width */
+  /* 1.57% of content width (min: 14px, max: 18px) */
+  margin-bottom: clamp(14px, calc(var(--content-width, 1020px) * 0.0157), 18px);
   opacity: 0.5;
+  transition: font-size 0s, margin 0s;
 }
 
 .empty-state-title {
-  font-size: 18px;
+  /* Responsive font-size: scales proportionally with content width */
+  /* 1.76% of content width (min: 16px, max: 20px) */
+  font-size: clamp(16px, calc(var(--content-width, 1020px) * 0.0176), 20px);
   font-weight: 600;
   color: #ffffff;
-  margin: 0 0 8px 0;
+  /* Responsive margin-bottom: scales proportionally with content width */
+  /* 0.78% of content width (min: 6px, max: 10px) */
+  margin: 0 0 clamp(6px, calc(var(--content-width, 1020px) * 0.0078), 10px) 0;
+  transition: font-size 0s, margin 0s;
   letter-spacing: -0.3px;
 }
 
 .empty-state-description {
-  font-size: 13px;
+  /* Responsive font-size: scales proportionally with content width */
+  /* 1.27% of content width (min: 12px, max: 15px) */
+  font-size: clamp(12px, calc(var(--content-width, 1020px) * 0.0127), 15px);
   color: rgba(255, 255, 255, 0.5);
-  margin: 0 0 24px 0;
+  /* Responsive margin-bottom: scales proportionally with content width */
+  /* 2.35% of content width (min: 20px, max: 28px) */
+  margin: 0 0 clamp(20px, calc(var(--content-width, 1020px) * 0.0235), 28px) 0;
+  transition: font-size 0s, margin 0s;
 }
 
 .empty-state-action-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
+  /* Responsive gap: scales proportionally with content width */
+  /* 0.78% of content width (min: 6px, max: 10px) */
+  gap: clamp(6px, calc(var(--content-width, 1020px) * 0.0078), 10px);
+  /* Responsive padding: scales proportionally with content width */
+  /* Vertical: 0.98% of content width (min: 8px, max: 12px) */
+  /* Horizontal: 1.96% of content width (min: 18px, max: 24px) */
+  padding: clamp(8px, calc(var(--content-width, 1020px) * 0.0098), 12px) clamp(18px, calc(var(--content-width, 1020px) * 0.0196), 24px);
   background: rgba(74, 158, 255, 0.1);
   color: #4a9eff;
   border: 1px solid rgba(74, 158, 255, 0.3);
   border-radius: 0;
-  font-size: 13px;
+  /* Responsive font-size: scales proportionally with content width */
+  /* 1.27% of content width (min: 12px, max: 15px) */
+  font-size: clamp(12px, calc(var(--content-width, 1020px) * 0.0127), 15px);
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.15s ease, gap 0s, padding 0s, font-size 0s;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }

@@ -1,6 +1,6 @@
 /* Title Bar - Modern Design */
 .title-bar {
-  height: 40px;
+  height: 32px;
   background: var(--bg-primary);
   border: none;
   display: flex;
@@ -24,27 +24,26 @@
   align-items: center;
   gap: 0px;
   -webkit-app-region: no-drag;
-  padding-left: 8px;
 }
 
 .title-bar-logo-wrapper {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 2px 6px;
   border-radius: 4px;
   transition: background 0.2s ease;
   -webkit-app-region: no-drag;
 }
 
 .title-bar-logo-wrapper:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: transparent;
 }
 
 .title-bar-logo {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   background: transparent;
   color: #ffffff;
   border-radius: 0;
@@ -52,7 +51,7 @@
   align-items: center;
   justify-content: center;
   font-weight: 800;
-  font-size: 18px;
+  font-size: 15px;
   flex-shrink: 0;
   overflow: visible;
   position: relative;
@@ -63,7 +62,7 @@
 }
 
 .title-bar-logo-text {
-  font-size: 14px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.25px;
@@ -138,8 +137,8 @@
 }
 
 .title-bar-button {
-  width: 46px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   background: transparent;
   border: none;
   color: var(--text-secondary);
@@ -149,12 +148,13 @@
   cursor: pointer;
   transition: var(--transition);
   border-radius: 0;
+  aspect-ratio: 1;
 }
 
 .title-bar-button.nav-arrow {
   /* Make nav arrows square - same width and height */
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   aspect-ratio: 1;
 }
 
@@ -186,12 +186,12 @@
 }
 
 .title-bar-menu-button {
-  height: 40px;
+  height: 32px;
   padding: 0 12px;
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.2s ease, color 0.2s ease;
@@ -217,22 +217,22 @@
   left: 0;
   background: var(--bg-secondary, rgba(20, 22, 27, 0.98));
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
+  border-radius: 0;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   min-width: 180px;
   z-index: 10002;
   margin-top: 2px;
   overflow: hidden;
   backdrop-filter: blur(12px);
-  padding: 4px 0;
+  padding: 2px 0;
 }
 
 .title-bar-menu-item {
-  padding: 8px 16px;
+  padding: 6px 12px;
   color: var(--text-primary);
   cursor: pointer;
   transition: background 0.15s ease;
-  font-size: 13px;
+  font-size: 11px;
   white-space: nowrap;
   display: flex;
   align-items: center;
@@ -245,12 +245,12 @@
 .title-bar-menu-divider {
   height: 1px;
   background: rgba(255, 255, 255, 0.1);
-  margin: 4px 8px;
+  margin: 2px 8px;
 }
 
 .title-bar-separator {
   width: 1px;
-  height: 24px;
+  height: 20px;
   background: rgba(255, 255, 255, 0.1);
   margin: 0 4px;
   flex-shrink: 0;
@@ -281,8 +281,8 @@
   }
   
   .title-bar-button {
-    width: 40px;
-    height: 40px;
+    width: 32px;
+    height: 32px;
   }
 }
 
@@ -310,7 +310,7 @@
   }
   
   .title-bar-button {
-    width: 36px;
-    height: 40px;
+    width: 28px;
+    height: 28px;
   }
 }

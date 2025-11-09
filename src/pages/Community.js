@@ -33,26 +33,144 @@ const Community = () => {
   const pickerRef = React.useRef(null);
   const [pickerQuery, setPickerQuery] = React.useState('');
   
+  // Post type dropdown state
+  const [postTypeDropdownOpen, setPostTypeDropdownOpen] = React.useState(false);
+  const postTypeDropdownRef = React.useRef(null);
+
   // Thread creation state
   const [threadTitle, setThreadTitle] = React.useState('');
   const [threadDescription, setThreadDescription] = React.useState('');
   const [threadGame, setThreadGame] = React.useState('all');
+  const [threadType, setThreadType] = React.useState('discussion'); // discussion, gaming, art, music, tech, fitness, cooking, travel, photography, books
+  const [threadImage, setThreadImage] = React.useState('');
   const [showThreadCreator, setShowThreadCreator] = React.useState(false);
   const [selectedThreadId, setSelectedThreadId] = React.useState(null);
   const [threadSearchQuery, setThreadSearchQuery] = React.useState('');
-  const [postContent, setPostContent] = React.useState('');
+  const [threadTypeDropdownOpen, setThreadTypeDropdownOpen] = React.useState(false);
+  const threadTypeDropdownRef = React.useRef(null);
 
-  // Right sidebar resizing state
-  const [communityRightSidebarWidth, setCommunityRightSidebarWidth] = React.useState(() => {
+  // Close post type dropdown when clicking outside
+  React.useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (postTypeDropdownRef.current && !postTypeDropdownRef.current.contains(event.target)) {
+        setPostTypeDropdownOpen(false);
+      }
+      if (threadTypeDropdownRef.current && !threadTypeDropdownRef.current.contains(event.target)) {
+        setThreadTypeDropdownOpen(false);
+      }
+    };
+    if (postTypeDropdownOpen || threadTypeDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [postTypeDropdownOpen, threadTypeDropdownOpen]);
+  const [postContent, setPostContent] = React.useState('');
+  const [postType, setPostType] = React.useState('text'); // text, speedrun, achievement, screenshot, image-text, video, build, discussion, meme, review, tournament
+  const [postImage, setPostImage] = React.useState('');
+  const [postVideo, setPostVideo] = React.useState('');
+  const [postRating, setPostRating] = React.useState(5);
+  const [postTime, setPostTime] = React.useState({ h: 0, m: 0, s: 0, ms: 0 });
+  const [postTitle, setPostTitle] = React.useState('');
+  const [showPostForm, setShowPostForm] = React.useState(false);
+
+  // Window width for responsive sidebar sizing
+  const [windowWidth, setWindowWidth] = React.useState(() => {
+    return typeof window !== 'undefined' ? window.innerWidth : 1120;
+  });
+
+  // Left sidebar resizing state
+  const [communityLeftSidebarWidth, setCommunityLeftSidebarWidth] = React.useState(() => {
     try {
-      const saved = localStorage.getItem('communityRightSidebarWidth');
-      return saved ? parseInt(saved, 10) : 260;
+      const saved = localStorage.getItem('sidebarWidth');
+      return saved ? parseInt(saved, 10) : 200;
     } catch (_) {
-      return 260;
+      return 200;
     }
   });
-  const [isRightSidebarResizing, setIsRightSidebarResizing] = React.useState(false);
-  const rightSidebarResizeRef = useRef(null);
+
+  // Calculate responsive left sidebar width based on window size
+  // Sidebar only increases by max 50px (200px min, 250px max)
+  // Content area is the main focus and should resize based on window size
+  const responsiveLeftSidebarWidth = React.useMemo(() => {
+    const minWidth = 200; // Base size - not too big, not too small
+    const maxWidth = 250; // Only 50px increase from min
+    // Scale based on window width - more conservative scaling
+    // At minimum window (1120px): use minWidth
+    // At larger windows: gradually increase up to maxWidth
+    const windowMin = 1120;
+    const windowMax = 1920;
+    const normalizedWidth = Math.min(1, Math.max(0, (windowWidth - windowMin) / (windowMax - windowMin)));
+    const calculatedWidth = minWidth + (normalizedWidth * (maxWidth - minWidth));
+    return Math.max(minWidth, Math.min(maxWidth, calculatedWidth));
+  }, [windowWidth]);
+
+  // Content width for smart resizing (window width minus left sidebar only)
+  // Content area is the main focus - should use most of the window width
+  const [contentWidth, setContentWidth] = React.useState(() => {
+    // Default to 1080px (1280px min app width - 200px left sidebar)
+    // Content should be the main resizing element
+    return typeof window !== 'undefined' ? Math.max(1080, window.innerWidth - 200) : 1080;
+  });
+
+  // Track window size changes
+  React.useEffect(() => {
+    const updateWindowSize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+    
+    const updateContentWidth = () => {
+      // Calculate available content width (window width - left sidebar only)
+      // Content is the main focus - should use most of available space
+      // Use current left sidebar width state (can be up to 250px max)
+      const leftSidebarWidth = communityLeftSidebarWidth || 200;
+      // Ensure minimum content width for readability (1030px accounts for max sidebar of 250px)
+      const newContentWidth = Math.max(1030, window.innerWidth - leftSidebarWidth);
+      setContentWidth(newContentWidth);
+    };
+    
+    updateWindowSize();
+    updateContentWidth();
+    window.addEventListener('resize', () => {
+      updateWindowSize();
+      updateContentWidth();
+    });
+    // Listen for sidebar resize events
+    window.addEventListener('sidebar-resize', updateContentWidth);
+    return () => {
+      window.removeEventListener('resize', updateWindowSize);
+      window.removeEventListener('resize', updateContentWidth);
+      window.removeEventListener('sidebar-resize', updateContentWidth);
+    };
+  }, [communityLeftSidebarWidth]);
+
+  // Calculate banner height based on content width (maintain aspect ratio)
+  // Use 20% of content width, clamped between 180px and 600px
+  const bannerHeight = React.useMemo(() => {
+    return Math.max(180, Math.min(600, contentWidth * 0.20));
+  }, [contentWidth]);
+
+
+  // Auto-adjust left sidebar width based on window size
+  React.useEffect(() => {
+    if (responsiveLeftSidebarWidth) {
+      setCommunityLeftSidebarWidth(prevWidth => {
+        const newWidth = responsiveLeftSidebarWidth;
+        if (Math.abs(prevWidth - newWidth) > 0.1) {
+          // Update localStorage asynchronously to avoid blocking
+          setTimeout(() => {
+            try {
+              localStorage.setItem('sidebarWidth', newWidth.toString());
+            } catch (_) {}
+          }, 0);
+          return newWidth;
+        }
+        return prevWidth;
+      });
+    }
+  }, [windowWidth, responsiveLeftSidebarWidth]);
+
 
   // Game notification preferences - structure: { gameId: { posts: boolean, threads: boolean, workshop: boolean } }
   const [gameNotifications, setGameNotifications] = React.useState(() => {
@@ -93,14 +211,18 @@ const Community = () => {
         g.card || g.cardImage || g.fullFormData?.cardImage ||
         g.fullFormData?.card || g.metadata?.cardImage || g.files?.card?.path || null
       );
+      const getBanner = (g) => (
+        g.banner || g.bannerImage || g.fullFormData?.bannerImage ||
+        g.fullFormData?.banner || g.metadata?.bannerImage || g.files?.banner?.path || null
+      );
       const getLogo = (g) => (
         g.gameLogo || g.logo || g.fullFormData?.gameLogo || g.fullFormData?.titleImage || g.titleImage || g.title || null
       );
       const customs = publishedGames.map(g => ({
         id: g.gameId,
         name: g.name || g.gameName || g.id,
-        banner: null,
-        card: getCard(g) || g.banner || g.bannerImage || null,
+        banner: getBanner(g),
+        card: getCard(g) || getBanner(g) || null,
         logo: getLogo(g)
       }));
       list = [...list, ...customs];
@@ -209,6 +331,8 @@ const Community = () => {
       title: threadTitle,
       description: threadDescription,
       game: threadGame === 'all' ? null : threadGame,
+      type: threadType,
+      image: threadImage || null,
       author: 'You',
       time: 'just now',
       createdAt: Date.now(),
@@ -252,14 +376,25 @@ const Community = () => {
     setThreadTitle('');
     setThreadDescription('');
     setThreadGame('all');
+    setThreadType('discussion');
+    setThreadImage('');
     setShowThreadCreator(false);
   };
 
   const handleCreatePost = () => {
-    if (!postContent.trim()) return;
+    if (!postContent.trim() && !postImage && !postVideo) return;
     const newPost = {
       id: Date.now(),
+      type: postType,
       text: postContent,
+      image: postImage || null,
+      video: postVideo || null,
+      title: postTitle || null,
+      rating: postType === 'review' ? postRating : null,
+      h: postType === 'speedrun' ? postTime.h : null,
+      m: postType === 'speedrun' ? postTime.m : null,
+      s: postType === 'speedrun' ? postTime.s : null,
+      ms: postType === 'speedrun' ? postTime.ms : null,
       game: postsGame === 'all' ? null : postsGame,
       author: 'You',
       time: 'just now',
@@ -303,6 +438,13 @@ const Community = () => {
     }
     
     setPostContent('');
+    setPostImage('');
+    setPostVideo('');
+    setPostType('text');
+    setPostRating(5);
+    setPostTime({ h: 0, m: 0, s: 0, ms: 0 });
+    setPostTitle('');
+    setShowPostForm(false);
   };
 
   // Close picker when clicking outside
@@ -318,80 +460,15 @@ const Community = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [pickerOpen]);
 
-  // Right sidebar resize handlers
-  const handleRightSidebarResizeStart = (e) => {
-    setIsRightSidebarResizing(true);
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  React.useEffect(() => {
-    if (!isRightSidebarResizing) return;
-
-    const handleResize = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const windowWidth = window.innerWidth;
-      const clientX = e.clientX !== undefined ? e.clientX : windowWidth;
-      const newWidth = windowWidth - clientX;
-      const minWidth = 180;
-      const maxWidth = 400;
-      
-      // Clamp to boundaries
-      const clampedWidth = Math.max(minWidth, Math.min(maxWidth, newWidth));
-      setCommunityRightSidebarWidth(clampedWidth);
-    };
-
-    const handleResizeEnd = (e) => {
-      if (e) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-      setIsRightSidebarResizing(false);
-      // Save to localStorage only at the end
-      try {
-        localStorage.setItem('communityRightSidebarWidth', communityRightSidebarWidth.toString());
-      } catch (_) {}
-    };
-
-    const handleMouseLeave = () => {
-      // When mouse leaves window, clamp to boundaries
-      const minWidth = 180;
-      const maxWidth = 400;
-      const currentWidth = communityRightSidebarWidth;
-      const clampedWidth = Math.max(minWidth, Math.min(maxWidth, currentWidth));
-      if (clampedWidth !== currentWidth) {
-        setCommunityRightSidebarWidth(clampedWidth);
-      }
-    };
-
-    // Use capture phase to ensure we catch events even outside the window
-    document.addEventListener('mousemove', handleResize, true);
-    document.addEventListener('mouseup', handleResizeEnd, true);
-    window.addEventListener('mouseup', handleResizeEnd, true);
-    window.addEventListener('mouseleave', handleMouseLeave);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-
-    return () => {
-      document.removeEventListener('mousemove', handleResize, true);
-      document.removeEventListener('mouseup', handleResizeEnd, true);
-      window.removeEventListener('mouseup', handleResizeEnd, true);
-      window.removeEventListener('mouseleave', handleMouseLeave);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-    };
-  }, [isRightSidebarResizing, communityRightSidebarWidth]);
 
   return (
     <div className="community">
       <div className="community-layout-3">
         {/* Left: Filters */}
-        <aside className="community-left">
+        <aside className="community-left" style={{ '--sidebar-width': `${communityLeftSidebarWidth}px`, width: `${communityLeftSidebarWidth}px` }}>
           <div className="community-left-content">
             {/* CHOOSE GAME Filter - Keep this design exactly as is */}
-            <div className="comm-filter-group">
-              <div className="comm-filter-label">Choose game</div>
+            <div className="comm-filter-group" style={{ paddingLeft: '0', paddingRight: '0', marginTop: '0' }}>
               <div className="comm-game-picker" ref={pickerRef}>
                 <button className="comm-picker-btn" onClick={() => setPickerOpen(!pickerOpen)}>
                   <div className="comm-picker-card">
@@ -458,27 +535,81 @@ const Community = () => {
                           )}
                           <span className="comm-picker-name">{g.name}</span>
                           {g.id !== 'all' && (
-                            <div className="comm-picker-notifications">
+                            <div className="comm-picker-notifications" onClick={(e) => e.stopPropagation()}>
                               <button
-                                className={`comm-picker-notification-toggle ${gameNotifications[g.id]?.posts ? 'enabled' : ''}`}
-                                onClick={(e) => toggleGameNotification(g.id, 'posts', e)}
-                                title={gameNotifications[g.id]?.posts ? 'Disable game posts notifications' : 'Enable game posts notifications'}
+                                className="comm-picker-notification-toggle"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleGameNotification(g.id, 'posts', e);
+                                }}
+                                style={{
+                                  background: gameNotifications[g.id]?.posts
+                                    ? 'rgba(74, 158, 255, 0.15)'
+                                    : 'transparent',
+                                  border: gameNotifications[g.id]?.posts
+                                    ? '1px solid rgba(74, 158, 255, 0.3)'
+                                    : '1px solid rgba(255, 255, 255, 0.1)',
+                                  color: gameNotifications[g.id]?.posts
+                                    ? '#4a9eff'
+                                    : 'rgba(255, 255, 255, 0.4)'
+                                }}
+                                title="Posts notifications"
                               >
-                                <MessageSquare size={12} />
+                                <Bell size={12} style={{ 
+                                  color: gameNotifications[g.id]?.posts
+                                    ? '#4a9eff'
+                                    : 'rgba(255, 255, 255, 0.4)'
+                                }} />
                               </button>
                               <button
-                                className={`comm-picker-notification-toggle ${gameNotifications[g.id]?.threads ? 'enabled' : ''}`}
-                                onClick={(e) => toggleGameNotification(g.id, 'threads', e)}
-                                title={gameNotifications[g.id]?.threads ? 'Disable community threads notifications' : 'Enable community threads notifications'}
+                                className="comm-picker-notification-toggle"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleGameNotification(g.id, 'threads', e);
+                                }}
+                                style={{
+                                  background: gameNotifications[g.id]?.threads
+                                    ? 'rgba(74, 158, 255, 0.15)'
+                                    : 'transparent',
+                                  border: gameNotifications[g.id]?.threads
+                                    ? '1px solid rgba(74, 158, 255, 0.3)'
+                                    : '1px solid rgba(255, 255, 255, 0.1)',
+                                  color: gameNotifications[g.id]?.threads
+                                    ? '#4a9eff'
+                                    : 'rgba(255, 255, 255, 0.4)'
+                                }}
+                                title="Threads notifications"
                               >
-                                <Users size={12} />
+                                <Bell size={12} style={{ 
+                                  color: gameNotifications[g.id]?.threads
+                                    ? '#4a9eff'
+                                    : 'rgba(255, 255, 255, 0.4)'
+                                }} />
                               </button>
                               <button
-                                className={`comm-picker-notification-toggle ${gameNotifications[g.id]?.workshop ? 'enabled' : ''}`}
-                                onClick={(e) => toggleGameNotification(g.id, 'workshop', e)}
-                                title={gameNotifications[g.id]?.workshop ? 'Disable workshop notifications' : 'Enable workshop notifications'}
+                                className="comm-picker-notification-toggle"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleGameNotification(g.id, 'workshop', e);
+                                }}
+                                style={{
+                                  background: gameNotifications[g.id]?.workshop
+                                    ? 'rgba(74, 158, 255, 0.15)'
+                                    : 'transparent',
+                                  border: gameNotifications[g.id]?.workshop
+                                    ? '1px solid rgba(74, 158, 255, 0.3)'
+                                    : '1px solid rgba(255, 255, 255, 0.1)',
+                                  color: gameNotifications[g.id]?.workshop
+                                    ? '#4a9eff'
+                                    : 'rgba(255, 255, 255, 0.4)'
+                                }}
+                                title="Workshop notifications"
                               >
-                                <Package size={12} />
+                                <Bell size={12} style={{ 
+                                  color: gameNotifications[g.id]?.workshop
+                                    ? '#4a9eff'
+                                    : 'rgba(255, 255, 255, 0.4)'
+                                }} />
                               </button>
                             </div>
                           )}
@@ -490,126 +621,366 @@ const Community = () => {
               </div>
             </div>
 
-            {/* Notification Toggles - Show when a game is selected */}
-            {((selectedTab === 'posts' && postsGame !== 'all') || (selectedTab === 'workshop' && workshopGame !== 'all')) && (
-              <div className="comm-notification-toggles">
-                {selectedTab === 'posts' && !showThreads && (
+            {/* Content Navigation - Posts, Threads, Workshop */}
+            <div className="comm-filter-group">
+              <h3 className="sidebar-section-title">Content</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'clamp(8px, calc(var(--window-width, 1120px) * 0.0071), 12px)' }}>
                   <button
-                    className={`comm-notification-toggle ${gameNotifications[postsGame]?.posts ? 'enabled' : ''}`}
-                    onClick={(e) => toggleGameNotification(postsGame, 'posts', e)}
-                    title={gameNotifications[postsGame]?.posts ? 'Disable game posts notifications' : 'Enable game posts notifications'}
-                  >
-                    <MessageSquare size={14} />
-                    <span>Notify me about new game posts</span>
-                  </button>
-                )}
-                {selectedTab === 'posts' && showThreads && (
-                  <button
-                    className={`comm-notification-toggle ${gameNotifications[postsGame]?.threads ? 'enabled' : ''}`}
-                    onClick={(e) => toggleGameNotification(postsGame, 'threads', e)}
-                    title={gameNotifications[postsGame]?.threads ? 'Disable community threads notifications' : 'Enable community threads notifications'}
-                  >
-                    <Users size={14} />
-                    <span>Notify me about new community threads</span>
-                  </button>
-                )}
-                {selectedTab === 'workshop' && (
-                  <button
-                    className={`comm-notification-toggle ${gameNotifications[workshopGame]?.workshop ? 'enabled' : ''}`}
-                    onClick={(e) => toggleGameNotification(workshopGame, 'workshop', e)}
-                    title={gameNotifications[workshopGame]?.workshop ? 'Disable workshop notifications' : 'Enable workshop notifications'}
-                  >
-                    <Package size={14} />
-                    <span>Notify me about new workshop items</span>
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Thread Creation - Only show when threads view is active */}
-            {selectedTab === 'posts' && showThreads && (
-              <div className="comm-thread-creation">
-                <button 
-                  className="comm-create-thread-btn" 
-                  onClick={() => setShowThreadCreator(!showThreadCreator)}
+                  className={`sidebar-nav-item ${selectedTab === 'posts' && !showThreads ? 'active' : ''}`}
+                  onClick={() => {
+                    setSelectedTab('posts');
+                    setShowThreads(false);
+                  }}
+                  style={{ width: '100%', justifyContent: 'flex-start' }}
                 >
-                  <Plus size={16} />
-                  <span>{showThreadCreator ? 'Cancel' : 'Create Community Thread'}</span>
-                </button>
-                {showThreadCreator && (
-                  <div className="comm-thread-form">
-                    <input
-                      className="comm-thread-title-input"
-                      placeholder="Community thread name..."
-                      value={threadTitle}
-                      onChange={(e) => setThreadTitle(e.target.value)}
-                    />
-                    <textarea
-                      className="comm-thread-description-input"
-                      placeholder="Description (optional)..."
-                      value={threadDescription}
-                      onChange={(e) => setThreadDescription(e.target.value)}
-                      rows={3}
-                    />
-                    <select
-                      className="comm-thread-game-select"
-                      value={threadGame}
-                      onChange={(e) => setThreadGame(e.target.value)}
-                    >
-                      <option value="all">No game</option>
-                      {gameList.filter(g => g.id !== 'all').map(game => (
-                        <option key={game.id} value={game.id}>{game.name}</option>
-                      ))}
-                    </select>
-                    <button className="comm-thread-submit-btn" onClick={handleCreateThread}>
-                      Create Community Thread
-                    </button>
-                  </div>
-                )}
+                  <MessageSquare size={18} />
+                  <span>Posts</span>
+                  </button>
+                  <button
+                  className={`sidebar-nav-item ${selectedTab === 'posts' && showThreads ? 'active' : ''}`}
+                  onClick={() => {
+                    setSelectedTab('posts');
+                    setShowThreads(true);
+                  }}
+                  style={{ width: '100%', justifyContent: 'flex-start' }}
+                >
+                  <Users size={18} />
+                  <span>Threads</span>
+                  </button>
+                  <button
+                  className={`sidebar-nav-item ${selectedTab === 'workshop' ? 'active' : ''}`}
+                  onClick={() => setSelectedTab('workshop')}
+                  style={{ width: '100%', justifyContent: 'flex-start' }}
+                >
+                  <Package size={18} />
+                  <span>Workshop</span>
+                  </button>
               </div>
-            )}
+                        </div>
 
-            {/* Stats Section */}
-            <div className="comm-stats-section">
-              <div className="comm-stats-row">
-                <div className="comm-stat">
-                  <div className="comm-stat-num">{savedSet.size}</div>
-                  <div className="comm-stat-label">saved</div>
-                </div>
-                <div className="comm-stat">
-                  <div className="comm-stat-num">{sortedPosts.length}</div>
-                  <div className="comm-stat-label">game posts</div>
-                </div>
-              </div>
-            </div>
-          </div>
+
+                  </div>
         </aside>
 
         {/* Center: Feed */}
         <main className="community-center">
-          <div className="comm-header">
-            <div className="comm-title">
-              {selectedTab === 'workshop'
-                ? (workshopGame === 'all' ? 'All Workshop' : `${workshopGame} Workshop`)
-                : showThreads
-                ? 'All Community Threads'
-                : (postsGame === 'all' ? 'All Communities' : `${postsGame} Community`)
-              }
+          <div className="marketplace-content">
+            {/* Hero Sections */}
+            {selectedTab === 'workshop' ? (
+              <div 
+                className="marketplace-hero"
+                style={{ 
+                  '--content-width': `${contentWidth}px`,
+                  '--banner-height': `${bannerHeight}px`,
+                  height: `${bannerHeight}px`,
+                  backgroundImage: workshopGame !== 'all' && gameList.find(g => g.id === workshopGame)?.banner 
+                    ? `url(${gameList.find(g => g.id === workshopGame).banner})` 
+                    : undefined,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  backgroundRepeat: 'no-repeat'
+                }}
+              >
+                <div className="marketplace-hero-content">
+                  <div className="marketplace-hero-left">
+                    <h1 className="marketplace-hero-title">
+                      {workshopGame !== 'all' 
+                        ? `${gameList.find(g => g.id === workshopGame)?.name || workshopGame}: Workshop`
+                        : 'Workshop'
+                      }
+                    </h1>
+                    <p className="marketplace-hero-subtitle">Browse and share community-created content for your favorite games.</p>
+                    <div className="marketplace-hero-stats">
+                      <div className="hero-stat">
+                        <div className="hero-stat-value">{sortedPosts.length}</div>
+                        <div className="hero-stat-label">Items</div>
+              </div>
             </div>
-            <div className="comm-subtitle">
-              {selectedTab === 'workshop'
-                ? 'Browse community content'
-                : showThreads
-                ? `${sortedThreads.length} community threads • sorted by popularity`
-                : `${sortedPosts.length} game posts • sorted by ${postsSortBy}`
-              }
+                  </div>
+                  <div className="marketplace-hero-right">
+                    {workshopGame !== 'all' && (
+                <button 
+                        className="featured-deal-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleGameNotification(workshopGame, 'workshop', e);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          background: gameNotifications[workshopGame]?.workshop 
+                            ? 'rgba(74, 158, 255, 0.2)' 
+                            : 'rgba(255, 255, 255, 0.1)',
+                          border: gameNotifications[workshopGame]?.workshop 
+                            ? '1px solid rgba(74, 158, 255, 0.4)' 
+                            : '1px solid rgba(255, 255, 255, 0.2)'
+                        }}
+                      >
+                        <Bell size={18} style={{ color: gameNotifications[workshopGame]?.workshop ? '#4a9eff' : 'rgba(255, 255, 255, 0.8)' }} />
+                        <span>{gameNotifications[workshopGame]?.workshop ? 'Notifications On' : 'Notifications Off'}</span>
+                </button>
+                )}
+                  </div>
+                </div>
+              </div>
+            ) : showThreads ? (
+              <div 
+                className="marketplace-hero"
+                style={{ 
+                  '--content-width': `${contentWidth}px`,
+                  '--banner-height': `${bannerHeight}px`,
+                  height: `${bannerHeight}px`,
+                  backgroundImage: postsGame !== 'all' && gameList.find(g => g.id === postsGame)?.banner 
+                    ? `url(${gameList.find(g => g.id === postsGame).banner})` 
+                    : undefined,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  backgroundRepeat: 'no-repeat'
+                }}
+              >
+                <div className="marketplace-hero-content">
+                  <div className="marketplace-hero-left">
+                    <h1 className="marketplace-hero-title">
+                      {postsGame !== 'all' 
+                        ? `${gameList.find(g => g.id === postsGame)?.name || postsGame}: Community Threads`
+                        : 'Community Threads'
+                      }
+                    </h1>
+                    <p className="marketplace-hero-subtitle">Join discussions and connect with other players in community threads.</p>
+                    <div className="marketplace-hero-stats">
+                      <div className="hero-stat">
+                        <div className="hero-stat-value">{sortedThreads.length}</div>
+                        <div className="hero-stat-label">Threads</div>
+                  </div>
+              </div>
+                  </div>
+                  <div className="marketplace-hero-right">
+                    {postsGame !== 'all' && (
+                  <button
+                        className="featured-deal-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleGameNotification(postsGame, 'threads', e);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          background: gameNotifications[postsGame]?.threads 
+                            ? 'rgba(74, 158, 255, 0.2)' 
+                            : 'rgba(255, 255, 255, 0.1)',
+                          border: gameNotifications[postsGame]?.threads 
+                            ? '1px solid rgba(74, 158, 255, 0.4)' 
+                            : '1px solid rgba(255, 255, 255, 0.2)',
+                          marginRight: '12px'
+                        }}
+                      >
+                        <Bell size={18} style={{ color: gameNotifications[postsGame]?.threads ? '#4a9eff' : 'rgba(255, 255, 255, 0.8)' }} />
+                        <span>{gameNotifications[postsGame]?.threads ? 'Notifications On' : 'Notifications Off'}</span>
+                  </button>
+                )}
+                </div>
+                </div>
+              </div>
+            ) : (
+              <div 
+                className="marketplace-hero"
+                style={{ 
+                  '--content-width': `${contentWidth}px`,
+                  '--banner-height': `${bannerHeight}px`,
+                  height: `${bannerHeight}px`,
+                  backgroundImage: postsGame !== 'all' && gameList.find(g => g.id === postsGame)?.banner 
+                    ? `url(${gameList.find(g => g.id === postsGame).banner})` 
+                    : undefined,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  backgroundRepeat: 'no-repeat'
+                }}
+              >
+                <div className="marketplace-hero-content">
+                  <div className="marketplace-hero-left">
+                    <h1 className="marketplace-hero-title">
+                      {postsGame !== 'all' 
+                        ? `${gameList.find(g => g.id === postsGame)?.name || postsGame}: Posts`
+                        : 'Posts'
+                      }
+                    </h1>
+                    <p className="marketplace-hero-subtitle">Share your achievements, screenshots, and experiences with the community.</p>
+                    <div className="marketplace-hero-stats">
+                      <div className="hero-stat">
+                        <div className="hero-stat-value">{sortedPosts.length}</div>
+                        <div className="hero-stat-label">Posts</div>
             </div>
           </div>
+            </div>
+                  <div className="marketplace-hero-right">
+                    {postsGame !== 'all' && (
+                      <button
+                        className="featured-deal-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleGameNotification(postsGame, 'posts', e);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          background: gameNotifications[postsGame]?.posts 
+                            ? 'rgba(74, 158, 255, 0.2)' 
+                            : 'rgba(255, 255, 255, 0.1)',
+                          border: gameNotifications[postsGame]?.posts 
+                            ? '1px solid rgba(74, 158, 255, 0.4)' 
+                            : '1px solid rgba(255, 255, 255, 0.2)'
+                        }}
+                      >
+                        <Bell size={18} style={{ color: gameNotifications[postsGame]?.posts ? '#4a9eff' : 'rgba(255, 255, 255, 0.8)' }} />
+                        <span>{gameNotifications[postsGame]?.posts ? 'Notifications On' : 'Notifications Off'}</span>
+                      </button>
+                    )}
+            </div>
+            </div>
+            </div>
+            )}
 
-          {selectedTab === 'workshop' ? (
+            {/* Content Area */}
+            <div className="marketplace-content-inner">
+
+            {selectedTab === 'workshop' ? (
             <WorkshopSection gameId={workshopGame === 'all' ? null : workshopGame} />
-          ) : showThreads ? (
+            ) : showThreads ? (
             <>
+              {/* Create Thread Form */}
+              {showThreadCreator && (
+                <div 
+                  className="create-petition-form-container"
+                  style={{ '--content-width': `${contentWidth}px` }}
+                >
+                  <div className="create-petition-form">
+                    <div className="create-petition-form-header">
+                      <h2>Create New Thread</h2>
+                      <p className="create-petition-description">Start a discussion with the community</p>
+                    </div>
+                    <div className="post-type-selector-wrapper" ref={threadTypeDropdownRef}>
+                      <button
+                        type="button"
+                        className="post-type-selector-btn"
+                        onClick={() => setThreadTypeDropdownOpen(!threadTypeDropdownOpen)}
+                        style={{ '--content-width': `${contentWidth}px` }}
+                      >
+                        <span className="post-type-selector-label">
+                          {threadType === 'discussion' ? 'Discussion' :
+                           threadType === 'gaming' ? 'Gaming' :
+                           threadType === 'art' ? 'Art & Design' :
+                           threadType === 'music' ? 'Music' :
+                           threadType === 'tech' ? 'Technology' :
+                           threadType === 'fitness' ? 'Fitness' :
+                           threadType === 'cooking' ? 'Cooking' :
+                           threadType === 'travel' ? 'Travel' :
+                           threadType === 'photography' ? 'Photography' :
+                           threadType === 'books' ? 'Books & Literature' : 'Discussion'}
+                        </span>
+                        <svg width="12" height="8" viewBox="0 0 12 8" fill="none" style={{ 
+                          transform: threadTypeDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.2s ease'
+                        }}>
+                          <path d="M1 1L6 6L11 1" stroke="rgba(255, 255, 255, 0.6)" strokeWidth="2" strokeLinecap="round"/>
+                        </svg>
+                      </button>
+                      {threadTypeDropdownOpen && (
+                        <div className="post-type-dropdown-menu" style={{ '--content-width': `${contentWidth}px` }}>
+                          <button type="button" className={`post-type-option ${threadType === 'discussion' ? 'active' : ''}`} onClick={() => { setThreadType('discussion'); setThreadTypeDropdownOpen(false); }}>Discussion</button>
+                          <button type="button" className={`post-type-option ${threadType === 'gaming' ? 'active' : ''}`} onClick={() => { setThreadType('gaming'); setThreadTypeDropdownOpen(false); }}>Gaming</button>
+                          <button type="button" className={`post-type-option ${threadType === 'art' ? 'active' : ''}`} onClick={() => { setThreadType('art'); setThreadTypeDropdownOpen(false); }}>Art & Design</button>
+                          <button type="button" className={`post-type-option ${threadType === 'music' ? 'active' : ''}`} onClick={() => { setThreadType('music'); setThreadTypeDropdownOpen(false); }}>Music</button>
+                          <button type="button" className={`post-type-option ${threadType === 'tech' ? 'active' : ''}`} onClick={() => { setThreadType('tech'); setThreadTypeDropdownOpen(false); }}>Technology</button>
+                          <button type="button" className={`post-type-option ${threadType === 'fitness' ? 'active' : ''}`} onClick={() => { setThreadType('fitness'); setThreadTypeDropdownOpen(false); }}>Fitness</button>
+                          <button type="button" className={`post-type-option ${threadType === 'cooking' ? 'active' : ''}`} onClick={() => { setThreadType('cooking'); setThreadTypeDropdownOpen(false); }}>Cooking</button>
+                          <button type="button" className={`post-type-option ${threadType === 'travel' ? 'active' : ''}`} onClick={() => { setThreadType('travel'); setThreadTypeDropdownOpen(false); }}>Travel</button>
+                          <button type="button" className={`post-type-option ${threadType === 'photography' ? 'active' : ''}`} onClick={() => { setThreadType('photography'); setThreadTypeDropdownOpen(false); }}>Photography</button>
+                          <button type="button" className={`post-type-option ${threadType === 'books' ? 'active' : ''}`} onClick={() => { setThreadType('books'); setThreadTypeDropdownOpen(false); }}>Books & Literature</button>
+                        </div>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      className="comm-thread-title-input"
+                      placeholder="Thread title..."
+                      value={threadTitle}
+                      onChange={(e) => setThreadTitle(e.target.value)}
+                      style={{ '--content-width': `${contentWidth}px` }}
+                    />
+                    <textarea
+                      className="comm-thread-description-input"
+                      placeholder="Thread description..."
+                      value={threadDescription}
+                      onChange={(e) => setThreadDescription(e.target.value)}
+                      style={{ '--content-width': `${contentWidth}px` }}
+                    />
+                    {(threadType === 'art' || threadType === 'photography' || threadType === 'travel' || threadType === 'cooking' || threadType === 'gaming') && (
+                      <input
+                        type="text"
+                        className="comm-thread-title-input"
+                        placeholder="Image URL (optional)..."
+                        value={threadImage}
+                        onChange={(e) => setThreadImage(e.target.value)}
+                        style={{ '--content-width': `${contentWidth}px` }}
+                      />
+                    )}
+                    <select
+                      className="comm-thread-game-select"
+                      value={threadGame}
+                      onChange={(e) => setThreadGame(e.target.value)}
+                      style={{ '--content-width': `${contentWidth}px` }}
+                    >
+                      <option value="all">All Games</option>
+                      {gameList.filter(g => g.id !== 'all').map(game => (
+                        <option key={game.id} value={game.id}>{game.name}</option>
+                      ))}
+                    </select>
+                    <div className="create-petition-actions" style={{ '--content-width': `${contentWidth}px` }}>
+                      <button
+                        className="create-petition-cancel-btn"
+                        onClick={() => {
+                          setShowThreadCreator(false);
+                          setThreadTitle('');
+                          setThreadDescription('');
+                          setThreadGame('all');
+                          setThreadType('discussion');
+                          setThreadImage('');
+                        }}
+                        style={{ '--content-width': `${contentWidth}px` }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="create-petition-submit-btn"
+                        onClick={handleCreateThread}
+                        disabled={!threadTitle.trim()}
+                        style={{ '--content-width': `${contentWidth}px` }}
+                      >
+                        Create Thread
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {!showThreadCreator && (
+                <div className="items-grid-controls" style={{ '--content-width': `${contentWidth}px` }}>
+                  <div className="items-grid-controls-left">
+                    <div className="items-count">{sortedThreads.length} {sortedThreads.length === 1 ? 'thread' : 'threads'}</div>
+                  </div>
+                  <div className="items-grid-controls-right">
+                    <button 
+                      className="featured-deal-btn"
+                      onClick={() => setShowThreadCreator(true)}
+                    >
+                      <Plus size={18} />
+                      <span>Create Thread</span>
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="comm-thread-search">
                 <Search size={18} />
                 <input
@@ -668,160 +1039,693 @@ const Community = () => {
                       <p>Create your first community thread to start a discussion!</p>
                     </div>
                   ) : (
-                    sortedThreads.map(thread => (
-                      <article key={thread.id} className="comm-thread-card">
-                        <div className="comm-thread-card-header">
-                          <div className="comm-thread-icon">#</div>
-                          <div className="comm-thread-card-info">
-                            <h3 className="comm-thread-card-title">{thread.title}</h3>
-                            <div className="comm-thread-card-meta">
-                              <span className="comm-thread-card-author">by {thread.author}</span>
-                              {thread.game && (
-                                <span className="comm-game-badge">{gameList.find(g => g.id === thread.game)?.name || thread.game}</span>
-                              )}
-                              {!thread.game && <span className="comm-game-badge">All Games</span>}
+                    <div className="threads-grid" style={{ '--content-width': `${contentWidth}px` }}>
+                      {sortedThreads.map(thread => {
+                        const renderThreadContent = () => {
+                          switch(thread.type) {
+                            case 'gaming':
+                              return (
+                                <div className="thread-gaming">
+                                  {thread.image && (
+                                    <div className="thread-image-container">
+                                      <img src={thread.image} alt="gaming" />
+                                    </div>
+                                  )}
+                                  <div className="thread-gaming-content">
+                                    <div className="thread-gaming-icon">🎮</div>
+                                    <h3 className="thread-card-title">{thread.title}</h3>
+                                    {thread.description && <p className="thread-card-description">{thread.description}</p>}
+                                  </div>
+                                </div>
+                              );
+                            case 'art':
+                              return (
+                                <div className="thread-art">
+                                  {thread.image && (
+                                    <div className="thread-image-container">
+                                      <img src={thread.image} alt="art" />
+                                    </div>
+                                  )}
+                                  <div className="thread-art-content">
+                                    <div className="thread-art-icon">🎨</div>
+                                    <h3 className="thread-card-title">{thread.title}</h3>
+                                    {thread.description && <p className="thread-card-description">{thread.description}</p>}
+                                  </div>
+                                </div>
+                              );
+                            case 'music':
+                              return (
+                                <div className="thread-music">
+                                  <div className="thread-music-header">
+                                    <div className="thread-music-icon">🎵</div>
+                                    <h3 className="thread-card-title">{thread.title}</h3>
+                                  </div>
+                                  {thread.description && <p className="thread-card-description">{thread.description}</p>}
+                                  <div className="thread-music-waveform">
+                                    <div className="waveform-bar"></div>
+                                    <div className="waveform-bar"></div>
+                                    <div className="waveform-bar"></div>
+                                    <div className="waveform-bar"></div>
+                                    <div className="waveform-bar"></div>
+                                  </div>
+                                </div>
+                              );
+                            case 'tech':
+                              return (
+                                <div className="thread-tech">
+                                  <div className="thread-tech-header">
+                                    <div className="thread-tech-icon">💻</div>
+                                    <h3 className="thread-card-title">{thread.title}</h3>
+                                  </div>
+                                  {thread.description && <p className="thread-card-description">{thread.description}</p>}
+                                  <div className="thread-tech-code">
+                                    <code>{'// Tech discussion thread'}</code>
+                                  </div>
+                                </div>
+                              );
+                            case 'fitness':
+                              return (
+                                <div className="thread-fitness">
+                                  <div className="thread-fitness-header">
+                                    <div className="thread-fitness-icon">💪</div>
+                                    <h3 className="thread-card-title">{thread.title}</h3>
+                                  </div>
+                                  {thread.description && <p className="thread-card-description">{thread.description}</p>}
+                                  <div className="thread-fitness-stats">
+                                    <div className="fitness-stat">🔥 Active</div>
+                                    <div className="fitness-stat">📊 Progress</div>
+                                  </div>
+                                </div>
+                              );
+                            case 'cooking':
+                              return (
+                                <div className="thread-cooking">
+                                  {thread.image && (
+                                    <div className="thread-image-container">
+                                      <img src={thread.image} alt="cooking" />
+                                    </div>
+                                  )}
+                                  <div className="thread-cooking-content">
+                                    <div className="thread-cooking-icon">🍳</div>
+                                    <h3 className="thread-card-title">{thread.title}</h3>
+                                    {thread.description && <p className="thread-card-description">{thread.description}</p>}
+                                  </div>
+                                </div>
+                              );
+                            case 'travel':
+                              return (
+                                <div className="thread-travel">
+                                  {thread.image && (
+                                    <div className="thread-image-container">
+                                      <img src={thread.image} alt="travel" />
+                                    </div>
+                                  )}
+                                  <div className="thread-travel-content">
+                                    <div className="thread-travel-icon">✈️</div>
+                                    <h3 className="thread-card-title">{thread.title}</h3>
+                                    {thread.description && <p className="thread-card-description">{thread.description}</p>}
+                                    <div className="thread-travel-location">📍 Location</div>
+                                  </div>
+                                </div>
+                              );
+                            case 'photography':
+                              return (
+                                <div className="thread-photography">
+                                  {thread.image && (
+                                    <div className="thread-image-container">
+                                      <img src={thread.image} alt="photography" />
+                                    </div>
+                                  )}
+                                  <div className="thread-photography-content">
+                                    <div className="thread-photography-icon">📸</div>
+                                    <h3 className="thread-card-title">{thread.title}</h3>
+                                    {thread.description && <p className="thread-card-description">{thread.description}</p>}
+                                  </div>
+                                </div>
+                              );
+                            case 'books':
+                              return (
+                                <div className="thread-books">
+                                  <div className="thread-books-header">
+                                    <div className="thread-books-icon">📚</div>
+                                    <h3 className="thread-card-title">{thread.title}</h3>
+                                  </div>
+                                  {thread.description && <p className="thread-card-description">{thread.description}</p>}
+                                  <div className="thread-books-pages">
+                                    <div className="book-page"></div>
+                                    <div className="book-page"></div>
+                                    <div className="book-page"></div>
+                                  </div>
+                                </div>
+                              );
+                            default: // discussion
+                              return (
+                                <div className="thread-discussion">
+                                  <div className="thread-discussion-header">
+                                    <div className="thread-discussion-icon">💬</div>
+                                    <h3 className="thread-card-title">{thread.title}</h3>
+                                  </div>
+                                  {thread.description && <p className="thread-card-description">{thread.description}</p>}
+                                </div>
+                              );
+                          }
+                        };
+
+                        return (
+                          <article key={thread.id} className={`thread-card thread-type-${thread.type || 'discussion'}`} onClick={() => setSelectedThreadId(thread.id)}>
+                            <div className="thread-card-content">
+                              {renderThreadContent()}
+                              <div className="thread-card-meta">
+                                <span className="thread-card-author">by {thread.author}</span>
+                                {thread.game && (
+                                  <span className="thread-game-badge">{gameList.find(g => g.id === thread.game)?.name || thread.game}</span>
+                                )}
+                                {!thread.game && <span className="thread-game-badge">All Games</span>}
+                              </div>
                             </div>
-                          </div>
-                        </div>
-                        {thread.description && (
-                          <p className="comm-thread-card-description">{thread.description}</p>
-                        )}
-                        <div className="comm-thread-card-stats">
-                          <span className="comm-thread-stat">👥 {thread.members || 1} members</span>
-                          <span className="comm-thread-stat">📝 {thread.posts || 0} posts</span>
-                          <span className="comm-thread-stat">🕐 {thread.time || new Date(thread.createdAt).toLocaleDateString()}</span>
-                        </div>
-                        <button className="comm-thread-enter-btn" onClick={() => setSelectedThreadId(thread.id)}>
-                          Enter Community Thread →
-                        </button>
-                      </article>
-                    ))
+                            <div className="thread-card-footer">
+                              <div className="thread-card-stats">
+                                <span className="thread-stat">👥 {thread.members || 1}</span>
+                                <span className="thread-stat">📝 {thread.posts || 0}</span>
+                                <span className="thread-stat">🕐 {thread.time || new Date(thread.createdAt).toLocaleDateString()}</span>
+                              </div>
+                              <button className="thread-enter-btn" onClick={(e) => { e.stopPropagation(); setSelectedThreadId(thread.id); }}>
+                                Join →
+                              </button>
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
               )}
             </>
           ) : (
             <>
-              <div className="comm-composer">
-                <div className="comm-composer-avatar">👤</div>
-                <div className="comm-composer-content">
+              {/* Create Post Form */}
+              {showPostForm && (
+                <div 
+                  className="create-petition-form-container"
+                  style={{ '--content-width': `${contentWidth}px` }}
+                >
+                  <div className="create-petition-form">
+                    <div className="create-petition-form-header">
+                      <h2>Create New Post</h2>
+                      <p className="create-petition-description">Share something with the community</p>
+                    </div>
+                    <div className="post-type-selector-wrapper" ref={postTypeDropdownRef}>
+                      <button
+                        type="button"
+                        className="post-type-selector-btn"
+                        onClick={() => setPostTypeDropdownOpen(!postTypeDropdownOpen)}
+                        style={{ '--content-width': `${contentWidth}px` }}
+                      >
+                        <span className="post-type-selector-label">
+                          {postType === 'text' ? 'Text Post' :
+                           postType === 'speedrun' ? 'Speedrun' :
+                           postType === 'achievement' ? 'Achievement' :
+                           postType === 'screenshot' ? 'Screenshot' :
+                           postType === 'image-text' ? 'Image + Text' :
+                           postType === 'video' ? 'Video' :
+                           postType === 'build' ? 'Build/Setup' :
+                           postType === 'discussion' ? 'Discussion' :
+                           postType === 'meme' ? 'Meme' :
+                           postType === 'review' ? 'Review' :
+                           postType === 'tournament' ? 'Tournament' : 'Text Post'}
+                        </span>
+                        <svg width="12" height="8" viewBox="0 0 12 8" fill="none" style={{ 
+                          transform: postTypeDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                          transition: 'transform 0.2s ease'
+                        }}>
+                          <path d="M1 1L6 6L11 1" stroke="rgba(255, 255, 255, 0.6)" strokeWidth="2" strokeLinecap="round"/>
+                        </svg>
+                      </button>
+                      {postTypeDropdownOpen && (
+                        <div className="post-type-dropdown-menu" style={{ '--content-width': `${contentWidth}px` }}>
+                          <button
+                            type="button"
+                            className={`post-type-option ${postType === 'text' ? 'active' : ''}`}
+                            onClick={() => {
+                              setPostType('text');
+                              setPostTypeDropdownOpen(false);
+                            }}
+                          >
+                            Text Post
+                          </button>
+                          <button
+                            type="button"
+                            className={`post-type-option ${postType === 'speedrun' ? 'active' : ''}`}
+                            onClick={() => {
+                              setPostType('speedrun');
+                              setPostTypeDropdownOpen(false);
+                            }}
+                          >
+                            Speedrun
+                          </button>
+                          <button
+                            type="button"
+                            className={`post-type-option ${postType === 'achievement' ? 'active' : ''}`}
+                            onClick={() => {
+                              setPostType('achievement');
+                              setPostTypeDropdownOpen(false);
+                            }}
+                          >
+                            Achievement
+                          </button>
+                          <button
+                            type="button"
+                            className={`post-type-option ${postType === 'screenshot' ? 'active' : ''}`}
+                            onClick={() => {
+                              setPostType('screenshot');
+                              setPostTypeDropdownOpen(false);
+                            }}
+                          >
+                            Screenshot
+                          </button>
+                          <button
+                            type="button"
+                            className={`post-type-option ${postType === 'image-text' ? 'active' : ''}`}
+                            onClick={() => {
+                              setPostType('image-text');
+                              setPostTypeDropdownOpen(false);
+                            }}
+                          >
+                            Image + Text
+                          </button>
+                          <button
+                            type="button"
+                            className={`post-type-option ${postType === 'video' ? 'active' : ''}`}
+                            onClick={() => {
+                              setPostType('video');
+                              setPostTypeDropdownOpen(false);
+                            }}
+                          >
+                            Video
+                          </button>
+                          <button
+                            type="button"
+                            className={`post-type-option ${postType === 'build' ? 'active' : ''}`}
+                            onClick={() => {
+                              setPostType('build');
+                              setPostTypeDropdownOpen(false);
+                            }}
+                          >
+                            Build/Setup
+                          </button>
+                          <button
+                            type="button"
+                            className={`post-type-option ${postType === 'discussion' ? 'active' : ''}`}
+                            onClick={() => {
+                              setPostType('discussion');
+                              setPostTypeDropdownOpen(false);
+                            }}
+                          >
+                            Discussion
+                          </button>
+                          <button
+                            type="button"
+                            className={`post-type-option ${postType === 'meme' ? 'active' : ''}`}
+                            onClick={() => {
+                              setPostType('meme');
+                              setPostTypeDropdownOpen(false);
+                            }}
+                          >
+                            Meme
+                          </button>
+                          <button
+                            type="button"
+                            className={`post-type-option ${postType === 'review' ? 'active' : ''}`}
+                            onClick={() => {
+                              setPostType('review');
+                              setPostTypeDropdownOpen(false);
+                            }}
+                          >
+                            Review
+                          </button>
+                          <button
+                            type="button"
+                            className={`post-type-option ${postType === 'tournament' ? 'active' : ''}`}
+                            onClick={() => {
+                              setPostType('tournament');
+                              setPostTypeDropdownOpen(false);
+                            }}
+                          >
+                            Tournament
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {(postType === 'achievement' || postType === 'build' || postType === 'discussion' || postType === 'review' || postType === 'tournament') && (
+                      <input
+                        className="comm-thread-title-input"
+                        placeholder="Title..."
+                        value={postTitle}
+                        onChange={(e) => setPostTitle(e.target.value)}
+                      />
+                    )}
+                    {(postType === 'speedrun') && (
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <input
+                          type="number"
+                          placeholder="Hours"
+                          value={postTime.h || ''}
+                          onChange={(e) => setPostTime({...postTime, h: parseInt(e.target.value) || 0})}
+                          style={{ width: '80px', padding: '8px' }}
+                        />
+                        <span>:</span>
+                        <input
+                          type="number"
+                          placeholder="Minutes"
+                          value={postTime.m || ''}
+                          onChange={(e) => setPostTime({...postTime, m: parseInt(e.target.value) || 0})}
+                          style={{ width: '80px', padding: '8px' }}
+                        />
+                        <span>:</span>
+                        <input
+                          type="number"
+                          placeholder="Seconds"
+                          value={postTime.s || ''}
+                          onChange={(e) => setPostTime({...postTime, s: parseInt(e.target.value) || 0})}
+                          style={{ width: '80px', padding: '8px' }}
+                        />
+                        <span>.</span>
+                        <input
+                          type="number"
+                          placeholder="MS"
+                          value={postTime.ms || ''}
+                          onChange={(e) => setPostTime({...postTime, ms: parseInt(e.target.value) || 0})}
+                          style={{ width: '80px', padding: '8px' }}
+                        />
+                      </div>
+                    )}
+                    {(postType === 'review') && (
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <span>Rating:</span>
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => setPostRating(i + 1)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              fontSize: '24px',
+                              color: i < postRating ? '#ffd700' : 'rgba(255,255,255,0.3)',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            ★
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {(postType === 'screenshot' || postType === 'image-text' || postType === 'speedrun' || postType === 'achievement' || postType === 'build' || postType === 'meme' || postType === 'review' || postType === 'tournament') && (
+                      <input
+                        className="comm-thread-title-input"
+                        placeholder="Image URL..."
+                        value={postImage}
+                        onChange={(e) => setPostImage(e.target.value)}
+                      />
+                    )}
+                    {(postType === 'video') && (
+                      <input
+                        className="comm-thread-title-input"
+                        placeholder="Video URL..."
+                        value={postVideo}
+                        onChange={(e) => setPostVideo(e.target.value)}
+                      />
+                    )}
                   <textarea
                     className="comm-composer-input"
-                    placeholder="Share something..."
+                      placeholder={postType === 'screenshot' ? "Caption (optional)..." : postType === 'meme' ? "Caption..." : "Share something..."}
                     value={postContent}
                     onChange={(e) => setPostContent(e.target.value)}
-                    rows={3}
-                  />
-                  <div className="comm-composer-actions">
-                    <button className="comm-post-btn" onClick={handleCreatePost}>
+                      rows={4}
+                    />
+                    <div className="create-petition-actions">
+                      <button
+                        className="create-petition-cancel-btn"
+                        onClick={() => {
+                          setPostContent('');
+                          setPostImage('');
+                          setPostVideo('');
+                          setPostType('text');
+                          setPostRating(5);
+                          setPostTime({ h: 0, m: 0, s: 0, ms: 0 });
+                          setPostTitle('');
+                          setShowPostForm(false);
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="create-petition-submit-btn"
+                        onClick={handleCreatePost}
+                        disabled={!postContent.trim() && !postImage && !postVideo}
+                      >
                       Post
                     </button>
                   </div>
                 </div>
               </div>
-              <div className="comm-feed">
+              )}
+              {!showPostForm && (
+                <div className="items-grid-controls" style={{ '--content-width': `${contentWidth}px` }}>
+                  <div className="items-grid-controls-left">
+                    <div className="items-count">{sortedPosts.length} {sortedPosts.length === 1 ? 'post' : 'posts'}</div>
+                  </div>
+                  <div className="items-grid-controls-right">
+                    <button 
+                      className="featured-deal-btn"
+                      onClick={() => setShowPostForm(true)}
+                    >
+                      <Plus size={18} />
+                      <span>Create Post</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div 
+                className="posts-grid" 
+                style={{ 
+                  '--content-width': `${contentWidth}px`,
+                  // No left/right spacing
+                  paddingLeft: '0',
+                  paddingRight: '0'
+                }}
+              >
                 {sortedPosts.length === 0 ? (
-                  <div className="comm-empty-state">
-                    <MessageSquare size={48} />
-                    <h3>No game posts yet</h3>
-                    <p>Be the first to share something!</p>
+                  <div className="marketplace-empty-state">
+                    <div className="empty-state-icon">📝</div>
+                    <h3 className="empty-state-title">No posts yet</h3>
+                    <p className="empty-state-description">Be the first to share something with the community!</p>
+                    <button className="empty-state-action-btn" onClick={() => setShowPostForm(true)}>
+                      <Plus size={16} />
+                      <span>Create Post</span>
+                    </button>
                   </div>
                 ) : (
-                  sortedPosts.map(p => (
-                    <article key={p.id} className={`comm-post ${p.type ? `type-${p.type}` : ''}`}>
-                      <header className="comm-post-header">
-                        <div className="comm-avatar">👤</div>
-                        <div className="comm-meta">
-                          <div className="comm-author">
-                            {p.author} 
-                            {p.game && <span className="comm-game-badge">{p.game}</span>}
+                  sortedPosts.map(p => {
+                    const renderPostContent = () => {
+                      switch(p.type) {
+                        case 'speedrun':
+                          return (
+                            <div className="post-speedrun">
+                              {p.image && (
+                                <div className="post-image-container">
+                                  <img src={p.image} alt="speedrun" />
                           </div>
-                          <div className="comm-time">{p.time}</div>
+                              )}
+                              <div className="post-time-display">
+                                <div className="post-time-big">
+                                  {`${(p.h || 0).toString().padStart(2,'0')}:${(p.m || 0).toString().padStart(2,'0')}:${(p.s || 0).toString().padStart(2,'0')}.${((p.ms || 0)).toString().padStart(2,'0')}`}
                         </div>
-                      </header>
-                      {p.type === 'speedrun' ? (
-                        <div className="comm-speedrun">
-                          <div className="comm-time-big">{`${p.h?.toString().padStart(2,'0')}:${p.m?.toString().padStart(2,'0')}:${p.s?.toString().padStart(2,'0')}.${(p.ms??0).toString().padStart(2,'0')}`}</div>
-                          <p className="comm-text">{p.text}</p>
+                                <div className="post-time-label">Speedrun Time</div>
                         </div>
-                      ) : p.type === 'screenshot' ? (
-                        <div className="comm-screenshot">
-                          {p.image && (<div className="comm-shot"><img src={p.image} alt="screenshot" /></div>)}
-                          <p className="comm-text">{p.text}</p>
+                              {p.text && <p className="post-text">{p.text}</p>}
                         </div>
-                      ) : (
-                        <p className="comm-text">{p.text}</p>
-                      )}
-                      {p.tags?.length ? (
-                        <div className="comm-post-tags">
-                          {p.tags.map(t => <span key={t} className="comm-post-tag">{t}</span>)}
+                          );
+                        case 'achievement':
+                          return (
+                            <div className="post-achievement">
+                              {p.image && (
+                                <div className="post-achievement-badge">
+                                  <img src={p.image} alt="achievement" />
+                                </div>
+                              )}
+                              <div className="post-achievement-content">
+                                <h3 className="post-achievement-title">{p.title || 'Achievement Unlocked!'}</h3>
+                                {p.text && <p className="post-text">{p.text}</p>}
                         </div>
-                      ) : null}
-                      <footer className="comm-actions">
-                        <button className="comm-action">❤️ {p.likes}</button>
-                        <button className="comm-action">💬 {p.comments}</button>
-                        <button className="comm-action">↗︎ Share</button>
-                      </footer>
-                    </article>
-                  ))
+                            </div>
+                          );
+                        case 'screenshot':
+                          return (
+                            <div className="post-screenshot">
+                              {p.image && (
+                                <div className="post-image-container">
+                                  <img src={p.image} alt="screenshot" />
+                                </div>
+                              )}
+                              {p.text && <p className="post-text">{p.text}</p>}
+              </div>
+                          );
+                        case 'image-text':
+                          return (
+                            <div className="post-image-text">
+                              {p.image && (
+                                <div className="post-image-container">
+                                  <img src={p.image} alt="post" />
+                                </div>
+                              )}
+                              {p.text && <p className="post-text">{p.text}</p>}
+          </div>
+                          );
+                        case 'video':
+                          return (
+                            <div className="post-video">
+                              {p.video && (
+                                <div className="post-video-container">
+                                  <video src={p.video} controls />
+                                </div>
+                              )}
+                              {p.text && <p className="post-text">{p.text}</p>}
+                            </div>
+                          );
+                        case 'build':
+                          return (
+                            <div className="post-build">
+                              <div className="post-build-header">
+                                <h3 className="post-build-title">{p.title || 'Character Build'}</h3>
+                                {p.game && <span className="post-build-game">{p.game}</span>}
+                              </div>
+                              {p.image && (
+                                <div className="post-image-container">
+                                  <img src={p.image} alt="build" />
+                                </div>
+                              )}
+                              {p.text && <p className="post-text">{p.text}</p>}
+                              {p.stats && (
+                                <div className="post-build-stats">
+                                  {Object.entries(p.stats).map(([key, value]) => (
+                                    <div key={key} className="post-build-stat">
+                                      <span className="stat-label">{key}</span>
+                                      <span className="stat-value">{value}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        case 'discussion':
+                          return (
+                            <div className="post-discussion">
+                              <h3 className="post-discussion-title">{p.title || 'Discussion'}</h3>
+                              {p.text && <p className="post-text">{p.text}</p>}
+                              {p.tags && p.tags.length > 0 && (
+                                <div className="post-tags">
+                                  {p.tags.map(t => <span key={t} className="post-tag">{t}</span>)}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        case 'meme':
+                          return (
+                            <div className="post-meme">
+                              {p.image && (
+                                <div className="post-image-container">
+                                  <img src={p.image} alt="meme" />
+                                </div>
+                              )}
+                              {p.text && (
+                                <div className="post-meme-caption">
+                                  <p className="post-text">{p.text}</p>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        case 'review':
+                          return (
+                            <div className="post-review">
+                              <div className="post-review-header">
+                                <h3 className="post-review-title">{p.title || 'Game Review'}</h3>
+                                <div className="post-review-rating">
+                                  {Array.from({ length: 5 }).map((_, i) => (
+                                    <span key={i} className={`star ${i < (p.rating || 0) ? 'filled' : ''}`}>★</span>
+                                  ))}
+                                </div>
+                              </div>
+                              {p.image && (
+                                <div className="post-image-container">
+                                  <img src={p.image} alt="review" />
+                                </div>
+                              )}
+                              {p.text && <p className="post-text">{p.text}</p>}
+                            </div>
+                          );
+                        case 'tournament':
+                          return (
+                            <div className="post-tournament">
+                              <div className="post-tournament-header">
+                                <h3 className="post-tournament-title">{p.title || 'Tournament'}</h3>
+                                <div className="post-tournament-badge">🏆</div>
+                              </div>
+                              {p.image && (
+                                <div className="post-image-container">
+                                  <img src={p.image} alt="tournament" />
+                                </div>
+                              )}
+                              {p.text && <p className="post-text">{p.text}</p>}
+                              {p.date && (
+                                <div className="post-tournament-date">
+                                  <span>📅 {p.date}</span>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        default: // text
+                          return p.text ? <p className="post-text">{p.text}</p> : null;
+                      }
+                    };
+
+                    return (
+                      <div key={p.id} className={`post-card ${p.type ? `type-${p.type}` : 'type-text'}`}>
+                        <div className="post-vote-section">
+                          <button className="post-vote-up">▲</button>
+                          <div className="post-vote-count">{p.likes || 0}</div>
+                          <button className="post-vote-down">▼</button>
+                        </div>
+                        <div className="post-card-content-wrapper">
+                          <div className="post-card-header">
+                            <div className="post-avatar">👤</div>
+                            <div className="post-meta">
+                              <div className="post-author">
+                                {p.author} 
+                                {p.game && <span className="post-game-badge">{p.game}</span>}
+                              </div>
+                              <div className="post-time">{p.time}</div>
+                            </div>
+                          </div>
+                          <div className="post-card-content">
+                            {renderPostContent()}
+                          </div>
+                          <div className="post-card-footer">
+                            <button className="post-action">💬 {p.comments || 0} Comments</button>
+                            <button className="post-action">↗︎ Share</button>
+                            <button className="post-action">🔖 Save</button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </>
           )}
-        </main>
-
-        {/* Right Sidebar Resizer */}
-        <div 
-          ref={rightSidebarResizeRef}
-          className={`sidebar-resizer ${isRightSidebarResizing ? 'resizing' : ''}`}
-          onMouseDown={handleRightSidebarResizeStart}
-        />
-
-        {/* Right: Navigation Sidebar */}
-        <aside 
-          className={`community-right marketplace-sidebar ${isRightSidebarResizing ? 'resizing' : ''}`}
-          style={{ width: communityRightSidebarWidth }}
-        >
-          <div className="sidebar-title">Community</div>
-          <nav className="sidebar-nav">
-            <div className="sidebar-nav-section">
-              <h3 className="sidebar-section-title">Content</h3>
-              <button 
-                className={`sidebar-nav-item ${selectedTab === 'posts' && !showThreads ? 'active' : ''}`}
-                onClick={() => {
-                  setSelectedTab('posts');
-                  setShowThreads(false);
-                }}
-              >
-                <MessageSquare size={18} />
-                <span>Game Posts</span>
-                {sortedPosts.length > 0 && (
-                  <span className="sidebar-badge">{sortedPosts.length}</span>
-                )}
-              </button>
-              <button 
-                className={`sidebar-nav-item ${selectedTab === 'posts' && showThreads ? 'active' : ''}`}
-                onClick={() => {
-                  setSelectedTab('posts');
-                  setShowThreads(true);
-                }}
-              >
-                <Users size={18} />
-                <span>Community Threads</span>
-                {sortedThreads.length > 0 && (
-                  <span className="sidebar-badge">{sortedThreads.length}</span>
-                )}
-              </button>
-              <button 
-                className={`sidebar-nav-item ${selectedTab === 'workshop' ? 'active' : ''}`}
-                onClick={() => setSelectedTab('workshop')}
-              >
-                <Package size={18} />
-                <span>Workshop</span>
-              </button>
             </div>
-          </nav>
-        </aside>
+          </div>
+        </main>
       </div>
     </div>
   );

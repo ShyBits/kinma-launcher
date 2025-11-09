@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   closeWindow: () => ipcRenderer.invoke('close-window'),
   resizeWindow: (width, height) => ipcRenderer.invoke('resize-window', width, height),
   getWindowSize: () => ipcRenderer.invoke('get-window-size'),
+  getScreenSize: () => ipcRenderer.invoke('get-screen-size'),
   centerWindow: () => ipcRenderer.invoke('center-window'),
   isMainWindowReady: () => ipcRenderer.invoke('is-main-window-ready'),
 
@@ -47,8 +48,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveUsers: (users) => ipcRenderer.invoke('save-users', users),
   getUsers: () => ipcRenderer.invoke('get-users'),
   clearAllUsers: () => ipcRenderer.invoke('clear-all-users'),
-  openAuthWindow: () => ipcRenderer.invoke('open-auth-window'),
+  openAuthWindow: (email) => ipcRenderer.invoke('open-auth-window', email),
   openAccountSwitcherWindow: () => ipcRenderer.invoke('open-account-switcher-window'),
+  openAdminWindow: () => ipcRenderer.invoke('open-admin-window'),
   
   onMenuAddGame: (callback) => {
     ipcRenderer.on('menu-add-game', callback);
