@@ -114,34 +114,40 @@ const Community = () => {
     return typeof window !== 'undefined' ? Math.max(1080, window.innerWidth - 200) : 1080;
   });
 
-  // Track window size changes
+  // Track window size changes - optimized with requestAnimationFrame for smooth updates
   React.useEffect(() => {
-    const updateWindowSize = () => {
-      setWindowWidth(window.innerWidth);
+    let rafId = null;
+    let lastWidth = window.innerWidth;
+    
+    const handleResize = () => {
+      const currentWidth = window.innerWidth;
+      
+      // Only update if width actually changed (avoid unnecessary re-renders)
+      if (Math.abs(currentWidth - lastWidth) < 1) return;
+      lastWidth = currentWidth;
+      
+      // Use requestAnimationFrame for smooth, batched updates
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        setWindowWidth(currentWidth);
+        
+        // Calculate available content width (window width - left sidebar only)
+        const leftSidebarWidth = communityLeftSidebarWidth || 200;
+        const newContentWidth = Math.max(1030, currentWidth - leftSidebarWidth);
+        setContentWidth(newContentWidth);
+      });
     };
     
-    const updateContentWidth = () => {
-      // Calculate available content width (window width - left sidebar only)
-      // Content is the main focus - should use most of available space
-      // Use current left sidebar width state (can be up to 250px max)
-      const leftSidebarWidth = communityLeftSidebarWidth || 200;
-      // Ensure minimum content width for readability (1030px accounts for max sidebar of 250px)
-      const newContentWidth = Math.max(1030, window.innerWidth - leftSidebarWidth);
-      setContentWidth(newContentWidth);
-    };
+    // Initial update
+    handleResize();
     
-    updateWindowSize();
-    updateContentWidth();
-    window.addEventListener('resize', () => {
-      updateWindowSize();
-      updateContentWidth();
-    });
-    // Listen for sidebar resize events
-    window.addEventListener('sidebar-resize', updateContentWidth);
+    window.addEventListener('resize', handleResize, { passive: true });
+    window.addEventListener('sidebar-resize', handleResize, { passive: true });
+    
     return () => {
-      window.removeEventListener('resize', updateWindowSize);
-      window.removeEventListener('resize', updateContentWidth);
-      window.removeEventListener('sidebar-resize', updateContentWidth);
+      if (rafId) cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('sidebar-resize', handleResize);
     };
   }, [communityLeftSidebarWidth]);
 
@@ -197,37 +203,83 @@ const Community = () => {
   };
 
   // Build game list from ALL published games from ALL users (shared marketplace)
-  const gameList = React.useMemo(() => {
-    let list = [{ id: 'all', name: 'All Games', banner: null }];
-    try {
-      // Get all games from all users (shared)
-      const allGames = getAllUsersData('customGames');
-      // Filter to only show published games
-      const publishedGames = allGames.filter(game => {
-        const status = game.status || game.fullFormData?.status || 'draft';
-        return status === 'public' || status === 'published';
-      });
-      const getCard = (g) => (
-        g.card || g.cardImage || g.fullFormData?.cardImage ||
-        g.fullFormData?.card || g.metadata?.cardImage || g.files?.card?.path || null
-      );
-      const getBanner = (g) => (
-        g.banner || g.bannerImage || g.fullFormData?.bannerImage ||
-        g.fullFormData?.banner || g.metadata?.bannerImage || g.files?.banner?.path || null
-      );
-      const getLogo = (g) => (
-        g.gameLogo || g.logo || g.fullFormData?.gameLogo || g.fullFormData?.titleImage || g.titleImage || g.title || null
-      );
-      const customs = publishedGames.map(g => ({
-        id: g.gameId,
-        name: g.name || g.gameName || g.id,
-        banner: getBanner(g),
-        card: getCard(g) || getBanner(g) || null,
-        logo: getLogo(g)
-      }));
-      list = [...list, ...customs];
-    } catch (_) {}
-    return list;
+  const [gameList, setGameList] = React.useState([{ id: 'all', name: 'All Games', banner: null }]);
+  
+  React.useEffect(() => {
+    const loadGames = async () => {
+      let list = [{ id: 'all', name: 'All Games', banner: null }];
+      try {
+        // Get all games from all users (shared)
+        const allGames = getAllUsersData('customGames');
+        
+        // Filter to only show published games
+        const publishedGames = allGames.filter(game => {
+          const status = game.status || game.fullFormData?.status || 'draft';
+          return status === 'public' || status === 'published';
+        });
+        
+        // Remove duplicates based on gameId (keep first occurrence)
+        const uniqueGamesMap = new Map();
+        publishedGames.forEach(game => {
+          const gameId = game.gameId || game.id;
+          if (gameId && !uniqueGamesMap.has(gameId)) {
+            uniqueGamesMap.set(gameId, game);
+          }
+        });
+        
+        // Check which games actually exist in the games folder
+        const existingGames = [];
+        for (const [gameId, game] of uniqueGamesMap) {
+          try {
+            if (window.electronAPI && window.electronAPI.gameFolderExists) {
+              const exists = await window.electronAPI.gameFolderExists(gameId);
+              if (exists) {
+                existingGames.push(game);
+              }
+            } else {
+              // Fallback: if Electron API is not available, include the game anyway
+              existingGames.push(game);
+            }
+          } catch (error) {
+            console.error(`Error checking game folder for ${gameId}:`, error);
+            // Skip games that can't be verified
+          }
+        }
+        
+        const getCard = (g) => (
+          g.card || g.cardImage || g.fullFormData?.cardImage ||
+          g.fullFormData?.card || g.metadata?.cardImage || g.files?.card?.path || null
+        );
+        const getBanner = (g) => (
+          g.banner || g.bannerImage || g.fullFormData?.bannerImage ||
+          g.fullFormData?.banner || g.metadata?.bannerImage || g.files?.banner?.path || null
+        );
+        const getLogo = (g) => (
+          g.gameLogo || g.logo || g.fullFormData?.gameLogo || g.fullFormData?.titleImage || g.titleImage || g.title || null
+        );
+        const customs = existingGames.map(g => ({
+          id: g.gameId,
+          name: g.name || g.gameName || g.id,
+          banner: getBanner(g),
+          card: getCard(g) || getBanner(g) || null,
+          logo: getLogo(g)
+        }));
+        list = [...list, ...customs];
+      } catch (_) {}
+      setGameList(list);
+    };
+    
+    loadGames();
+    
+    // Reload when games are updated
+    const handleUpdate = () => loadGames();
+    window.addEventListener('customGameUpdate', handleUpdate);
+    window.addEventListener('user-changed', loadGames);
+    
+    return () => {
+      window.removeEventListener('customGameUpdate', handleUpdate);
+      window.removeEventListener('user-changed', loadGames);
+    };
   }, []);
 
   // Load ALL published posts from ALL users (shared community)
@@ -462,7 +514,7 @@ const Community = () => {
 
 
   return (
-    <div className="community">
+    <div className="community" style={{ '--window-width': `${windowWidth}px` }}>
       <div className="community-layout-3">
         {/* Left: Filters */}
         <aside className="community-left" style={{ '--sidebar-width': `${communityLeftSidebarWidth}px`, width: `${communityLeftSidebarWidth}px` }}>

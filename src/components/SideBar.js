@@ -17,58 +17,43 @@ import {
   Edit2,
   Folder,
   FolderOpen,
+  ArrowDownCircle,
+  BookOpen,
 } from "lucide-react";
 import { useLocation } from "react-router-dom";
-import { subscribe as subscribeDownloadSpeed, setSpeed as setGlobalDownloadSpeed, setPaused as setGlobalPaused, clearSpeed as clearGlobalDownloadSpeed, getPaused } from "../utils/DownloadSpeedStore";
+import { subscribe as subscribeDownloadSpeed, setSpeed as setGlobalDownloadSpeed, setPaused as setGlobalPaused, clearSpeed as clearGlobalDownloadSpeed, getPaused, startDownload as startGlobalDownload, stopDownload as stopGlobalDownload, getProgress, getSpeed } from "../utils/DownloadSpeedStore";
 import { getUserData, saveUserData, getUserScopedKey } from "../utils/UserDataManager";
 import "./SideBar.css";
 
 const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isCollapsed, width = 260, isResizing = false }, ref) => {
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
-  const [expanded, setExpanded] = useState(() => {
-    try {
-      const stored = getUserData('sidebarExpanded', null);
-      if (stored) {
-        // Ensure defaults are set
-        return { recent: true, myOwn: true, ...stored };
-      }
-    } catch (_) {}
-    return { recent: true, myOwn: true };
-  });
+  const [expanded, setExpanded] = useState({ recent: true, myOwn: true });
   const [updatingGames, setUpdatingGames] = useState({}); // track updating states
   const [downloadingGames, setDownloadingGames] = useState({}); // track downloading states
   const [gameStatus, setGameStatus] = useState({}); // track status type: "download", "update", "verify", "install"
   const [pausedGames, setPausedGames] = useState({}); // track paused games
-  const [playingGames, setPlayingGames] = useState(() => {
-    // Load playing games from user-specific storage on mount
-    try {
-      return getUserData('playingGames', {});
-    } catch (e) {
-      return {};
-    }
-  });
+  const [playingGames, setPlayingGames] = useState({});
   const [showUpdateConfirmModal, setShowUpdateConfirmModal] = useState(false);
   const [pendingUpdateGameId, setPendingUpdateGameId] = useState(null);
-  const [hoveredUpdateIcon, setHoveredUpdateIcon] = useState(null); // track hover state
+  const [hoveredUpdateIcon, setHoveredUpdateIcon] = useState(null);
+  const [appVersion, setAppVersion] = useState('1.0.0');
+  const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [updateDownloaded, setUpdateDownloaded] = useState(false);
+  const [updateDownloading, setUpdateDownloading] = useState(false);
+  const [updateProgress, setUpdateProgress] = useState(0);
+  const [updateInfo, setUpdateInfo] = useState(null); // track hover state
   const [hoveredDownloadId, setHoveredDownloadId] = useState(null); // track hovered download for side menu
   const [sidebarSpeeds, setSidebarSpeeds] = useState({}); // per-game speeds from global store
   const [sidebarProgress, setSidebarProgress] = useState({}); // per-game progress from global store
   const [completedGames, setCompletedGames] = useState({}); // track completed games (true = download, "update" = update)
   const [sideMenuPosition, setSideMenuPosition] = useState(null); // track side menu position
   const [contextMenuPosition, setContextMenuPosition] = useState(null); // track context menu position
-  const [selectedCategoryId, setSelectedCategoryId] = useState(null); // track which category was right-clicked
-  const [showAddCategoryInput, setShowAddCategoryInput] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState("");
-  const [renamingCategoryId, setRenamingCategoryId] = useState(null); // track which category is being renamed
-  const [renameCategoryName, setRenameCategoryName] = useState(""); // name for renaming category
-  const [customCategories, setCustomCategories] = useState(() => {
-    try {
-      return getUserData('sidebarCategories', []);
-    } catch (e) {
-      return [];
-    }
-  });
+  const [selectedFolderId, setSelectedFolderId] = useState(null); // track which folder was right-clicked
+  const [showAddFolderInput, setShowAddFolderInput] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [renamingFolderId, setRenamingFolderId] = useState(null); // track which folder is being renamed
+  const [renameFolderName, setRenameFolderName] = useState(""); // name for renaming folder
   const updateTimersRef = React.useRef({}); // track update timers for cancellation
   const downloadTimersRef = React.useRef({}); // track download timers for cancellation
   const sidebarContentRef = useRef(null);
@@ -121,41 +106,66 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
   }, []);
 
   // Load custom games from user-specific storage - MUST be before allGames definition
-  const [customGames, setCustomGames] = useState(() => {
-    try {
-      return getUserData('customGames', []);
-    } catch (e) {
-      console.error('Error loading custom games:', e);
-      return [];
-    }
-  });
+  const [customGames, setCustomGames] = useState([]);
+
+  // Load library folders from user-specific storage
+  const [libraryFolders, setLibraryFolders] = useState([]);
 
   // Listen for storage changes to update custom games and sidebar data
   useEffect(() => {
-    const loadCustomGames = () => {
+    const loadCustomGames = async () => {
       try {
-        const userGames = getUserData('customGames', []);
-        setCustomGames(userGames);
+        const userGames = await getUserData('customGames', []);
+        
+        // Remove duplicates based on gameId (keep the most recent one)
+        const uniqueGamesMap = new Map();
+        if (Array.isArray(userGames)) {
+          userGames.forEach(game => {
+            const gameId = game.gameId || game.id;
+            if (gameId) {
+              const gameIdStr = String(gameId);
+              const existingGame = uniqueGamesMap.get(gameIdStr);
+              // Keep the one with the most recent addedToLibraryAt or purchasedAt
+              if (!existingGame || 
+                  (game.addedToLibraryAt && (!existingGame.addedToLibraryAt || 
+                   new Date(game.addedToLibraryAt) > new Date(existingGame.addedToLibraryAt))) ||
+                  (game.purchasedAt && (!existingGame.purchasedAt || 
+                   new Date(game.purchasedAt) > new Date(existingGame.purchasedAt)))) {
+                uniqueGamesMap.set(gameIdStr, game);
+              }
+            }
+          });
+        }
+        
+        const uniqueGames = Array.from(uniqueGamesMap.values());
+        
+        // Only update if there are actual changes (to avoid unnecessary re-renders)
+        if (uniqueGames.length !== (Array.isArray(userGames) ? userGames.length : 0)) {
+          // Save cleaned up games back to storage
+          await saveUserData('customGames', uniqueGames);
+        }
+        
+        setCustomGames(uniqueGames);
       } catch (e) {
         console.error('Error loading custom games:', e);
       }
     };
     
-    const loadSidebarData = () => {
+    const loadSidebarData = async () => {
       try {
-        // Reload categories
-        const categories = getUserData('sidebarCategories', []);
-        setCustomCategories(categories);
+        // Reload library folders
+        const folders = await getUserData('libraryFolders', []);
+        setLibraryFolders(Array.isArray(folders) ? folders : []);
         
         // Reload expanded state
-        const expandedState = getUserData('sidebarExpanded', null);
-        if (expandedState) {
+        const expandedState = await getUserData('sidebarExpanded', null);
+        if (expandedState && typeof expandedState === 'object') {
           setExpanded({ recent: true, myOwn: true, ...expandedState });
         }
         
         // Reload playing games
-        const playing = getUserData('playingGames', {});
-        setPlayingGames(playing);
+        const playing = await getUserData('playingGames', {});
+        setPlayingGames(playing && typeof playing === 'object' ? playing : {});
       } catch (e) {
         console.error('Error loading sidebar data:', e);
       }
@@ -164,11 +174,15 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
     const handleStorageChange = (e) => {
       if (e.key === getUserScopedKey('customGames')) {
         loadCustomGames();
-      } else if (e.key === getUserScopedKey('sidebarCategories') || 
-                 e.key === getUserScopedKey('sidebarExpanded') ||
-                 e.key === getUserScopedKey('playingGames')) {
+      } else if (e.key === getUserScopedKey('sidebarExpanded') ||
+                 e.key === getUserScopedKey('playingGames') ||
+                 e.key === getUserScopedKey('libraryFolders')) {
         loadSidebarData();
       }
+    };
+
+    const handleLibraryFolderUpdate = () => {
+      loadSidebarData();
     };
     
     const handleCustomGameUpdate = () => {
@@ -187,11 +201,98 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('customGameUpdate', handleCustomGameUpdate);
     window.addEventListener('user-changed', handleUserChange);
+    window.addEventListener('libraryFolderUpdate', handleLibraryFolderUpdate);
     
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('customGameUpdate', handleCustomGameUpdate);
       window.removeEventListener('user-changed', handleUserChange);
+      window.removeEventListener('libraryFolderUpdate', handleLibraryFolderUpdate);
+    };
+  }, []);
+
+  // Load app version and check for updates
+  useEffect(() => {
+    const loadVersion = async () => {
+      try {
+        if (window.electronAPI && window.electronAPI.getAppVersion) {
+          const result = await window.electronAPI.getAppVersion();
+          if (result && result.version) {
+            setAppVersion(result.version);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading app version:', error);
+      }
+    };
+
+    const checkUpdateStatus = async () => {
+      try {
+        if (window.electronAPI && window.electronAPI.getUpdateStatus) {
+          const result = await window.electronAPI.getUpdateStatus();
+          if (result) {
+            setUpdateAvailable(result.updateAvailable || false);
+            setUpdateDownloaded(result.updateDownloaded || false);
+            setUpdateInfo(result.updateInfo);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking update status:', error);
+      }
+    };
+
+    loadVersion();
+    checkUpdateStatus();
+
+    // Check for updates on mount
+    if (window.electronAPI && window.electronAPI.checkForUpdates) {
+      window.electronAPI.checkForUpdates().catch(err => {
+        console.error('Error checking for updates:', err);
+      });
+    }
+
+    // Set up update event listeners
+    if (window.electronAPI) {
+      if (window.electronAPI.onUpdateAvailable) {
+        window.electronAPI.onUpdateAvailable((info) => {
+          setUpdateAvailable(true);
+          setUpdateInfo(info);
+        });
+      }
+
+      if (window.electronAPI.onUpdateNotAvailable) {
+        window.electronAPI.onUpdateNotAvailable(() => {
+          setUpdateAvailable(false);
+        });
+      }
+
+      if (window.electronAPI.onUpdateDownloadProgress) {
+        window.electronAPI.onUpdateDownloadProgress((progress) => {
+          setUpdateDownloading(true);
+          setUpdateProgress(progress.percent || 0);
+        });
+      }
+
+      if (window.electronAPI.onUpdateDownloaded) {
+        window.electronAPI.onUpdateDownloaded((info) => {
+          setUpdateDownloaded(true);
+          setUpdateDownloading(false);
+          setUpdateInfo(info);
+        });
+      }
+
+      if (window.electronAPI.onUpdateError) {
+        window.electronAPI.onUpdateError((error) => {
+          console.error('Update error:', error);
+          setUpdateDownloading(false);
+        });
+      }
+    }
+
+    return () => {
+      if (window.electronAPI && window.electronAPI.removeUpdateListeners) {
+        window.electronAPI.removeUpdateListeners();
+      }
     };
   }, []);
 
@@ -202,20 +303,23 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
       myOwn: [] // This will be populated by custom games
     };
     
-    // Add custom categories
-    customCategories.forEach(cat => {
-      if (cat.id && cat.name) {
-        base[cat.id] = [];
-      }
-    });
+    // Categories and folders are the same - use libraryFolders
+    if (Array.isArray(libraryFolders)) {
+      libraryFolders.forEach(folder => {
+        if (folder.id && folder.name) {
+          // Use folder.id directly (not folder_folder.id) since categories = folders
+          base[folder.id] = [];
+        }
+      });
+    }
     
     return base;
-  }, [customCategories]);
+  }, [libraryFolders]);
 
   // Combine regular games with custom games - MUST be after customGames and gamesByCategory
   const allGames = useMemo(() => {
-    // Format custom games as a separate category
-    const myOwnGames = customGames.map(customGame => ({
+    // Format ALL custom games (not just own games)
+    const allCustomGamesFormatted = customGames.map(customGame => ({
       id: customGame.gameId,
       name: customGame.name,
       icon: customGame.icon,
@@ -229,16 +333,78 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
       tags: customGame.tags,
       playtime: customGame.playtime,
       lastPlayed: customGame.lastPlayed,
+      lastPlayedTimestamp: customGame.lastPlayedTimestamp || customGame.lastPlayed,
       size: customGame.size,
       developer: customGame.developer,
-      releaseDate: customGame.releaseDate
+      releaseDate: customGame.releaseDate,
+      isOwnGame: customGame.isOwnGame || false
     }));
     
-    return {
+    // Only include own games in myOwn folder that are published
+    const myOwnGames = allCustomGamesFormatted.filter(g => {
+      if (g.isOwnGame !== true) return false;
+      // Check if game is published
+      const originalGame = customGames.find(cg => cg.gameId === g.id);
+      if (!originalGame) return false;
+      const status = originalGame.status || originalGame.fullFormData?.status || 'draft';
+      return status === 'public' || status === 'published';
+    });
+    
+    // Calculate Recent games (same logic as Library page)
+    const recentGames = [...allCustomGamesFormatted]
+      .filter(g => g.lastPlayedTimestamp || g.lastPlayed)
+      .sort((a, b) => {
+        const aTime = a.lastPlayedTimestamp || a.lastPlayed;
+        const bTime = b.lastPlayedTimestamp || b.lastPlayed;
+        const aDate = new Date(aTime);
+        const bDate = new Date(bTime);
+        return bDate - aDate; // Most recent first
+      })
+      .slice(0, 20); // Limit to 20 most recent
+    
+    // Get all game IDs that are in user-created folders (not special folders)
+    const gamesInUserFolders = new Set();
+    if (Array.isArray(libraryFolders)) {
+      libraryFolders.forEach(folder => {
+        if (folder.gameIds && folder.gameIds.length > 0) {
+          folder.gameIds.forEach(gameId => gamesInUserFolders.add(String(gameId)));
+        }
+      });
+    }
+    
+    // Games outside user-created folders (not in myOwn and not in any user folder)
+    // These are games that should be displayed at root level
+    const gamesOutsideFolders = allCustomGamesFormatted.filter(game => {
+      const gameId = String(game.id);
+      return !game.isOwnGame && !gamesInUserFolders.has(gameId);
+    });
+    
+    const result = {
       ...gamesByCategory,
-      myOwn: myOwnGames
+      myOwn: myOwnGames,
+      recent: recentGames,
+      library: gamesOutsideFolders // Games added to library but not in user folders
     };
-  }, [customGames, gamesByCategory]);
+    
+    // Add games to their respective folders/categories (they are the same)
+    if (Array.isArray(libraryFolders)) {
+      libraryFolders.forEach(folder => {
+        const folderKey = folder.id; // Use folder.id directly since categories = folders
+        if (folder.gameIds && folder.gameIds.length > 0) {
+          result[folderKey] = folder.gameIds
+            .map(gameId => {
+              const game = allCustomGamesFormatted.find(g => String(g.id) === String(gameId));
+              return game;
+            })
+            .filter(Boolean);
+        } else {
+          result[folderKey] = [];
+        }
+      });
+    }
+    
+    return result;
+  }, [customGames, gamesByCategory, libraryFolders]);
 
   // Calculate vertical line height for active items - MUST be after allGames is defined
   useEffect(() => {
@@ -310,29 +476,29 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
     e.preventDefault();
     e.stopPropagation();
     
-    setSelectedCategoryId(null);
+    setSelectedFolderId(null);
     setContextMenuPosition({ x: e.clientX, y: e.clientY });
   };
 
-  // Handle context menu for categories
-  const handleCategoryContextMenu = (e, categoryId) => {
+  // Handle context menu for folders/categories (they are the same)
+  const handleFolderContextMenu = (e, folderId) => {
     e.preventDefault();
     e.stopPropagation();
     
-    setSelectedCategoryId(categoryId);
+    setSelectedFolderId(folderId);
     setContextMenuPosition({ x: e.clientX, y: e.clientY });
   };
 
   const handleCloseContextMenu = () => {
     setContextMenuPosition(null);
-    setSelectedCategoryId(null);
+    setSelectedFolderId(null);
   };
 
   // Close context menu when clicking outside
   useEffect(() => {
     const handleClickOutside = () => {
       setContextMenuPosition(null);
-      setSelectedCategoryId(null);
+      setSelectedFolderId(null);
     };
     if (contextMenuPosition) {
       document.addEventListener('click', handleClickOutside);
@@ -340,97 +506,76 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
     }
   }, [contextMenuPosition]);
 
-  // Handle adding new category
-  const handleAddCategory = () => {
-    if (!newCategoryName.trim()) {
-      setShowAddCategoryInput(false);
-      setNewCategoryName("");
+  // Handle creating library folder
+  const handleCreateLibraryFolder = () => {
+    if (!newFolderName.trim()) {
+      setShowAddFolderInput(false);
+      setNewFolderName("");
       return;
     }
     
-    const categoryId = newCategoryName.toLowerCase().replace(/\s+/g, '-');
-    const newCategory = {
-      id: categoryId,
-      name: newCategoryName.trim()
+    const newFolder = {
+      id: `folder-${Date.now()}`,
+      name: newFolderName.trim(),
+      gameIds: [],
+      createdAt: Date.now()
     };
     
-    const updated = [...customCategories, newCategory];
-    setCustomCategories(updated);
-    try {
-      saveUserData('sidebarCategories', updated);
-    } catch (e) {
-      console.error('Error saving categories:', e);
-    }
-    
-    setExpanded(prev => ({ ...prev, [categoryId]: true }));
-    setShowAddCategoryInput(false);
-    setNewCategoryName("");
+    const updatedFolders = [...libraryFolders, newFolder];
+    setLibraryFolders(updatedFolders);
+    saveUserData('libraryFolders', updatedFolders);
+    setNewFolderName("");
+    setShowAddFolderInput(false);
+    // Dispatch event to notify library page
+    window.dispatchEvent(new CustomEvent('libraryFolderUpdate'));
   };
 
-  const handleCancelAddCategory = () => {
-    setShowAddCategoryInput(false);
-    setNewCategoryName("");
+  // Handle renaming library folder
+  const handleRenameLibraryFolder = (folderId) => {
+    const folder = Array.isArray(libraryFolders) ? libraryFolders.find(f => f.id === folderId) : null;
+    if (!folder) return;
+    
+    setRenamingFolderId(folderId);
+    setRenameFolderName(folder.name);
+    handleCloseContextMenu();
   };
 
-  // Handle deleting category
-  const handleDeleteCategory = (categoryId) => {
-    if (categoryId === 'recent' || categoryId === 'myOwn') return; // Don't allow deleting default categories
-    
-    const updated = customCategories.filter(cat => cat.id !== categoryId);
-    setCustomCategories(updated);
-    try {
-      saveUserData('sidebarCategories', updated);
-    } catch (e) {
-      console.error('Error saving categories:', e);
+  const handleSaveFolderRename = () => {
+    if (!renameFolderName.trim() || !renamingFolderId) {
+      setRenamingFolderId(null);
+      setRenameFolderName("");
+      return;
     }
+    
+    const updatedFolders = libraryFolders.map(f => 
+      f.id === renamingFolderId ? { ...f, name: renameFolderName.trim() } : f
+    );
+    setLibraryFolders(updatedFolders);
+    saveUserData('libraryFolders', updatedFolders);
+    setRenamingFolderId(null);
+    setRenameFolderName("");
+    // Dispatch event to notify library page
+    window.dispatchEvent(new CustomEvent('libraryFolderUpdate'));
+  };
+
+  // Handle deleting library folder (same as category)
+  const handleDeleteLibraryFolder = (folderId) => {
+    const updatedFolders = libraryFolders.filter(f => f.id !== folderId);
+    setLibraryFolders(updatedFolders);
+    saveUserData('libraryFolders', updatedFolders);
     
     // Remove from expanded state
     setExpanded(prev => {
       const newExpanded = { ...prev };
-      delete newExpanded[categoryId];
+      delete newExpanded[folderId];
       return newExpanded;
     });
     
     handleCloseContextMenu();
+    // Dispatch event to notify library page
+    window.dispatchEvent(new CustomEvent('libraryFolderUpdate'));
   };
 
-  // Handle renaming category
-  const handleRenameCategory = (categoryId) => {
-    const category = customCategories.find(c => c.id === categoryId);
-    if (!category) return;
-    
-    setRenamingCategoryId(categoryId);
-    setRenameCategoryName(category.name);
-    handleCloseContextMenu();
-  };
-
-  const handleSaveRename = () => {
-    if (!renameCategoryName.trim() || !renamingCategoryId) {
-      setRenamingCategoryId(null);
-      setRenameCategoryName("");
-      return;
-    }
-    
-    const updated = customCategories.map(cat => 
-      cat.id === renamingCategoryId 
-        ? { ...cat, name: renameCategoryName.trim() }
-        : cat
-    );
-    setCustomCategories(updated);
-    try {
-      saveUserData('sidebarCategories', updated);
-    } catch (e) {
-      console.error('Error saving categories:', e);
-    }
-    
-    setRenamingCategoryId(null);
-    setRenameCategoryName("");
-  };
-
-  const handleCancelRename = () => {
-    setRenamingCategoryId(null);
-    setRenameCategoryName("");
-  };
 
   // Subscribe to all games for download/update tracking (moved after allGames definition)
   useEffect(() => {
@@ -446,16 +591,21 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
           setPausedGames((prev) => ({ ...prev, [gameId]: data.isPaused }));
         }
         
+        // Update downloading state based on progress
+        const isDownloading = data.progress > 0 && data.progress < 100;
+        setDownloadingGames((prev) => {
+          if (isDownloading && !prev[gameId]) {
+            return { ...prev, [gameId]: true };
+          } else if (!isDownloading && prev[gameId]) {
+            const newState = { ...prev };
+            delete newState[gameId];
+            return newState;
+          }
+          return prev;
+        });
+        
         // If progress is 100, mark as completed and remove from downloads/updates immediately
         if (data.progress >= 100) {
-          setDownloadingGames((prev) => {
-            if (prev[gameId]) {
-              const newState = { ...prev };
-              delete newState[gameId];
-              return newState;
-            }
-            return prev;
-          });
           setUpdatingGames((prev) => {
             if (prev[gameId]) {
               const newState = { ...prev };
@@ -575,6 +725,12 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
   };
 
   const handleCancelDownload = (gameId) => {
+    // Stop the global download first
+    stopGlobalDownload(gameId);
+    
+    // Clear all download states - this will notify subscribers with speed: 0, progress: 0
+    clearGlobalDownloadSpeed(gameId);
+    
     // Clear all download states
     setDownloadingGames((prev) => {
       const newState = { ...prev };
@@ -744,49 +900,39 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
     };
   };
 
-  const handleDownloadClick = async (gameId) => {
-    const currentlyDownloading = downloadingGames[gameId];
+  const handleDownloadClick = (gameId) => {
+    const currentProgress = getProgress(gameId);
+    const isPaused = getPaused(gameId);
+    const isDownloading = currentProgress > 0 && currentProgress < 100;
 
-    if (currentlyDownloading) {
-      // Pause/Cancel download
-      if (downloadTimersRef.current[gameId]) {
-        clearTimeout(downloadTimersRef.current[gameId]);
-        delete downloadTimersRef.current[gameId];
-      }
-      setDownloadingGames((prev) => ({ ...prev, [gameId]: false }));
-      return;
+    if (isDownloading) {
+      // If downloading, toggle pause/resume
+      const newPausedState = !isPaused;
+      setGlobalPaused(gameId, newPausedState);
+      setPausedGames((prev) => ({ ...prev, [gameId]: newPausedState }));
+    } else if (currentProgress === 0 || currentProgress >= 100) {
+      // Start or restart download
+      startGlobalDownload(gameId, true);
+      setDownloadingGames((prev) => ({ ...prev, [gameId]: true }));
+      setPausedGames((prev) => ({ ...prev, [gameId]: false }));
+      try { localStorage.setItem(`game_${gameId}_status`, 'download'); } catch (_) {}
     }
+  };
 
-    // Start download
-    setDownloadingGames((prev) => ({ ...prev, [gameId]: true }));
-    try { localStorage.setItem(`game_${gameId}_status`, 'download'); } catch (_) {}
-
-    // Create a promise-based timer that can be cancelled (longer for downloads)
-    const timerPromise = new Promise((resolve) => {
-      downloadTimersRef.current[gameId] = setTimeout(() => {
-        resolve();
-        delete downloadTimersRef.current[gameId];
-      }, 5000);
+  const handleStopDownload = (gameId) => {
+    stopGlobalDownload(gameId);
+    clearGlobalDownloadSpeed(gameId);
+    setDownloadingGames((prev) => {
+      const newState = { ...prev };
+      delete newState[gameId];
+      return newState;
     });
-
-    try {
-      await timerPromise;
-      // Show completed state
-      setCompletedGames((prev) => ({ ...prev, [gameId]: true }));
-      setDownloadingGames((prev) => ({ ...prev, [gameId]: false }));
-      try { localStorage.removeItem(`game_${gameId}_status`); } catch (_) {}
-      
-      // Clear completed state after 1 second
-      setTimeout(() => {
-        setCompletedGames((prev) => {
-          const newState = { ...prev };
-          delete newState[gameId];
-          return newState;
-        });
-      }, 1000);
-    } catch (error) {
-      // Download was cancelled, nothing to do
-    }
+    setPausedGames((prev) => {
+      const newState = { ...prev };
+      delete newState[gameId];
+      return newState;
+    });
+    try { localStorage.removeItem(`game_${gameId}_status`); } catch (_) {}
   };
 
   return (
@@ -825,189 +971,232 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
           ref={sidebarContentRef}
           onContextMenu={handleContextMenu}
         >
-          {Object.entries(filteredGames)
-            .sort(([a], [b]) => {
-              // Always put "myOwn" first
-              if (a === 'myOwn') return -1;
-              if (b === 'myOwn') return 1;
-              // Then "recent"
-              if (a === 'recent') return -1;
-              if (b === 'recent') return 1;
-              // Then all other categories (custom categories) alphabetically
-              return a.localeCompare(b);
-            })
-            .map(([section, games]) => {
-            const category = customCategories.find(c => c.id === section);
-            const categoryName = category ? category.name : (section === 'myOwn' ? 'MY OWN GAMES' : section.toUpperCase());
+          {(() => {
+            // Extract library games (games not in folders) to render separately
+            const libraryGames = filteredGames['library'] || [];
+            const otherSections = Object.entries(filteredGames).filter(([section]) => section !== 'library');
             
-            // Only show "My Own Games" section when there are games in it
-            return games.length || section === 'recent' || (section === 'myOwn' && games.length) || category ? (
-              <div key={section} className="sidebar-section">
-                {renamingCategoryId === section && category ? (
-                  <div className="sidebar-rename-category">
-                    <div className="add-category-input-wrapper">
-                      <input
-                        type="text"
-                        value={renameCategoryName}
-                        onChange={(e) => setRenameCategoryName(e.target.value)}
-                        placeholder="Kategoriename eingeben..."
-                        className="add-category-input"
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            handleSaveRename();
-                          } else if (e.key === 'Escape') {
-                            handleCancelRename();
-                          }
-                        }}
-                        autoFocus
-                      />
-                      <div className="add-category-actions">
-                        <button
-                          className="add-category-btn add-category-confirm"
-                          onClick={handleSaveRename}
-                          disabled={!renameCategoryName.trim()}
-                          title="Speichern (Enter)"
-                        >
-                          <CheckCircle size={14} />
-                        </button>
-                        <button
-                          className="add-category-btn add-category-cancel"
-                          onClick={handleCancelRename}
-                          title="Abbrechen (Esc)"
-                        >
-                          <X size={14} />
-                        </button>
+            // Helper function to render a game item
+            const renderGameItem = (game) => {
+              const updating = updatingGames[game.id];
+              const downloading = downloadingGames[game.id] && !updating;
+              const completed = completedGames[game.id];
+              const playing = playingGames[game.id];
+
+              return (
+                <div
+                  key={game.id}
+                  className={`game-item ${currentGame === game.id && location.pathname.startsWith('/game/') ? "active" : ""
+                    } ${updating ? "updating" : ""} ${downloading ? "downloading" : ""} ${completed === true ? "completed-download" : ""} ${completed === "update" ? "completed-update" : ""} ${playing ? "playing" : ""}`}
+                  onClick={() => handleGameClick(game.id)}
+                >
+                  <div className="game-row">
+                    <div className="game-clickable">
+                      <div className="game-icon">
+                        {game.logo ? (
+                          <img 
+                            src={game.logo}
+                            alt={game.name}
+                            onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
+                          />
+                        ) : null}
+                        <span style={{ display: game.logo ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', fontSize: '10px', fontWeight: 700, color: 'var(--accent-primary)' }}>
+                          {(game.name || '?').charAt(0).toUpperCase()}
+                        </span>
                       </div>
+                      <div className="game-name">{game.name}</div>
                     </div>
-                  </div>
-                ) : (
-                  <button
-                    className="section-header"
-                    onClick={() => toggle(section)}
-                    onContextMenu={(e) => {
-                      // Only show context menu for custom categories
-                      if (category && section !== 'recent' && section !== 'myOwn') {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleCategoryContextMenu(e, section);
-                      }
-                    }}
-                  >
-                    {expanded[section] ? (
-                      <FolderOpen size={16} className="section-folder-icon" />
-                    ) : (
-                      <Folder size={16} className="section-folder-icon" />
-                    )}
-                    {categoryName} ({games.length})
-                  </button>
-                )}
 
-                {expanded[section] && (
-                  <div 
-                    className="section-list"
-                    ref={(el) => {
-                      if (el) sectionListRefs.current[section] = el;
-                      else delete sectionListRefs.current[section];
-                    }}
-                  >
-                    {games.map((game) => {
-                      const updating = updatingGames[game.id];
-                      const downloading = downloadingGames[game.id] && !updating; // don't show downloading class if updating
-                      const completed = completedGames[game.id];
-                      const playing = playingGames[game.id];
-
-                      return (
-                        <div
-                          key={game.id}
-                          className={`game-item ${currentGame === game.id && location.pathname.startsWith('/game/') ? "active" : ""
-                            } ${updating ? "updating" : ""} ${downloading ? "downloading" : ""} ${completed === true ? "completed-download" : ""} ${completed === "update" ? "completed-update" : ""} ${playing ? "playing" : ""}`}
-                          onClick={() => handleGameClick(game.id)}
-                        >
-                            <div className="game-row">
-                            <div className="game-clickable">
-                              <div className="game-icon">
-                                {game.logo ? (
-                                  <img 
-                                    src={game.logo}
-                                    alt={game.name}
-                                    onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
-                                  />
-                                ) : null}
-                                <span style={{ display: game.logo ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', fontSize: '10px', fontWeight: 700, color: 'var(--accent-primary)' }}>
-                                  {(game.name || '?').charAt(0).toUpperCase()}
-                                </span>
-                              </div>
-                              <div className="game-name">{game.name}</div>
-                            </div>
-
-                            {game.isUpdateQueued && (
-                              updating ? (
-                                <div className="update-controls" onMouseEnter={() => setHoveredUpdateIcon(game.id)} onMouseLeave={() => setHoveredUpdateIcon(null)}>
-                                  <span className="update-speed">
-                                    {pausedGames[game.id] ? 'Paused' : `${typeof sidebarSpeeds[game.id] === 'number' ? sidebarSpeeds[game.id].toFixed(1) : '0.0'} MB/s`}
-                                  </span>
-                                  <button
-                                    className="icon-btn"
-                                    title={pausedGames[game.id] ? 'Resume' : 'Pause'}
-                                    onClick={(e) => { e.stopPropagation(); handlePauseDownload(game.id); }}
-                                  >
-                                    {pausedGames[game.id] ? <Play size={14} fill="currentColor" /> : <Pause size={14} fill="currentColor" />}
-                                  </button>
-                                  <button
-                                    className="icon-btn"
-                                    title="Cancel"
-                                    onClick={(e) => handleUpdateClick(game.id, e)}
-                                  >
-                                    <X size={14} fill="currentColor" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  className={`update-icon-btn ${updating && hoveredUpdateIcon !== game.id ? 'spinning' : ''}`}
-                                  onClick={(e) => {
-                                    handleUpdateClick(game.id, e);
-                                  }}
-                                  onMouseEnter={() => setHoveredUpdateIcon(game.id)}
-                                  onMouseLeave={() => setHoveredUpdateIcon(null)}
-                                  title="Click to start update"
-                                >
-                                  <RefreshCw size={14} />
-                                </button>
-                              )
-                            )}
-                          </div>
-
-                          {/* Download/Update Progress Bar (synced with global progress) */}
-                          {(downloading || updating) && (
-                            <div className="game-progress-bar" style={{
-                              width: `${sidebarProgress[game.id] || 0}%`
-                            }} />
-                          )}
-
+                    {game.isUpdateQueued && (
+                      updating ? (
+                        <div className="update-controls" onMouseEnter={() => setHoveredUpdateIcon(game.id)} onMouseLeave={() => setHoveredUpdateIcon(null)}>
+                          <span className="update-speed">
+                            {pausedGames[game.id] ? 'Paused' : `${typeof sidebarSpeeds[game.id] === 'number' ? sidebarSpeeds[game.id].toFixed(1) : '0.0'} MB/s`}
+                          </span>
+                          <button
+                            className="icon-btn"
+                            title={pausedGames[game.id] ? 'Resume' : 'Pause'}
+                            onClick={(e) => { e.stopPropagation(); handlePauseDownload(game.id); }}
+                          >
+                            {pausedGames[game.id] ? <Play size={14} fill="currentColor" /> : <Pause size={14} fill="currentColor" />}
+                          </button>
+                          <button
+                            className="icon-btn"
+                            title="Cancel"
+                            onClick={(e) => handleUpdateClick(game.id, e)}
+                          >
+                            <X size={14} fill="currentColor" />
+                          </button>
                         </div>
-                      );
-                    })}
+                      ) : (
+                        <button
+                          className={`update-icon-btn ${updating && hoveredUpdateIcon !== game.id ? 'spinning' : ''}`}
+                          onClick={(e) => {
+                            handleUpdateClick(game.id, e);
+                          }}
+                          onMouseEnter={() => setHoveredUpdateIcon(game.id)}
+                          onMouseLeave={() => setHoveredUpdateIcon(null)}
+                          title="Click to start update"
+                        >
+                          <RefreshCw size={14} />
+                        </button>
+                      )
+                    )}
                   </div>
-                )}
-              </div>
-            ) : null;
-          })}
+
+                  {/* Download/Update Progress Bar (synced with global progress) */}
+                  {(downloading || updating) && (
+                    <div className="game-progress-bar" style={{
+                      width: `${sidebarProgress[game.id] || 0}%`
+                    }} />
+                  )}
+                </div>
+              );
+            };
+
+            return (
+              <>
+                {/* Render library games at the same level as folders */}
+                {libraryGames
+                  .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                  .map(renderGameItem)}
+                
+                {/* Render folders and other sections */}
+                {otherSections
+                  .sort(([a], [b]) => {
+                    // Always put "myOwn" first
+                    if (a === 'myOwn') return -1;
+                    if (b === 'myOwn') return 1;
+                    // Then folders/categories (after myOwn, before recent)
+                    const aIsFolder = libraryFolders.some(f => f.id === a);
+                    const bIsFolder = libraryFolders.some(f => f.id === b);
+                    if (aIsFolder && !bIsFolder && b !== 'recent') return -1;
+                    if (!aIsFolder && bIsFolder && a !== 'recent') return 1;
+                    if (aIsFolder && bIsFolder) {
+                      const aFolder = libraryFolders.find(f => f.id === a);
+                      const bFolder = libraryFolders.find(f => f.id === b);
+                      if (aFolder && bFolder) return aFolder.name.localeCompare(bFolder.name);
+                      return a.localeCompare(b);
+                    }
+                    // Then "recent"
+                    if (a === 'recent') return -1;
+                    if (b === 'recent') return 1;
+                    // Then all other categories alphabetically
+                    return a.localeCompare(b);
+                  })
+                  .map(([section, games]) => {
+                    // Categories and folders are the same - use libraryFolders
+                    const folder = Array.isArray(libraryFolders) ? libraryFolders.find(f => f.id === section) : null;
+                    let categoryName;
+                    if (folder) {
+                      categoryName = folder.name;
+                    } else if (section === 'myOwn') {
+                      categoryName = 'MY OWN GAMES';
+                    } else {
+                      categoryName = section.toUpperCase();
+                    }
+                    
+                    // Only show "My Own Games" section when there are games in it
+                    // Show folders/categories if they exist, even if empty
+                    return games.length || section === 'recent' || (section === 'myOwn' && games.length) || folder ? (
+                      <div key={section} className="sidebar-section">
+                        {(renamingFolderId && folder && folder.id === section) ? (
+                          <div className="sidebar-rename-category">
+                            <div className="add-category-input-wrapper">
+                              <input
+                                type="text"
+                                value={renameFolderName}
+                                onChange={(e) => setRenameFolderName(e.target.value)}
+                                placeholder="Ordnername eingeben..."
+                                className="add-category-input"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    handleSaveFolderRename();
+                                  } else if (e.key === 'Escape') {
+                                    setRenamingFolderId(null);
+                                    setRenameFolderName("");
+                                  }
+                                }}
+                                autoFocus
+                              />
+                              <div className="add-category-actions">
+                                <button
+                                  className="add-category-btn add-category-confirm"
+                                  onClick={handleSaveFolderRename}
+                                  disabled={!renameFolderName.trim()}
+                                  title="Speichern (Enter)"
+                                >
+                                  <CheckCircle size={14} />
+                                </button>
+                                <button
+                                  className="add-category-btn add-category-cancel"
+                                  onClick={() => {
+                                    setRenamingFolderId(null);
+                                    setRenameFolderName("");
+                                  }}
+                                  title="Abbrechen (Esc)"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            className="section-header"
+                            onClick={() => toggle(section)}
+                            onContextMenu={(e) => {
+                              // Show context menu for folders/categories (they are the same)
+                              if (folder && section !== 'recent' && section !== 'myOwn') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleFolderContextMenu(e, folder.id);
+                              }
+                            }}
+                          >
+                            {expanded[section] ? (
+                              <FolderOpen size={16} className="section-folder-icon" />
+                            ) : (
+                              <Folder size={16} className="section-folder-icon" />
+                            )}
+                            {categoryName} ({games.length})
+                          </button>
+                        )}
+
+                        {expanded[section] && (
+                          <div 
+                            className="section-list"
+                            ref={(el) => {
+                              if (el) sectionListRefs.current[section] = el;
+                              else delete sectionListRefs.current[section];
+                            }}
+                          >
+                            {games.map(renderGameItem)}
+                          </div>
+                        )}
+                      </div>
+                    ) : null;
+                  })}
+              </>
+            );
+          })()}
           
-          {/* Add Category Input Field */}
-          {showAddCategoryInput && (
+          {/* Add Folder Input Field */}
+          {showAddFolderInput && (
             <div className="sidebar-add-category">
               <div className="add-category-input-wrapper">
                 <input
                   type="text"
-                  value={newCategoryName}
-                  onChange={(e) => setNewCategoryName(e.target.value)}
-                  placeholder="Kategoriename eingeben..."
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  placeholder="Ordnername eingeben..."
                   className="add-category-input"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
-                      handleAddCategory();
+                      handleCreateLibraryFolder();
                     } else if (e.key === 'Escape') {
-                      handleCancelAddCategory();
+                      setShowAddFolderInput(false);
+                      setNewFolderName("");
                     }
                   }}
                   autoFocus
@@ -1015,15 +1204,18 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
                 <div className="add-category-actions">
                   <button
                     className="add-category-btn add-category-confirm"
-                    onClick={handleAddCategory}
-                    disabled={!newCategoryName.trim()}
+                    onClick={handleCreateLibraryFolder}
+                    disabled={!newFolderName.trim()}
                     title="Hinzufügen (Enter)"
                   >
                     <CheckCircle size={14} />
                   </button>
                   <button
                     className="add-category-btn add-category-cancel"
-                    onClick={handleCancelAddCategory}
+                    onClick={() => {
+                      setShowAddFolderInput(false);
+                      setNewFolderName("");
+                    }}
                     title="Abbrechen (Esc)"
                   >
                     <X size={14} />
@@ -1047,31 +1239,31 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          {selectedCategoryId ? (
-            // Context menu for a specific category (only shows for custom categories)
+          {selectedFolderId ? (
+            // Context menu for a library folder
             <>
-              {customCategories.find(c => c.id === selectedCategoryId) ? (
+              {Array.isArray(libraryFolders) && libraryFolders.find(f => f.id === selectedFolderId) ? (
                 <>
                   <button
                     className="context-menu-item"
                     onClick={() => {
-                      handleRenameCategory(selectedCategoryId);
+                      handleRenameLibraryFolder(selectedFolderId);
                       setContextMenuPosition(null);
                     }}
                   >
                     <Edit2 size={14} />
-                    <span>Kategorie umbenennen</span>
+                    <span>Ordner umbenennen</span>
                   </button>
                   <div className="context-menu-divider" />
                   <button
                     className="context-menu-item context-menu-item-danger"
                     onClick={() => {
-                      handleDeleteCategory(selectedCategoryId);
+                      handleDeleteLibraryFolder(selectedFolderId);
                       setContextMenuPosition(null);
                     }}
                   >
                     <Trash2 size={14} />
-                    <span>Kategorie löschen</span>
+                    <span>Ordner löschen</span>
                   </button>
                 </>
               ) : null}
@@ -1082,12 +1274,12 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
               <button
                 className="context-menu-item"
                 onClick={() => {
-                  setShowAddCategoryInput(true);
+                  setShowAddFolderInput(true);
                   setContextMenuPosition(null);
                 }}
               >
                 <FolderPlus size={14} />
-                <span>Kategorie hinzufügen</span>
+                <span>Ordner hinzufügen</span>
               </button>
             </>
           )}
@@ -1141,20 +1333,26 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
                       const menuWidth = 280;
                       const menuHeight = 290; // approximate height
                       
-                      // Calculate horizontal position
-                      const rightSpace = window.innerWidth - rect.right;
-                      let left = rect.right + 8;
+                      // Calculate horizontal position - show to the right of the sidebar
+                      const sidebarRight = rect.right;
+                      const rightSpace = window.innerWidth - sidebarRight;
+                      let left = sidebarRight + 8;
                       
                       // Check if menu would overflow to the right
-                      if (rightSpace < menuWidth && rect.left > menuWidth) {
-                        left = rect.left - menuWidth - 8; // Show to the left
+                      if (rightSpace < menuWidth + 8) {
+                        // Show to the left of the sidebar instead
+                        left = rect.left - menuWidth - 8;
+                        // Ensure it doesn't go off-screen to the left
+                        if (left < 8) {
+                          left = 8;
+                        }
                       }
                       
-                      // Calculate vertical position - center menu on item
-                      let top = rect.top + (rect.height / 2) - (menuHeight / 2);
+                      // Calculate vertical position - align top of menu with top of item
+                      let top = rect.top;
                       
                       // Adjust if menu would overflow at the bottom
-                      if (top + menuHeight > window.innerHeight) {
+                      if (top + menuHeight > window.innerHeight - 8) {
                         top = window.innerHeight - menuHeight - 8;
                       }
                       
@@ -1227,7 +1425,46 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
           
           <div className="footer-info">
             <span className="footer-text">© 2024 Kinma</span>
-            <span className="footer-version">v1.0.0</span>
+            {updateAvailable ? (
+              <button
+                className="footer-update-btn"
+                onClick={async () => {
+                  if (updateDownloaded) {
+                    // Install update
+                    if (window.electronAPI && window.electronAPI.installUpdate) {
+                      await window.electronAPI.installUpdate();
+                    }
+                  } else if (!updateDownloading) {
+                    // Download update
+                    setUpdateDownloading(true);
+                    if (window.electronAPI && window.electronAPI.downloadUpdate) {
+                      await window.electronAPI.downloadUpdate();
+                    }
+                  }
+                }}
+                disabled={updateDownloading && !updateDownloaded}
+                title={updateDownloaded ? 'Install update and restart' : updateDownloading ? `Downloading update... ${Math.round(updateProgress)}%` : 'Download update'}
+              >
+                {updateDownloaded ? (
+                  <>
+                    <CheckCircle size={14} />
+                    <span>Install Update</span>
+                  </>
+                ) : updateDownloading ? (
+                  <>
+                    <RefreshCw size={14} className="spinning" />
+                    <span>{Math.round(updateProgress)}%</span>
+                  </>
+                ) : (
+                  <>
+                    <ArrowDownCircle size={14} />
+                    <span>Update Available</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <span className="footer-version">v{appVersion}</span>
+            )}
           </div>
         </div>
       )}

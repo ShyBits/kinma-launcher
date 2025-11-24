@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { User, Edit2, X, Plus, Layout, BarChart3, Image, List, Code, Save, Terminal, Bug, FileText, AlertCircle, Package, Settings, History, Award, ShoppingBag, Heart, ChevronDown, ChevronUp, Minimize2, Sparkles, Target, Sword, Shield, Trophy, Mountain, Skull, Activity, Laugh, Rows, PanelLeftClose, PanelRightClose, FileCode, Paintbrush, Brackets, Search, Filter } from 'lucide-react';
-import { getUserData, saveUserData } from '../utils/UserDataManager';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { User, Edit2, X, Plus, Layout, BarChart3, Image, List, Code, Save, Terminal, Bug, FileText, AlertCircle, Package, Settings, History, Award, ShoppingBag, Heart, ChevronDown, ChevronUp, Minimize2, Sparkles, Target, Sword, Shield, Trophy, Mountain, Skull, Activity, Laugh, Rows, PanelLeftClose, PanelRightClose, FileCode, Paintbrush, Brackets, Search, Filter, Grid, Eye, EyeOff } from 'lucide-react';
+import { getUserData, saveUserData, getAllUsersData } from '../utils/UserDataManager';
 import CodeEditor from '../components/CodeEditor';
 import './Profile.css';
 import './GamePromo.css';
+import './Market.css';
 
 const Profile = ({ navigate }) => {
   const [authUser, setAuthUser] = useState(() => {
@@ -94,6 +95,11 @@ const Profile = ({ navigate }) => {
   const [profileView, setProfileView] = useState('overview');
   const [isTemplatesExpanded, setIsTemplatesExpanded] = useState(true);
   const [isResizing, setIsResizing] = useState(false);
+  const [inventoryViewMode, setInventoryViewMode] = useState('grid');
+  const [inventorySearch, setInventorySearch] = useState('');
+  const [inventoryFilter, setInventoryFilter] = useState('all');
+  const [inventoryRarityFilter, setInventoryRarityFilter] = useState('all');
+  const [inventoryGameFilter, setInventoryGameFilter] = useState('all');
 
   const previewRef = useRef(null);
   const editorRef = useRef(null);
@@ -610,6 +616,217 @@ const Profile = ({ navigate }) => {
 
   const userName = authUser?.name || authUser?.username || authUser?.email?.split('@')[0] || 'Player';
 
+  // Get all inventory items from all games
+  const getAllInventoryItems = () => {
+    try {
+      const allItems = [];
+      
+      // Get all games from all users
+      const allGames = getAllUsersData('customGames');
+      
+      // Create a map of gameId to game name
+      const gameMap = {};
+      allGames.forEach(game => {
+        const gameId = game.gameId || game.id;
+        if (gameId) {
+          gameMap[gameId] = game.name || game.gameName || gameId;
+        }
+      });
+      
+      // Get inventory for each game
+      Object.keys(gameMap).forEach(gameId => {
+        const inventory = getUserData(`inventory_${gameId}`, []);
+        if (inventory && Array.isArray(inventory) && inventory.length > 0) {
+          inventory.forEach(item => {
+            allItems.push({
+              ...item,
+              gameId,
+              gameName: gameMap[gameId]
+            });
+          });
+        }
+      });
+      
+      // Also check localStorage directly for any inventory_ keys
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('inventory_')) {
+          const gameId = key.replace('inventory_', '');
+          if (!gameMap[gameId]) {
+            // Game not in customGames, use gameId as name
+            gameMap[gameId] = gameId;
+          }
+          try {
+            const inventory = JSON.parse(localStorage.getItem(key) || '[]');
+            if (Array.isArray(inventory) && inventory.length > 0) {
+              inventory.forEach(item => {
+                // Check if item already added
+                const exists = allItems.some(existing => 
+                  existing.gameId === gameId && existing.id === item.id
+                );
+                if (!exists) {
+                  allItems.push({
+                    ...item,
+                    gameId,
+                    gameName: gameMap[gameId]
+                  });
+                }
+              });
+            }
+          } catch (_) {
+            // Skip invalid inventory data
+          }
+        }
+      }
+      
+      return allItems;
+    } catch (_) {
+      return [];
+    }
+  };
+
+  const [inventoryRefresh, setInventoryRefresh] = useState(0);
+  
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setInventoryRefresh(prev => prev + 1);
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('user-changed', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('user-changed', handleStorageChange);
+    };
+  }, []);
+
+  const allInventoryItems = useMemo(() => getAllInventoryItems(), [authUser, inventoryRefresh]);
+
+  // Get unique games from inventory
+  const inventoryGames = useMemo(() => {
+    const games = new Set();
+    allInventoryItems.forEach(item => {
+      if (item.gameId && item.gameName) {
+        games.add(JSON.stringify({ id: item.gameId, name: item.gameName }));
+      }
+    });
+    return Array.from(games).map(g => JSON.parse(g));
+  }, [allInventoryItems]);
+
+  // Filter and sort inventory items
+  const filteredInventoryItems = useMemo(() => {
+    let filtered = [...allInventoryItems];
+
+    // Search filter
+    if (inventorySearch) {
+      filtered = filtered.filter(item =>
+        item.name?.toLowerCase().includes(inventorySearch.toLowerCase()) ||
+        item.description?.toLowerCase().includes(inventorySearch.toLowerCase())
+      );
+    }
+
+    // Game filter
+    if (inventoryGameFilter !== 'all') {
+      filtered = filtered.filter(item => item.gameId === inventoryGameFilter);
+    }
+
+    // Rarity filter
+    if (inventoryRarityFilter !== 'all') {
+      filtered = filtered.filter(item =>
+        item.rarity?.toLowerCase() === inventoryRarityFilter.toLowerCase()
+      );
+    }
+
+    return filtered;
+  }, [allInventoryItems, inventorySearch, inventoryGameFilter, inventoryRarityFilter]);
+
+  const handleSellItem = (item) => {
+    if (navigate && item.gameId) {
+      navigate(`/market/${item.gameId}`);
+    }
+  };
+
+  // Test functions for adding/removing dummy items
+  const handleAddDummyItems = () => {
+    const dummyItems = [
+      {
+        id: `dummy-${Date.now()}-1`,
+        name: 'Epic Sword',
+        description: 'A powerful legendary weapon',
+        rarity: 'epic',
+        type: 'Weapon',
+        image: '⚔️',
+        gameId: 'test-game-1',
+        gameName: 'Test Game 1'
+      },
+      {
+        id: `dummy-${Date.now()}-2`,
+        name: 'Rare Shield',
+        description: 'A sturdy defensive item',
+        rarity: 'rare',
+        type: 'Armor',
+        image: '🛡️',
+        gameId: 'test-game-1',
+        gameName: 'Test Game 1'
+      },
+      {
+        id: `dummy-${Date.now()}-3`,
+        name: 'Legendary Potion',
+        description: 'Restores health completely',
+        rarity: 'legendary',
+        type: 'Consumable',
+        image: '🧪',
+        gameId: 'test-game-2',
+        gameName: 'Test Game 2'
+      },
+      {
+        id: `dummy-${Date.now()}-4`,
+        name: 'Common Boots',
+        description: 'Basic footwear',
+        rarity: 'common',
+        type: 'Armor',
+        image: '👢',
+        gameId: 'test-game-2',
+        gameName: 'Test Game 2'
+      }
+    ];
+
+    dummyItems.forEach(item => {
+      const inventory = getUserData(`inventory_${item.gameId}`, []);
+      inventory.push(item);
+      saveUserData(`inventory_${item.gameId}`, inventory);
+    });
+
+    // Force re-render
+    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new Event('user-changed'));
+  };
+
+  const handleRemoveDummyItems = () => {
+    // Remove all dummy items
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('inventory_')) {
+        try {
+          const inventory = JSON.parse(localStorage.getItem(key) || '[]');
+          if (Array.isArray(inventory)) {
+            const filtered = inventory.filter(item => !item.id || !item.id.startsWith('dummy-'));
+            if (filtered.length !== inventory.length) {
+              saveUserData(key.replace('inventory_', ''), filtered);
+            }
+          }
+        } catch (_) {
+          // Skip invalid data
+        }
+      }
+    }
+
+    // Force re-render
+    window.dispatchEvent(new Event('storage'));
+    window.dispatchEvent(new Event('user-changed'));
+  };
+
   const handleAddPrebuilt = (type) => {
     const prebuiltItems = getPrebuiltItems();
     const item = prebuiltItems[type];
@@ -660,34 +877,279 @@ const Profile = ({ navigate }) => {
           <div className="profile-view-mode">
             <div className="profile-main-content">
               <div className="profile-main-content-inner">
-            <div className="profile-placeholder">
-              <User size={64} />
-              <h2>{userName}</h2>
-              <p>Your custom profile page will appear here</p>
-              <button className="edit-profile-btn" onClick={() => setIsEditMode(true)}>
-                <Edit2 size={16} />
-                Edit Profile
-              </button>
-            </div>
-            {(profileHTML || profileCSS || profileJS) && (
-              <div 
-                className="profile-content-preview"
-                dangerouslySetInnerHTML={{ 
-                  __html: `
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                      <style>${profileCSS}</style>
-                    </head>
-                    <body>
-                      ${profileHTML}
-                      <script>${profileJS}</script>
-                    </body>
-                    </html>
-                  `
-                }}
-              />
-            )}
+                {/* Render content based on selected view */}
+                {profileView === 'overview' && (
+                  <div className="profile-section">
+                    <div className="profile-overview-content">
+                      {(profileHTML || profileCSS || profileJS) ? (
+                        <div 
+                          className="profile-content-preview"
+                          dangerouslySetInnerHTML={{ 
+                            __html: `
+                              <!DOCTYPE html>
+                              <html>
+                              <head>
+                                <style>${profileCSS}</style>
+                              </head>
+                              <body>
+                                ${profileHTML}
+                                <script>${profileJS}</script>
+                              </body>
+                              </html>
+                            `
+                          }}
+                        />
+                      ) : (
+                        <div className="profile-placeholder">
+                          <User size={64} />
+                          <h2>{userName}</h2>
+                          <p>Your custom profile page will appear here</p>
+                          <button className="edit-profile-btn" onClick={() => setIsEditMode(true)}>
+                            <Edit2 size={16} />
+                            Edit Profile
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {profileView === 'inventory' && (
+                  <div className="profile-section">
+                    <div className="profile-section-header">
+                      <h1 className="profile-section-title">Inventory</h1>
+                      <div className="inventory-controls">
+                        <div className="inventory-search">
+                          <Search size={16} />
+                          <input
+                            type="text"
+                            placeholder="Search items..."
+                            value={inventorySearch}
+                            onChange={(e) => setInventorySearch(e.target.value)}
+                            className="inventory-search-input"
+                          />
+                        </div>
+                        <div className="view-mode-controls">
+                          <button
+                            className={`view-mode-btn ${inventoryViewMode === 'grid' ? 'active' : ''}`}
+                            onClick={() => setInventoryViewMode('grid')}
+                            title="Grid view"
+                          >
+                            <Grid size={16} />
+                          </button>
+                          <button
+                            className={`view-mode-btn ${inventoryViewMode === 'row' ? 'active' : ''}`}
+                            onClick={() => setInventoryViewMode('row')}
+                            title="List view"
+                          >
+                            <List size={16} />
+                          </button>
+                        </div>
+                        <div className="inventory-test-controls">
+                          <button
+                            className="test-btn test-add-btn"
+                            onClick={handleAddDummyItems}
+                            title="Add dummy items"
+                          >
+                            <Plus size={14} />
+                            Add Test Items
+                          </button>
+                          <button
+                            className="test-btn test-remove-btn"
+                            onClick={handleRemoveDummyItems}
+                            title="Remove dummy items"
+                          >
+                            <X size={14} />
+                            Remove Test Items
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="profile-inventory-content">
+                      <div className="inventory-filters">
+                        <select
+                          className="inventory-filter-select"
+                          value={inventoryGameFilter}
+                          onChange={(e) => setInventoryGameFilter(e.target.value)}
+                        >
+                          <option value="all">All Games</option>
+                          {inventoryGames.map(game => (
+                            <option key={game.id} value={game.id}>{game.name}</option>
+                          ))}
+                        </select>
+                        <select
+                          className="inventory-filter-select"
+                          value={inventoryRarityFilter}
+                          onChange={(e) => setInventoryRarityFilter(e.target.value)}
+                        >
+                          <option value="all">All Rarities</option>
+                          <option value="common">Common</option>
+                          <option value="rare">Rare</option>
+                          <option value="epic">Epic</option>
+                          <option value="legendary">Legendary</option>
+                        </select>
+                        {filteredInventoryItems.length > 0 && (
+                          <div className="inventory-count">{filteredInventoryItems.length} {filteredInventoryItems.length === 1 ? 'item' : 'items'}</div>
+                        )}
+                      </div>
+                      {filteredInventoryItems.length === 0 ? (
+                        <div className="profile-empty-state">
+                          <Package size={64} />
+                          <h2>No items in inventory</h2>
+                          <p>{allInventoryItems.length === 0 ? 'Items you own will appear here' : 'No items match your filters'}</p>
+                        </div>
+                      ) : (
+                        <div className={`items-grid ${inventoryViewMode === 'grid' ? 'grid-view' : 'row-view'}`}>
+                          {filteredInventoryItems.map((item, index) => (
+                            <div key={`${item.gameId}-${item.id || index}`} className="inventory-item-card">
+                              <div className="inventory-item-image">
+                                {item.imageUrl ? (
+                                  <img
+                                    src={item.imageUrl}
+                                    alt={item.name}
+                                    onError={(e) => {
+                                      e.target.style.display = 'none';
+                                      if (e.target.nextSibling) {
+                                        e.target.nextSibling.style.display = 'flex';
+                                      }
+                                    }}
+                                  />
+                                ) : null}
+                                <div className="inventory-item-icon" style={{ display: item.imageUrl ? 'none' : 'flex' }}>
+                                  {item.image || '📦'}
+                                </div>
+                                <div className={`inventory-rarity-badge rarity-${(item.rarity || 'common').toLowerCase()}`}>
+                                  {(item.rarity || 'common').toUpperCase()}
+                                </div>
+                              </div>
+                              {inventoryViewMode === 'row' && (
+                                <div className={`inventory-rarity-line-vertical rarity-${(item.rarity || 'common').toLowerCase()}`}></div>
+                              )}
+                              <div className={`inventory-rarity-line rarity-${(item.rarity || 'common').toLowerCase()}`}></div>
+                              <div className="inventory-item-info">
+                                <div className="inventory-item-header">
+                                  <h3 className="inventory-item-name">{item.name || 'Unnamed Item'}</h3>
+                                  {item.gameName && (
+                                    <span className="inventory-game-badge">{item.gameName}</span>
+                                  )}
+                                </div>
+                                {item.description && (
+                                  <p className="inventory-item-description">{item.description}</p>
+                                )}
+                                <div className="inventory-item-footer">
+                                  <span className="inventory-item-type">{item.type || 'Item'}</span>
+                                  <button
+                                    className="inventory-sell-btn"
+                                    onClick={() => handleSellItem(item)}
+                                  >
+                                    <ShoppingBag size={14} />
+                                    Sell
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {profileView === 'purchases' && (
+                  <div className="profile-section">
+                    <h1 className="profile-section-title">Purchases</h1>
+                    <div className="profile-purchases-content">
+                      <div className="profile-empty-state">
+                        <ShoppingBag size={64} />
+                        <h2>No purchases yet</h2>
+                        <p>Your purchase history will appear here</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {profileView === 'favorites' && (
+                  <div className="profile-section">
+                    <h1 className="profile-section-title">Favorites</h1>
+                    <div className="profile-favorites-content">
+                      <div className="profile-empty-state">
+                        <Heart size={64} />
+                        <h2>No favorites yet</h2>
+                        <p>Games and items you favorite will appear here</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {profileView === 'achievements' && (
+                  <div className="profile-section">
+                    <h1 className="profile-section-title">Achievements</h1>
+                    <div className="profile-achievements-content">
+                      <div className="profile-empty-state">
+                        <Award size={64} />
+                        <h2>No achievements yet</h2>
+                        <p>Your achievements will appear here</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {profileView === 'history' && (
+                  <div className="profile-section">
+                    <h1 className="profile-section-title">History</h1>
+                    <div className="profile-history-content">
+                      <div className="profile-empty-state">
+                        <History size={64} />
+                        <h2>No activity history</h2>
+                        <p>Your activity history will appear here</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {profileView === 'settings' && (
+                  <div className="profile-section">
+                    <h1 className="profile-section-title">Settings</h1>
+                    <div className="profile-settings-content">
+                      <div className="settings-section">
+                        <h3 className="settings-section-title">Profile Settings</h3>
+                        <div className="settings-item">
+                          <label className="settings-label">Display Name</label>
+                          <input 
+                            type="text" 
+                            className="settings-input" 
+                            value={userName}
+                            readOnly
+                          />
+                        </div>
+                        <div className="settings-item">
+                          <label className="settings-label">Email</label>
+                          <input 
+                            type="email" 
+                            className="settings-input" 
+                            value={authUser?.email || ''}
+                            readOnly
+                          />
+                        </div>
+                      </div>
+                      <div className="settings-section">
+                        <h3 className="settings-section-title">Preferences</h3>
+                        <div className="settings-item">
+                          <label className="settings-label">
+                            <input type="checkbox" className="settings-checkbox" />
+                            <span>Enable notifications</span>
+                          </label>
+                        </div>
+                        <div className="settings-item">
+                          <label className="settings-label">
+                            <input type="checkbox" className="settings-checkbox" />
+                            <span>Show online status</span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
           </div>
 
@@ -706,6 +1168,14 @@ const Profile = ({ navigate }) => {
                 style={{ width: profileRightSidebarWidth }}
               >
               <div className="sidebar-title">Profile</div>
+              {profileView === 'overview' && (
+                <div className="sidebar-edit-button">
+                  <button className="edit-profile-btn" onClick={() => setIsEditMode(true)}>
+                    <Edit2 size={16} />
+                    Edit Profile
+                  </button>
+                </div>
+              )}
               <nav className="sidebar-nav">
                 {/* Main Section */}
                 <div className="sidebar-nav-section sidebar-nav-main">

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Settings, Users, MessageSquare, ShoppingCart, Bell, User, Plus, Minus, CreditCard, Coins, Store, Globe, Menu,
-  BarChart3, Package, FileText, Upload, TrendingUp, DollarSign, Download, Check, RefreshCw, AlertCircle, Info, Gift, X, ShoppingBag, Award, Building2, LogOut
+  BarChart3, Package, FileText, Upload, TrendingUp, DollarSign, Download, Check, RefreshCw, AlertCircle, Info, Gift, X, ShoppingBag, Award, Building2, LogOut, ChevronRight
 } from 'lucide-react';
 import AuthModal from './AuthModal';
 import { getUserData, saveUserData, getCurrentUserId } from '../utils/UserDataManager';
@@ -120,6 +120,7 @@ const TopNavigation = ({
   const studioMenuTimeoutRef = useRef(null);
   const balanceMenuJustOpenedRef = useRef(false);
   const balanceMenuTimeoutRef = useRef(null);
+  const [isMenuToggleHovered, setIsMenuToggleHovered] = useState(false);
   
   // Get preview icon component
   const getPreviewIcon = (iconType) => {
@@ -251,6 +252,8 @@ const TopNavigation = ({
   
   // Check if user has game studio access
   const [hasGameStudioAccess, setHasGameStudioAccess] = useState(false);
+  const [gameStudioEnabled, setGameStudioEnabled] = useState(false);
+  
   useEffect(() => {
     const checkAccess = () => {
       try {
@@ -264,11 +267,14 @@ const TopNavigation = ({
           // Don't show switch button if status is pending
           const hasAccess = (hasDeveloperAccess || hasStudioAccess) && accessStatus !== 'pending';
           setHasGameStudioAccess(hasAccess);
+          setGameStudioEnabled(hasAccess);
         } else {
           setHasGameStudioAccess(false);
+          setGameStudioEnabled(false);
         }
       } catch (_) {
         setHasGameStudioAccess(false);
+        setGameStudioEnabled(false);
       }
     };
     
@@ -284,6 +290,23 @@ const TopNavigation = ({
       window.removeEventListener('user-changed', handleUserChange);
     };
   }, []);
+  
+  const handleGameStudioToggle = (enabled) => {
+    const userId = getCurrentUserId();
+    if (userId) {
+      saveUserData('gameStudioAccess', enabled, userId);
+      saveUserData('developerAccess', enabled, userId);
+      if (enabled) {
+        saveUserData('developerAccessStatus', 'approved', userId);
+        // Navigate to Game Studio when enabled
+        navigate('/game-studio');
+      }
+      setGameStudioEnabled(enabled);
+      setHasGameStudioAccess(enabled);
+      // Trigger user-changed event
+      window.dispatchEvent(new CustomEvent('user-changed'));
+    }
+  };
   
   const handleAmountChange = (delta) => {
     setTopUpAmount(prev => Math.max(0, prev + delta));
@@ -1231,9 +1254,23 @@ const TopNavigation = ({
               onToggleSidebar();
             }
           }}
+          onMouseEnter={() => setIsMenuToggleHovered(true)}
+          onMouseLeave={() => setIsMenuToggleHovered(false)}
           title="Toggle Sidebar"
         >
-          <Menu size={18} />
+          {(() => {
+            const isCollapsed = sidebarWidth === 0;
+            if (isCollapsed && isMenuToggleHovered) {
+              // Menu is closed, show "open" icon on hover
+              return <ChevronRight size={18} />;
+            } else if (!isCollapsed && isMenuToggleHovered) {
+              // Menu is open, show "close" icon on hover
+              return <X size={18} />;
+            } else {
+              // Default: show hamburger icon
+              return <Menu size={18} />;
+            }
+          })()}
         </button>
       )}
       
@@ -1626,37 +1663,65 @@ const TopNavigation = ({
         ) : (
           /* Regular navigation - Right side items */
           <>
-            {/* Game Studio Switch Button - Only show if user has access */}
-            {hasGameStudioAccess && (
-              <>
-                <button 
-                  className="nav-item nav-item-with-text"
-                  onClick={() => navigate('/game-studio')}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '8px 12px',
-                    background: 'rgba(0, 212, 255, 0.1)',
-                    border: '1px solid var(--accent-primary)',
-                    borderRadius: '8px',
-                    color: 'var(--accent-primary)',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    transition: 'all 0.2s ease'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = 'rgba(0, 212, 255, 0.15)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'rgba(0, 212, 255, 0.1)';
-                  }}
-                >
-                  <Building2 size={18} />
-                  <span>Studio View</span>
-                </button>
-                <div className="nav-separator" />
-              </>
+            {/* Game Studio Toggle Button - Always visible */}
+            {authUser && (
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px',
+                padding: '4px 8px',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                borderRadius: '8px'
+              }}>
+                <span style={{ 
+                  fontSize: '12px', 
+                  color: 'var(--text-secondary)',
+                  whiteSpace: 'nowrap'
+                }}>
+                  Game Studio
+                </span>
+                <label style={{ 
+                  position: 'relative',
+                  display: 'inline-block',
+                  width: '40px',
+                  height: '20px',
+                  cursor: 'pointer'
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={gameStudioEnabled}
+                    onChange={(e) => handleGameStudioToggle(e.target.checked)}
+                    style={{
+                      opacity: 0,
+                      width: 0,
+                      height: 0
+                    }}
+                  />
+                  <span style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: gameStudioEnabled ? 'var(--accent-primary)' : 'rgba(255, 255, 255, 0.2)',
+                    borderRadius: '20px',
+                    transition: 'background-color 0.2s ease'
+                  }}>
+                    <span style={{
+                      position: 'absolute',
+                      top: '2px',
+                      left: gameStudioEnabled ? '22px' : '2px',
+                      width: '16px',
+                      height: '16px',
+                      backgroundColor: '#ffffff',
+                      borderRadius: '50%',
+                      transition: 'left 0.2s ease',
+                      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
+                    }} />
+                  </span>
+                </label>
+              </div>
             )}
             
             {/* Notification Button */}

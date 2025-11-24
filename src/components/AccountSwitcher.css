@@ -430,6 +430,23 @@
     text-align: center;
 }
 
+.account-switcher-confirm-text-yes,
+.account-switcher-confirm-text-no {
+    display: none;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.account-switcher-card.confirming:has(.account-switcher-confirm-btn-yes:hover) .account-switcher-confirm-text-yes {
+    display: inline;
+    color: rgba(16, 185, 129, 1);
+}
+
+.account-switcher-card.confirming:has(.account-switcher-confirm-btn-no:hover) .account-switcher-confirm-text-no {
+    display: inline;
+    color: rgba(239, 68, 68, 1);
+}
+
 .account-switcher-confirm-buttons {
     display: flex;
     gap: 8px;

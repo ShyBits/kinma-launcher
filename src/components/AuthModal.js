@@ -3,6 +3,8 @@ import { X } from 'lucide-react';
 import './AuthModal.css';
 import oauthConfig from '../config/oauth.config.example.js';
 import { saveUserData, getUserData, getCurrentUserId } from '../utils/UserDataManager';
+import ForgotPasswordModal from './ForgotPasswordModal';
+import ResetPasswordModal from './ResetPasswordModal';
 
 const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, variant = 'modal', onHeightChange }) => {
   const [identifier, setIdentifier] = useState('');
@@ -39,11 +41,102 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({}); // Field-specific errors
+  const [maxAccountsReached, setMaxAccountsReached] = useState(false);
+  const [hasMaxAccounts, setHasMaxAccounts] = useState(false); // Track if 10 accounts exist (for blocking register tab)
+  const [hasGhostAccounts, setHasGhostAccounts] = useState(false); // Track if there are any ghost logged-in accounts
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [resetToken, setResetToken] = useState(null);
   const containerRef = useRef(null);
   const [qrPending, setQrPending] = useState(false);
   const bodyRef = useRef(null);
   const footerRef = useRef(null);
   const maxHeightRef = useRef(null); // Track maximum height for consistent window size
+
+  // Check if maximum accounts are reached (only for blocking register tab)
+  // Also check if there are any ghost logged-in accounts
+  useEffect(() => {
+    if (isOpen) {
+      const checkMaxAccounts = async () => {
+        try {
+          const users = await loadUsers();
+          // Filter out guest accounts and hidden accounts
+          const visibleUsers = users.filter(u => {
+            const isHidden = u.hiddenInSwitcher === true || u.hiddenInSwitcher === 1 || u.hiddenInSwitcher === '1';
+            const isGuest = u.isGuest === true || 
+                           u.id?.toString().startsWith('guest_') || 
+                           u.username?.toString().startsWith('guest_') || 
+                           u.name === 'Guest';
+            return !isHidden && !isGuest;
+          });
+          const hasMax = visibleUsers.length >= 10;
+          
+          setHasMaxAccounts(hasMax);
+          
+          // Check if there are any ghost accounts (logged in but not currently active)
+          // A ghost account is one that is logged in (isLoggedIn === true) but not the current user
+          const api = window.electronAPI;
+          let currentUserId = null;
+          try {
+            const authUser = await api?.getAuthUser?.();
+            currentUserId = authUser?.id || null;
+          } catch (_) {
+            // Try localStorage fallback
+            try {
+              const stored = localStorage.getItem('authUser');
+              if (stored) {
+                const user = JSON.parse(stored);
+                currentUserId = user?.id || null;
+              }
+            } catch (_) {}
+          }
+          
+          // Ghost accounts are visible users that are logged in but not the current user
+          const ghostAccounts = visibleUsers.filter(u => {
+            const isLoggedIn = u.isLoggedIn === true || u.isLoggedIn === 1 || u.isLoggedIn === '1';
+            return isLoggedIn && u.id !== currentUserId;
+          });
+          
+          setHasGhostAccounts(ghostAccounts.length > 0);
+          
+          // If we have max accounts and are in register mode, switch to login mode
+          if (hasMax && authMode === 'register') {
+            setAuthMode('login');
+          }
+        } catch (error) {
+          console.error('Error checking max accounts:', error);
+          setHasMaxAccounts(false);
+          setHasGhostAccounts(false);
+        }
+      };
+      checkMaxAccounts();
+    }
+  }, [isOpen, authMode]);
+
+  // Check for reset token in URL
+  useEffect(() => {
+    if (isOpen) {
+      const hash = window.location.hash || '';
+      const searchParams = window.location.search || '';
+      
+      // Check both hash and search params
+      let urlParams;
+      if (hash.includes('?')) {
+        urlParams = new URLSearchParams(hash.split('?')[1]);
+      } else if (searchParams) {
+        urlParams = new URLSearchParams(searchParams);
+      } else {
+        urlParams = new URLSearchParams();
+      }
+      
+      const token = urlParams.get('resetToken');
+      if (token) {
+        setResetToken(token);
+        setShowResetPassword(true);
+      }
+    }
+  }, [isOpen]);
 
   // Check for email parameter in URL and pre-fill it
   // Check both when isOpen changes AND when URL changes (for page variant)
@@ -322,10 +415,26 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
 
   const loadUsers = async () => {
     try {
-      console.log('📂 Loading users from file system...');
+      console.log('📂 Loading users...');
       
-      // Always try to load from file system first using Electron API
       const api = window.electronAPI;
+      
+      // Try database methods first
+      if (api && api.dbGetUsers) {
+        const result = await api.dbGetUsers();
+        if (result && result.success && Array.isArray(result.users)) {
+          // Sort users
+          const sorted = result.users.sort((a, b) => {
+            const nameA = (a.name || a.email || a.username || '').toLowerCase();
+            const nameB = (b.name || b.email || b.username || '').toLowerCase();
+            return nameA.localeCompare(nameB);
+          });
+          console.log('✅ Returning', sorted.length, 'users from database');
+          return sorted;
+        }
+      }
+      
+      // Fallback to file-based methods
       if (api && api.getUsers) {
         const result = await api.getUsers();
         
@@ -586,7 +695,7 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
       
       // Use the maximum height seen so far for both modes to keep window size consistent
       const maxHeight = 1200; // Maximum height to prevent it from getting too large
-      const windowHeight = Math.min(maxHeight, maxHeightRef.current);
+      const windowHeight = Math.min(maxHeight, maxHeightRef.current) - 100; // Reduce by 100px
       
       console.log('📐 Window height calculation:', {
         bodyHeight,
@@ -642,27 +751,52 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
 
   const handleContinue = async () => {
     setError(null);
+    setFieldErrors({});
+    
+    const newFieldErrors = {};
     
     // Validate inputs first
-    if (!identifier || !password) {
-      setError('Please fill in all required fields.');
-      setSubmitting(false);
-      return;
+    if (!identifier || !identifier.trim()) {
+      newFieldErrors.identifier = 'This field is required.';
+    }
+    
+    if (!password || !password.trim()) {
+      newFieldErrors.password = 'This field is required.';
     }
     
     // Validate username length early for register mode
     if (authMode === 'register') {
       const trimmedIdentifier = identifier.trim();
       if (trimmedIdentifier.length < 1) {
-        setError('Username must be at least 1 character long.');
-        setSubmitting(false);
-        return;
+        newFieldErrors.identifier = 'Username must be at least 1 character long.';
+      } else if (trimmedIdentifier.length > 20) {
+        newFieldErrors.identifier = 'Username must be 20 characters or less.';
       }
-      if (trimmedIdentifier.length > 20) {
-        setError('Username must be 20 characters or less.');
-        setSubmitting(false);
-        return;
+      
+      if (!email || !email.trim()) {
+        newFieldErrors.email = 'Email is required.';
+      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        newFieldErrors.email = 'Please enter a valid email address.';
       }
+      
+      if (password && password.length < 6) {
+        newFieldErrors.password = 'Password must be at least 6 characters long.';
+      }
+      
+      if (confirmPassword && password !== confirmPassword) {
+        newFieldErrors.confirmPassword = 'Passwords do not match.';
+      }
+      
+      if (!acceptTerms) {
+        newFieldErrors.acceptTerms = 'You must accept the Terms of Service and Privacy Policy.';
+      }
+    }
+    
+    // If there are field errors, set them and return
+    if (Object.keys(newFieldErrors).length > 0) {
+      setFieldErrors(newFieldErrors);
+      setSubmitting(false);
+      return;
     }
 
     setSubmitting(true);
@@ -670,6 +804,29 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
     
     // Re-check if user exists (final verification) - but only in login mode
     const users = await loadUsers();
+    const visibleUsers = users.filter(u => u.hiddenInSwitcher !== true);
+    const hasMax = visibleUsers.length >= 10;
+    
+    // Check if max accounts reached and entered email is not a ghost account (only on login attempt)
+    if (hasMax && authMode === 'login') {
+      const normalizedIdentifier = identifier.trim().toLowerCase();
+      const isGhostAccount = visibleUsers.some(u => {
+        const emailNorm = u.email ? u.email.trim().toLowerCase() : '';
+        const usernameNorm = u.username ? u.username.trim().toLowerCase() : '';
+        const phoneNorm = u.phone ? u.phone.trim().replace(/\s/g, '').toLowerCase() : '';
+        return emailNorm === normalizedIdentifier || 
+               usernameNorm === normalizedIdentifier || 
+               phoneNorm === normalizedIdentifier;
+      });
+      
+      // If max is reached AND the entered identifier is NOT a ghost account, show error
+      if (!isGhostAccount) {
+        setFieldErrors({ identifier: 'Maximum of 10 accounts reached. The entered email/username does not belong to any of your existing accounts. Please remove an account before adding a new one or log in to an existing account.' });
+        setSubmitting(false);
+        return;
+      }
+    }
+    
     const existing = findUserByIdentifier(identifier, users);
     let user;
     
@@ -677,7 +834,7 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
     if (authMode === 'register') {
       // Check if user already exists - show error instead of allowing registration
       if (existing) {
-        setError('An account with this identifier already exists. Please sign in instead.');
+        setFieldErrors({ identifier: 'An account with this identifier already exists. Please sign in instead.' });
         setSubmitting(false);
         return;
       }
@@ -685,7 +842,7 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
       // Existing user - login
       // Verify password matches
       if (existing.password !== password) {
-        setError('Incorrect password. Please try again.');
+        setFieldErrors({ password: 'Incorrect password. Please try again.' });
         setSubmitting(false);
         return;
       }
@@ -709,41 +866,10 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
     // If not an existing user (or in register mode), create new account
     if (!user) {
       // New user - register
-      // Validate username length
-      const trimmedIdentifier = identifier.trim();
-      if (trimmedIdentifier.length < 1) {
-        setError('Username must be at least 1 character long.');
-        setSubmitting(false);
-        return;
-      }
-      
-      if (trimmedIdentifier.length > 20) {
-        setError('Username must be 20 characters or less.');
-        setSubmitting(false);
-        return;
-      }
-      
-      // Validate that additional required fields are filled correctly
-      if (password !== confirmPassword) {
-        setError('Passwords do not match. Please try again.');
-        setSubmitting(false);
-        return;
-      }
-      
-      if (password.length < 6) {
-        setError('Password must be at least 6 characters long.');
-        setSubmitting(false);
-        return;
-      }
-      
-      if (!email || !email.trim()) {
-        setError('Email is required.');
-        setSubmitting(false);
-        return;
-      }
-      
-      if (!acceptTerms) {
-        setError('You must accept the Terms of Service and Privacy Policy.');
+      // Check if maximum of 10 users is reached (only count visible users, not hidden ones)
+      const visibleUsers = users.filter(u => u.hiddenInSwitcher !== true);
+      if (visibleUsers.length >= 10) {
+        setFieldErrors({ identifier: 'Maximum of 10 accounts allowed. Please remove an account before creating a new one.' });
         setSubmitting(false);
         return;
       }
@@ -754,7 +880,7 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
         today.setHours(0, 0, 0, 0); // Reset time to start of day
         const selectedDate = new Date(dateOfBirth);
         if (selectedDate > today) {
-          setError('Date of birth cannot be in the future.');
+          setFieldErrors({ dateOfBirth: 'Date of birth cannot be in the future.' });
           setSubmitting(false);
           return;
         }
@@ -911,7 +1037,15 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
           users[userIndex].stayLoggedIn = stayLoggedIn; // Update stay logged in preference
           await persistUsers(users);
         } else {
-          // If user doesn't exist in our system, add them
+          // If user doesn't exist in our system, check if we can add them (max 10 visible users)
+          const visibleUsers = users.filter(u => u.hiddenInSwitcher !== true);
+          if (visibleUsers.length >= 10) {
+            setError('Maximum of 10 accounts allowed. Please remove an account before adding a new one.');
+            setSubmitting(false);
+            return;
+          }
+          
+          // Add new user
           const newUser = {
             ...user,
             lastLoginTime: new Date().toISOString(),
@@ -976,6 +1110,44 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
     }
   };
 
+  const handleGoToAccountSwitcher = async () => {
+    try {
+      const api = window.electronAPI;
+      
+      // For page variant, navigate directly
+      if (variant === 'page') {
+        if (window.location) {
+          window.location.hash = '/account-switcher';
+        }
+        return;
+      }
+      
+      // For modal variant, close and navigate
+      onClose?.();
+      
+      // Try to use Electron API to open account switcher window
+      if (api && api.openAccountSwitcherWindow) {
+        try {
+          await api.openAccountSwitcherWindow();
+          return;
+        } catch (e) {
+          console.error('Error opening account switcher window:', e);
+        }
+      }
+      
+      // Fallback: navigate via hash
+      if (window.location) {
+        window.location.hash = '/account-switcher';
+      }
+    } catch (error) {
+      console.error('Error navigating to account switcher:', error);
+      // Final fallback
+      if (window.location) {
+        window.location.hash = '/account-switcher';
+      }
+    }
+  };
+
   if (!isOpen) return null;
 
   const Container = (
@@ -989,34 +1161,69 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
             >
               Login
             </button>
-            <button 
-              className={`auth-tab ${authMode === 'register' ? 'active' : ''}`}
-              onClick={() => setAuthMode('register')}
-              type="button"
-            >
-              Register
-            </button>
+            {!hasMaxAccounts && (
+              <button 
+                className={`auth-tab ${authMode === 'register' ? 'active' : ''}`}
+                onClick={() => setAuthMode('register')}
+                type="button"
+              >
+                Register
+              </button>
+            )}
           </div>
         </div>
 
         <div className="auth-body" ref={bodyRef}>
-          {authMode === 'login' && (
-            <div className="auth-qr">
-              {qrDataUrl && <img className="qr-code" alt="QR code" src={qrDataUrl} />}
-              <div className="qr-help">Scan with mobile app to sign in</div>
-            </div>
-          )}
-
-          {authMode === 'login' && (
+          <>
+              {authMode === 'login' && (
             <>
-              <div className="auth-field">
-                <label>Email, username, or phone</label>
-                <input 
+              <div className="auth-qr">
+                {qrDataUrl && <img className="qr-code" alt="QR code" src={qrDataUrl} />}
+                <div className="qr-help">Scan with mobile app to sign in</div>
+              </div>
+              
+              <div className="auth-social-quick-login">
+                <div className="auth-social-quick">
+                  <button className="auth-social-btn-square discord" onClick={() => handleSocial('discord')} disabled={submitting} title="Login with Discord">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+                    </svg>
+                  </button>
+                  <button className="auth-social-btn-square google" onClick={() => handleSocial('google')} disabled={submitting} title="Login with Google">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                    </svg>
+                  </button>
+                </div>
+                <div className="auth-social-divider"></div>
+                <button className="auth-guest-btn-square" onClick={handleSkip} disabled={submitting} title="Continue as guest">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                </button>
+              </div>
+              
+              <div className="auth-field-with-switch">
+                <div className="auth-field">
+                  <label>Email, username, or phone</label>
+                  <input 
                   type="text" 
                   value={identifier} 
                   onChange={(e) => {
                     const newValue = e.target.value;
                     setIdentifier(newValue);
+                    // Clear field error when user types
+                    if (fieldErrors.identifier) {
+                      setFieldErrors(prev => {
+                        const newErrors = { ...prev };
+                        delete newErrors.identifier;
+                        return newErrors;
+                      });
+                    }
                     // Reset check status when typing - no check while typing!
                     setIsExistingUser(null);
                     // Don't check while typing - only on blur or field switch
@@ -1037,16 +1244,50 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
                       setIsExistingUser(null);
                     }
                   }}
-                  placeholder="Email / Username / Phone" 
+                  className={fieldErrors.identifier ? 'error' : ''}
+                  placeholder={
+                    authMode === 'login' && isIdentifierComplete(identifier)
+                      ? (isExistingUser === null 
+                          ? 'Checking...' 
+                          : isExistingUser === true 
+                            ? 'Account exists' 
+                            : 'New account')
+                      : 'Email / Username / Phone'
+                  }
                   autoComplete="username" 
                 />
+                {fieldErrors.identifier && (
+                  <div className="auth-field-error">{fieldErrors.identifier}</div>
+                )}
+                </div>
+                {hasGhostAccounts && (
+                  <button 
+                    className="auth-switch-account-btn-inline" 
+                    onClick={handleGoToAccountSwitcher} 
+                    disabled={submitting}
+                    type="button"
+                    title="Switch to existing account"
+                  >
+                    Switch account
+                  </button>
+                )}
               </div>
               <div className="auth-field">
                 <label>Password</label>
                 <input 
                   type="password" 
                   value={password} 
-                  onChange={(e) => setPassword(e.target.value)} 
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    // Clear field error when user types
+                    if (fieldErrors.password) {
+                      setFieldErrors(prev => {
+                        const newErrors = { ...prev };
+                        delete newErrors.password;
+                        return newErrors;
+                      });
+                    }
+                  }}
                   onFocus={() => {
                     // Check when switching TO password field (user clicked away from identifier field)
                     // This counts as field switch - check if identifier is complete (only in login mode)
@@ -1060,26 +1301,38 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
                       checkUserExists();
                     }
                   }}
+                  className={fieldErrors.password ? 'error' : ''}
                   placeholder="Password" 
                   autoComplete="current-password" 
                 />
+                {fieldErrors.password && (
+                  <div className="auth-field-error">{fieldErrors.password}</div>
+                )}
               </div>
 
-              <label className="auth-checkbox">
-                <input 
-                  type="checkbox" 
-                  checked={stayLoggedIn} 
-                  onChange={(e) => setStayLoggedIn(e.target.checked)} 
-                />
-                <span>Keep me signed in</span>
-              </label>
-
-              {/* Debug info - only show in login mode when identifier is complete */}
-              {isIdentifierComplete(identifier) && (
-                <div style={{ fontSize: '11px', color: '#888', marginTop: '-8px', marginBottom: '4px' }}>
-                  Status: {isExistingUser === null ? 'Checking...' : isExistingUser === true ? 'Account exists' : 'New account'}
-                </div>
-              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                <label className="auth-checkbox">
+                  <input 
+                    type="checkbox" 
+                    checked={stayLoggedIn} 
+                    onChange={(e) => setStayLoggedIn(e.target.checked)} 
+                  />
+                  <span>Keep me signed in</span>
+                </label>
+                <button
+                  type="button"
+                  className="auth-forgot-password-link"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Forgot Password clicked, setting showForgotPassword to true');
+                    setShowForgotPassword(true);
+                  }}
+                  disabled={submitting}
+                >
+                  Forgot Password?
+                </button>
+              </div>
 
               {error && (
                 <div className="auth-error-message">
@@ -1092,41 +1345,36 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
                   {isExistingUser === true ? 'Login' : isExistingUser === false ? 'Create Account' : 'Continue'}
                 </button>
               </div>
-
-              <div className="auth-separator"><span>or</span></div>
-              <div className="auth-social">
-                <button className="auth-social-btn discord" onClick={() => handleSocial('discord')} disabled={submitting}>
-                  Login with Discord
-                </button>
-                <button className="auth-social-btn google" onClick={() => handleSocial('google')} disabled={submitting}>
-                  Login with Google
-                </button>
-              </div>
-              
-              <div className="auth-separator"><span>or</span></div>
-              <button className="auth-skip-btn" onClick={handleSkip} disabled={submitting}>
-                Skip and continue as guest
-              </button>
             </>
           )}
 
           {/* Registration Form - Completely Reorganized */}
           {authMode === 'register' && (
             <div className="auth-register-form">
-              {/* Title */}
-              <h2 className="auth-register-title">Create Account</h2>
-
-              {/* Social Login Buttons at Top */}
-              <div className="auth-social">
-                <button className="auth-social-btn discord" onClick={() => handleSocial('discord')} disabled={submitting}>
-                  Register with Discord
-                </button>
-                <button className="auth-social-btn google" onClick={() => handleSocial('google')} disabled={submitting}>
-                  Register with Google
+              <div className="auth-social-quick-login">
+                <div className="auth-social-quick">
+                  <button className="auth-social-btn-square discord" onClick={() => handleSocial('discord')} disabled={submitting} title="Register with Discord">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+                    </svg>
+                  </button>
+                  <button className="auth-social-btn-square google" onClick={() => handleSocial('google')} disabled={submitting} title="Register with Google">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                    </svg>
+                  </button>
+                </div>
+                <div className="auth-social-divider"></div>
+                <button className="auth-guest-btn-square" onClick={handleSkip} disabled={submitting} title="Continue as guest">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
                 </button>
               </div>
-
-              <div className="auth-separator"><span>or</span></div>
 
               {/* Required Fields */}
               <div className="auth-field">
@@ -1134,12 +1382,26 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
                 <input 
                   type="text" 
                   value={identifier} 
-                  onChange={(e) => setIdentifier(e.target.value)} 
+                  onChange={(e) => {
+                    setIdentifier(e.target.value);
+                    // Clear field error when user types
+                    if (fieldErrors.identifier) {
+                      setFieldErrors(prev => {
+                        const newErrors = { ...prev };
+                        delete newErrors.identifier;
+                        return newErrors;
+                      });
+                    }
+                  }}
+                  className={fieldErrors.identifier ? 'error' : ''}
                   placeholder="Choose a username" 
                   autoComplete="username"
                   maxLength={20}
                 />
-                {identifier.length > 0 && (
+                {fieldErrors.identifier && (
+                  <div className="auth-field-error">{fieldErrors.identifier}</div>
+                )}
+                {!fieldErrors.identifier && identifier.length > 0 && (
                   <div style={{ fontSize: '11px', color: '#888', marginTop: '4px' }}>
                     {identifier.length}/20 characters
                   </div>
@@ -1151,10 +1413,24 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
                 <input 
                   type="email" 
                   value={email} 
-                  onChange={(e) => setEmail(e.target.value)} 
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    // Clear field error when user types
+                    if (fieldErrors.email) {
+                      setFieldErrors(prev => {
+                        const newErrors = { ...prev };
+                        delete newErrors.email;
+                        return newErrors;
+                      });
+                    }
+                  }}
+                  className={fieldErrors.email ? 'error' : ''}
                   placeholder="your.email@example.com" 
                   autoComplete="email" 
                 />
+                {fieldErrors.email && (
+                  <div className="auth-field-error">{fieldErrors.email}</div>
+                )}
               </div>
 
               <div className="auth-field">
@@ -1162,11 +1438,25 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
                 <input 
                   type="password" 
                   value={password} 
-                  onChange={(e) => setPassword(e.target.value)} 
+                  onChange={(e) => {
+                    setPassword(e.target.value);
+                    // Clear field error when user types
+                    if (fieldErrors.password) {
+                      setFieldErrors(prev => {
+                        const newErrors = { ...prev };
+                        delete newErrors.password;
+                        return newErrors;
+                      });
+                    }
+                  }}
+                  className={fieldErrors.password ? 'error' : ''}
                   placeholder="Create a password" 
                   autoComplete="new-password" 
                 />
-                {password && password.length < 6 && (
+                {fieldErrors.password && (
+                  <div className="auth-field-error">{fieldErrors.password}</div>
+                )}
+                {!fieldErrors.password && password && password.length < 6 && (
                   <div className="auth-field-error">Password must be at least 6 characters</div>
                 )}
               </div>
@@ -1176,11 +1466,25 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
                 <input 
                   type="password" 
                   value={confirmPassword} 
-                  onChange={(e) => setConfirmPassword(e.target.value)} 
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    // Clear field error when user types
+                    if (fieldErrors.confirmPassword) {
+                      setFieldErrors(prev => {
+                        const newErrors = { ...prev };
+                        delete newErrors.confirmPassword;
+                        return newErrors;
+                      });
+                    }
+                  }}
+                  className={fieldErrors.confirmPassword ? 'error' : ''}
                   placeholder="Confirm your password" 
                   autoComplete="new-password" 
                 />
-                {confirmPassword && password !== confirmPassword && (
+                {fieldErrors.confirmPassword && (
+                  <div className="auth-field-error">{fieldErrors.confirmPassword}</div>
+                )}
+                {!fieldErrors.confirmPassword && confirmPassword && password !== confirmPassword && (
                   <div className="auth-field-error">Passwords do not match</div>
                 )}
               </div>
@@ -1233,8 +1537,17 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
                             // Only set if the date is not in the future
                             if (!selectedDate || selectedDate <= today) {
                               setDateOfBirth(selectedDate);
+                              // Clear field error when user changes date
+                              if (fieldErrors.dateOfBirth) {
+                                setFieldErrors(prev => {
+                                  const newErrors = { ...prev };
+                                  delete newErrors.dateOfBirth;
+                                  return newErrors;
+                                });
+                              }
                             }
                           }}
+                          className={fieldErrors.dateOfBirth ? 'error' : ''}
                           onKeyDown={(e) => {
                             // Handle backspace/delete to navigate backwards through date parts
                             if (e.key === 'Backspace' || e.key === 'Delete') {
@@ -1395,13 +1708,9 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
                   Create Account
                 </button>
               </div>
-
-              <div className="auth-separator"><span>or</span></div>
-              <button className="auth-skip-btn" onClick={handleSkip} disabled={submitting}>
-                Skip and continue as guest
-              </button>
             </div>
           )}
+          </>
         </div>
 
         {/* Footer ref kept for height calculation, but empty in login mode */}
@@ -1411,16 +1720,66 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
 
   if (variant === 'page') {
     return (
-      <div className={`auth-page ${fullscreen ? 'fullscreen' : ''}`}>
-        {Container}
-      </div>
+      <>
+        <div className={`auth-page ${fullscreen ? 'fullscreen' : ''}`}>
+          {Container}
+        </div>
+        <ForgotPasswordModal
+          isOpen={showForgotPassword}
+          onClose={() => setShowForgotPassword(false)}
+          onSuccess={() => {
+            setShowForgotPassword(false);
+          }}
+        />
+        <ResetPasswordModal
+          isOpen={showResetPassword}
+          onClose={() => {
+            setShowResetPassword(false);
+            setResetToken(null);
+          }}
+          token={resetToken}
+          onSuccess={() => {
+            setShowResetPassword(false);
+            setResetToken(null);
+            // Optionally show success message or redirect to login
+            if (onClose) {
+              onClose();
+            }
+          }}
+        />
+      </>
     );
   }
 
   return (
-    <div className={`auth-modal-overlay ${fullscreen ? 'fullscreen' : ''}`}>
-      {Container}
-    </div>
+    <>
+      <div className={`auth-modal-overlay ${fullscreen ? 'fullscreen' : ''}`}>
+        {Container}
+      </div>
+      <ForgotPasswordModal
+        isOpen={showForgotPassword}
+        onClose={() => setShowForgotPassword(false)}
+        onSuccess={() => {
+          setShowForgotPassword(false);
+        }}
+      />
+      <ResetPasswordModal
+        isOpen={showResetPassword}
+        onClose={() => {
+          setShowResetPassword(false);
+          setResetToken(null);
+        }}
+        token={resetToken}
+        onSuccess={() => {
+          setShowResetPassword(false);
+          setResetToken(null);
+          // Optionally show success message or redirect to login
+          if (onClose) {
+            onClose();
+          }
+        }}
+      />
+    </>
   );
 };
 

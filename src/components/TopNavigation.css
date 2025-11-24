@@ -112,6 +112,10 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
+.nav-menu-toggle svg {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
 /* Left Section - Home Button */
 .nav-left {
   display: flex;

@@ -321,6 +321,10 @@
   color: #FFD700; 
 }
 
+.featured-actions .banner-bookmark.inline:hover {
+  color: #FFD700;
+}
+
 .featured-background {
   position: absolute;
   top: 0;
@@ -332,21 +336,23 @@
 }
 
 .featured-images-container {
-  display: flex;
-  flex-direction: row;
+  position: relative;
   width: 100%;
   height: 100%;
-  position: relative;
+  overflow: hidden;
 }
 
 .featured-image {
-  flex: 0 0 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 1;
 }
 
 .featured-placeholder {
@@ -379,26 +385,16 @@
   left: 0;
   right: 0;
   bottom: 0;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 0;
   z-index: 2;
-  max-width: none;
-  gap: 0;
-  /* No transition delay for padding/gap resizing - instant response */
-  transition: transform 0.5s ease-in-out;
-  box-sizing: border-box;
-  flex-wrap: nowrap;
   overflow: hidden;
-  width: calc(100% * var(--banner-count, 1));
 }
 
 .featured-content-wrapper {
-  flex: 0 0 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
-  min-width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -407,7 +403,6 @@
   padding-left: clamp(16px, calc(var(--banner-height, 250px) * 0.35), 140px);
   gap: clamp(10px, calc(var(--banner-height, 250px) * 0.05), 24px);
   box-sizing: border-box;
-  position: relative;
 }
 
 .featured-content-left {
@@ -817,22 +812,27 @@
 
 .banner-indicators {
   position: absolute;
-  bottom: 20px;
+  /* Scale bottom position proportionally with banner height */
+  bottom: clamp(12px, calc(var(--banner-height, 250px) * 0.05), 24px);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 8px;
+  /* Scale gap proportionally with banner height */
+  gap: clamp(6px, calc(var(--banner-height, 250px) * 0.025), 12px);
   z-index: 3;
 }
 
 .indicator {
-  width: 8px;
-  height: 8px;
+  /* Scale size proportionally with banner height */
+  --indicator-size: clamp(6px, calc(var(--banner-height, 250px) * 0.025), 10px);
+  width: var(--indicator-size);
+  height: var(--indicator-size);
   border-radius: 50%;
   border: none;
   background: rgba(255, 255, 255, 0.4);
   cursor: pointer;
-  transition: var(--transition);
+  /* Smooth visual transitions, but no delay for size resizing */
+  transition: background 0.2s ease, transform 0.2s ease, width 0s, height 0s;
 }
 
 .indicator.active {
@@ -1143,12 +1143,7 @@
   }
 }
 
-.game-card:hover {
-  transform: translateY(-8px) scale(1.02);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(59, 130, 246, 0.3);
-  border-color: rgba(59, 130, 246, 0.5);
-  background: linear-gradient(135deg, rgba(40, 40, 40, 0.95) 0%, rgba(30, 30, 30, 1) 100%);
-}
+/* Hover effects removed - static design */
 
 .game-image {
   position: relative;
@@ -1708,6 +1703,12 @@
   transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease, height 0s, width 0s;
 }
 
+.taskbar-btn svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
 .taskbar-btn-favorite {
   border-color: rgba(255, 59, 48, 0.3);
 }
@@ -1729,102 +1730,171 @@
   color: rgba(255, 255, 255, 0.6);
 }
 
-.taskbar-btn-grid:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.5);
+.taskbar-btn-grid svg {
+  fill: currentColor;
+  stroke: none;
 }
 
-.taskbar-btn-grid:hover svg {
+.taskbar-btn-grid svg rect {
   fill: currentColor;
+  stroke: none;
 }
 
 .taskbar-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.2);
-  transform: translateY(-1px);
+}
+
+.taskbar-btn-grid:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.taskbar-btn-grid:hover svg {
+  fill: none;
+  stroke: currentColor;
+}
+
+.taskbar-btn-grid:hover svg rect {
+  fill: none;
+  stroke: currentColor;
 }
 
 .taskbar-btn-favorite:hover {
-  background: rgba(255, 59, 48, 0.15);
+  background: rgba(255, 59, 48, 0.1);
   color: #ff3b30;
   border-color: rgba(255, 59, 48, 0.3);
 }
 
 .taskbar-btn-favorite:hover svg {
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
 }
 
 .taskbar-btn-bookmarked:hover {
-  background: rgba(255, 193, 7, 0.15);
+  background: rgba(255, 193, 7, 0.1);
   color: #ffc107;
   border-color: rgba(255, 193, 7, 0.3);
 }
 
 .taskbar-btn-bookmarked:hover svg {
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
 }
 
 .taskbar-btn-trending:hover {
-  background: rgba(255, 87, 34, 0.15);
+  background: rgba(255, 87, 34, 0.1);
   color: #ff5722;
   border-color: rgba(255, 87, 34, 0.3);
 }
 
 .taskbar-btn-trending:hover svg {
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
 }
 
 .taskbar-btn-free:hover {
-  background: rgba(76, 175, 80, 0.15);
+  background: rgba(76, 175, 80, 0.1);
   color: #4caf50;
   border-color: rgba(76, 175, 80, 0.3);
 }
 
 .taskbar-btn-free:hover svg {
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
 }
 
 .taskbar-btn.active {
-  background: rgba(74, 158, 255, 0.2);
+  background: linear-gradient(135deg, rgba(74, 158, 255, 0.2) 0%, rgba(74, 158, 255, 0.1) 100%);
   border-width: 2px;
   border-color: rgba(74, 158, 255, 0.6);
   color: #4a9eff;
-  box-shadow: inset 0 0 0 3px rgba(15, 17, 21, 0.95);
 }
 
 .taskbar-btn-grid.active {
-  background: rgba(255, 255, 255, 0.2);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.1) 100%);
   border-width: 2px;
   border-color: rgba(255, 255, 255, 0.6);
   color: #ffffff;
-  box-shadow: inset 0 0 0 3px rgba(15, 17, 21, 0.95);
 }
 
 .taskbar-btn-bookmarked.active {
-  background: rgba(255, 193, 7, 0.2);
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.2) 0%, rgba(255, 193, 7, 0.1) 100%);
   border-width: 2px;
   border-color: rgba(255, 193, 7, 0.6);
   color: #ffc107;
-  box-shadow: inset 0 0 0 3px rgba(15, 17, 21, 0.95);
 }
 
 .taskbar-btn-trending.active {
-  background: rgba(255, 87, 34, 0.2);
+  background: linear-gradient(135deg, rgba(255, 87, 34, 0.2) 0%, rgba(255, 87, 34, 0.1) 100%);
   border-width: 2px;
   border-color: rgba(255, 87, 34, 0.6);
   color: #ff5722;
-  box-shadow: inset 0 0 0 3px rgba(15, 17, 21, 0.95);
 }
 
 .taskbar-btn-free.active {
-  background: rgba(76, 175, 80, 0.2);
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.2) 0%, rgba(76, 175, 80, 0.1) 100%);
   border-width: 2px;
   border-color: rgba(76, 175, 80, 0.6);
   color: #4caf50;
-  box-shadow: inset 0 0 0 3px rgba(15, 17, 21, 0.95);
 }
 
 .taskbar-btn.active svg {
+  fill: currentColor;
+}
+
+.taskbar-btn.active:hover {
+  background: rgba(74, 158, 255, 0.25);
+  border-color: rgba(74, 158, 255, 0.7);
+}
+
+.taskbar-btn-grid.active:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.7);
+}
+
+.taskbar-btn-bookmarked.active:hover {
+  background: rgba(255, 193, 7, 0.25);
+  border-color: rgba(255, 193, 7, 0.7);
+}
+
+.taskbar-btn-trending.active:hover {
+  background: rgba(255, 87, 34, 0.25);
+  border-color: rgba(255, 87, 34, 0.7);
+}
+
+.taskbar-btn-free.active:hover {
+  background: rgba(76, 175, 80, 0.25);
+  border-color: rgba(76, 175, 80, 0.7);
+}
+
+.taskbar-btn.active:hover svg {
+  fill: currentColor;
+}
+
+.taskbar-btn-grid.active:hover svg {
+  fill: currentColor;
+}
+
+.taskbar-btn-grid.active:hover svg rect {
+  fill: currentColor;
+  stroke: none;
+}
+
+.taskbar-btn-favorite.active:hover svg {
+  fill: currentColor;
+}
+
+.taskbar-btn-bookmarked.active:hover svg {
+  fill: currentColor;
+}
+
+.taskbar-btn-trending.active:hover svg {
+  fill: currentColor;
+}
+
+.taskbar-btn-free.active:hover svg {
   fill: currentColor;
 }
 
@@ -1943,7 +2013,7 @@
 .featured-older-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  gap: 24px;
+  gap: 28px;
 }
 
 /* Alternate visual density by spanning some cards */
@@ -1959,6 +2029,7 @@
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0;
+  border-bottom-right-radius: clamp(8px, calc(var(--content-width, 1090px) * 0.01), 12px);
   overflow: hidden;
   position: relative;
   /* Scale height proportionally with content width - grows with larger windows */
@@ -1968,24 +2039,16 @@
   flex-direction: row;
   align-items: stretch;
   /* No delay for resizing - instant response */
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, width 0s, max-width 0s, height 0s;
-  /* Scale collapsed width proportionally with content width - grows with larger windows */
-  width: clamp(110px, calc(var(--content-width, 1090px) * 0.12), calc(var(--content-width, 1090px) * 0.22));
-  max-width: clamp(110px, calc(var(--content-width, 1090px) * 0.12), calc(var(--content-width, 1090px) * 0.22));
-}
-
-.featured-below-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  border-color: rgba(255, 255, 255, 0.12);
-  /* Scale expanded width proportionally with content width - banner + panel - grows with larger windows */
+  transition: width 0s, max-width 0s, height 0s;
+  /* Always show expanded width with info panel - no hover needed */
   width: clamp(198px, calc(var(--content-width, 1090px) * 0.22), calc(var(--content-width, 1090px) * 0.4));
   max-width: clamp(198px, calc(var(--content-width, 1090px) * 0.22), calc(var(--content-width, 1090px) * 0.4));
+  cursor: pointer;
 }
 
 .featured-below-banner {
   position: relative;
-  /* Scale width proportionally with content width - grows with larger windows */
+  /* Scale width proportionally with content width - always show banner portion */
   width: clamp(110px, calc(var(--content-width, 1090px) * 0.12), calc(var(--content-width, 1090px) * 0.22));
   min-width: clamp(110px, calc(var(--content-width, 1090px) * 0.12), calc(var(--content-width, 1090px) * 0.22));
   height: 100%;
@@ -1996,112 +2059,30 @@
   justify-content: center;
   padding: 0;
   margin: 0;
+  flex-shrink: 0;
   /* No delay for width resizing - instant response */
   transition: width 0s, min-width 0s;
 }
 
 .featured-below-card .banner-bookmark {
-  /* Scale position and size based on card width - smaller when card is small */
-  top: clamp(-2px, calc((var(--content-width, 1090px) * 0.12) * -0.02), -3px);
-  right: clamp(-1px, calc((var(--content-width, 1090px) * 0.12) * -0.01), -1px);
+  /* Positioned at top left corner - slightly above the edge */
+  top: -3px;
+  left: 0;
+  right: auto;
   transform: none;
-  width: clamp(28px, calc((var(--content-width, 1090px) * 0.12) * 0.3), 48px);
-  height: clamp(28px, calc((var(--content-width, 1090px) * 0.12) * 0.3), 48px);
+  width: clamp(58px, calc((var(--content-width, 1090px) * 0.22) * 0.3), 67px);
+  height: clamp(58px, calc((var(--content-width, 1090px) * 0.22) * 0.3), 67px);
   /* No delay for size/position resizing - instant response */
-  transition: width 0s, height 0s, top 0s, right 0s, opacity 0.2s ease, transform 0.2s ease, color 0.2s ease;
+  transition: width 0s, height 0s, opacity 0.2s ease, color 0.2s ease;
+  opacity: 0.9;
+  z-index: 10;
 }
 
-/* CTA overlay on the banner when collapsed */
-.banner-cta {
-  position: absolute;
-  left: clamp(4px, calc((var(--content-width, 1090px) * 0.12) * 0.07), 8px);
-  bottom: clamp(4px, calc((var(--content-width, 1090px) * 0.12) * 0.07), 8px);
-  display: flex;
-  align-items: center;
-  gap: clamp(4px, calc((var(--content-width, 1090px) * 0.12) * 0.07), 8px);
-  opacity: 1;
-  /* No delay for position/gap resizing - instant response */
-  transition: opacity 120ms ease, transform 120ms ease, left 0s, bottom 0s, gap 0s;
-}
+/* CTA overlay removed - only bookmark visible on banner */
 
-.featured-below-card:hover .banner-cta {
-  opacity: 0;
-  transform: translateX(-8px);
-  pointer-events: none;
-}
-
-.banner-cta { flex-direction: column; align-items: flex-start; }
-.banner-game-name {
-  color: #ffffff;
-  font-weight: 700;
-  /* Scale font size based on card width - smaller when card is small */
-  font-size: clamp(14px, calc((var(--content-width, 1090px) * 0.12) * 0.14), 18px);
-  margin-bottom: 2px;
-  line-height: 1.2;
-  /* No delay for font-size resizing - instant response */
-  transition: font-size 0s;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 100%;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8), 0 1px 4px rgba(0, 0, 0, 0.6);
-}
-.banner-free-text {
-  color: #ffffff; 
-  font-weight: 400;
-  /* Scale font size based on card width - smaller when card is small */
-  font-size: clamp(11px, calc((var(--content-width, 1090px) * 0.12) * 0.11), 15px);
-  margin-left: 2px;
-  /* No delay for font-size resizing - instant response */
-  transition: font-size 0s;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8), 0 1px 4px rgba(0, 0, 0, 0.6);
-}
-
-/* Hover hint indicator - subtle icon only */
+/* Hover hint indicator - removed, no longer needed */
 .banner-hover-hint {
-  position: absolute;
-  right: clamp(6px, calc((var(--content-width, 1090px) * 0.12) * 0.1), 12px);
-  top: clamp(6px, calc((var(--content-width, 1090px) * 0.12) * 0.1), 12px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  /* Scale size based on card width - smaller when card is small */
-  width: clamp(20px, calc((var(--content-width, 1090px) * 0.12) * 0.2), 28px);
-  height: clamp(20px, calc((var(--content-width, 1090px) * 0.12) * 0.2), 28px);
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(6px);
-  border-radius: 50%;
-  color: rgba(255, 255, 255, 0.7);
-  opacity: 0.8;
-  /* No delay for size/position resizing - instant response */
-  transition: opacity 0.3s ease, transform 0.3s ease, background 0.3s ease, width 0s, height 0s, right 0s, top 0s;
-  pointer-events: none;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-}
-
-.banner-hover-hint svg {
-  /* Scale icon size based on card width - smaller when card is small */
-  width: clamp(10px, calc((var(--content-width, 1090px) * 0.12) * 0.12), 14px);
-  height: clamp(10px, calc((var(--content-width, 1090px) * 0.12) * 0.12), 14px);
-  animation: pulse-hint-icon 2s ease-in-out infinite;
-  /* No delay for icon size resizing - instant response */
-  transition: width 0s, height 0s;
-}
-
-@keyframes pulse-hint-icon {
-  0%, 100% {
-    transform: translateX(0) scale(1);
-    opacity: 0.7;
-  }
-  50% {
-    transform: translateX(2px) scale(1.1);
-    opacity: 1;
-  }
-}
-
-.featured-below-card:hover .banner-hover-hint {
-  opacity: 0;
-  transform: scale(0.8);
+  display: none;
 }
 
 /* Buy button removed from banner intentionally */
@@ -2129,29 +2110,28 @@
 
 .banner-bookmark:hover {
   opacity: 1;
+  color: #FFD700;
 }
 
 .featured-below-card .banner-bookmark:hover {
-  transform: none;
   opacity: 1;
+  color: #FFD700;
 }
 
 .banner-bookmark.bookmarked {
   color: #FFD700;
 }
 
-/* only change to accent on hover when not bookmarked */
-.banner-bookmark:not(.bookmarked):hover { color: var(--accent-primary); }
-
 .banner-bookmark svg {
-  /* Scale icon size based on card width - smaller when card is small */
-  width: clamp(20px, calc((var(--content-width, 1090px) * 0.12) * 0.25), 32px);
-  height: clamp(20px, calc((var(--content-width, 1090px) * 0.12) * 0.25), 32px);
+  /* Scale icon size based on card width - matches larger bookmark size */
+  width: clamp(34px, calc((var(--content-width, 1090px) * 0.22) * 0.216), 43px);
+  height: clamp(34px, calc((var(--content-width, 1090px) * 0.22) * 0.216), 43px);
   margin-top: 0;
 }
 
 .card-info-price.is-free {
   color: #ffffff;
+  font-size: clamp(14px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.13), 20px);
 }
 
 .featured-below-banner img {
@@ -2160,6 +2140,35 @@
   object-fit: cover;
   /* No delay for image resizing - instant response */
   transition: width 0s, height 0s;
+}
+
+.banner-rating {
+  position: absolute;
+  bottom: clamp(8px, calc((var(--content-width, 1090px) * 0.22) * 0.04), 12px);
+  left: clamp(8px, calc((var(--content-width, 1090px) * 0.22) * 0.04), 12px);
+  display: inline-flex;
+  align-items: center;
+  gap: clamp(4px, calc((var(--content-width, 1090px) * 0.22) * 0.025), 6px);
+  font-size: clamp(12px, calc((var(--content-width, 1090px) * 0.22) * 0.07), 16px);
+  font-weight: 600;
+  color: inherit;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  padding: clamp(4px, calc((var(--content-width, 1090px) * 0.22) * 0.02), 6px) clamp(6px, calc((var(--content-width, 1090px) * 0.22) * 0.035), 10px);
+  border-radius: clamp(4px, calc((var(--content-width, 1090px) * 0.22) * 0.025), 6px);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}
+
+.banner-rating svg {
+  width: clamp(14px, calc((var(--content-width, 1090px) * 0.22) * 0.08), 18px);
+  height: clamp(14px, calc((var(--content-width, 1090px) * 0.22) * 0.08), 18px);
+  flex-shrink: 0;
+}
+
+.banner-rating span {
+  color: inherit;
+  font-variant-numeric: tabular-nums;
 }
 
 .featured-below-placeholder {
@@ -2174,48 +2183,41 @@
 
 .featured-card-info {
   position: relative;
-  flex: 0 0 0;
-  width: 0;
-  height: 100%;
-  overflow: hidden;
-  background: linear-gradient(180deg, rgba(15, 17, 21, 0.95) 0%, rgba(20, 22, 27, 0.98) 100%);
-  border-left: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 0;
-  z-index: 1;
-  backdrop-filter: blur(12px);
-  display: flex;
-  flex-direction: column;
-  opacity: 0;
-  /* No delay for width/padding resizing - instant response, smooth opacity */
-  transition: width 0s, padding 0s, opacity 0.2s ease;
-}
-
-.featured-below-card:hover .featured-card-info {
-  /* Scale panel width and padding proportionally with content width - grows with larger windows */
-  /* When card is small (110px), info panel is smaller too */
+  /* Always show info panel - no hover needed */
   flex: 0 0 clamp(70px, calc(var(--content-width, 1090px) * 0.1), calc(var(--content-width, 1090px) * 0.18));
   width: clamp(70px, calc(var(--content-width, 1090px) * 0.1), calc(var(--content-width, 1090px) * 0.18));
-  padding: clamp(8px, calc(var(--content-width, 1090px) * 0.012), 20px);
+  height: 100%;
+  overflow: hidden;
+  /* Use extracted average color from banner as background - darkened */
+  background: var(--banner-color, rgba(15, 17, 21, 0.98));
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom-right-radius: clamp(8px, calc(var(--content-width, 1090px) * 0.01), 12px);
+  padding: clamp(12px, calc(var(--content-width, 1090px) * 0.015), 20px) clamp(12px, calc(var(--content-width, 1090px) * 0.015), 20px) 0 clamp(12px, calc(var(--content-width, 1090px) * 0.015), 20px);
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
   opacity: 1;
-  /* No delay for width/padding resizing - instant response, smooth opacity */
-  transition: width 0s, padding 0s, opacity 0.2s ease;
+  gap: 0;
+  /* No delay for width/padding resizing - instant response */
+  transition: width 0s, padding 0s, background 0.3s ease;
 }
 
 .card-info-header {
   display: flex;
   flex-direction: column;
-  gap: clamp(4px, calc(var(--content-width, 1090px) * 0.005), 6px);
-  margin-bottom: clamp(8px, calc(var(--content-width, 1090px) * 0.01), 12px);
+  gap: 0;
+  margin-bottom: 0;
   position: relative;
-  padding-bottom: clamp(8px, calc(var(--content-width, 1090px) * 0.01), 12px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0;
+  border-bottom: none;
+  flex-shrink: 0;
 }
 
 .card-info-header h3 {
   margin: 0;
-  color: var(--text-primary);
-  /* Scale font size based on card width - smaller when card is small */
-  font-size: clamp(11px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.12), 18px);
+  color: #ffffff;
+  /* Scale font size based on card width - bigger title */
+  font-size: clamp(16px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.16), 24px);
   font-weight: 700;
   line-height: 1.3;
   overflow: hidden;
@@ -2223,55 +2225,67 @@
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  letter-spacing: -0.3px;
+  letter-spacing: -0.4px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
 }
 
-.card-info-header-row {
+.card-info-header-meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: clamp(8px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.08), 12px);
+  margin-top: 0;
+}
+
+.card-info-header:has(.card-info-header-meta:empty) {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.card-info-version-separator {
+  margin: clamp(6px, calc(var(--content-width, 1090px) * 0.008), 10px) calc(-1 * clamp(12px, calc(var(--content-width, 1090px) * 0.015), 20px)) clamp(8px, calc(var(--content-width, 1090px) * 0.01), 12px) calc(-1 * clamp(12px, calc(var(--content-width, 1090px) * 0.015), 20px));
+  padding: 0 0 0 20px;
+  background: rgba(59, 130, 246, 1);
+  border-left: none;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: fit-content;
+  flex-shrink: 0;
+  height: fit-content;
+  line-height: 1.2;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 999px;
 }
 
 .card-info-version {
   margin: 0;
   /* Scale font size based on card width - smaller when card is small */
-  font-size: clamp(8px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.08), 12px);
-  color: rgba(255, 255, 255, 0.5);
-  font-weight: 500;
-  letter-spacing: 0.2px;
-  display: flex;
-  align-items: center;
-  gap: clamp(4px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.05), 6px);
-}
-
-.card-info-version::before {
-  content: '';
-  width: clamp(3px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.03), 4px);
-  height: clamp(3px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.03), 4px);
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  flex-shrink: 0;
+  font-size: clamp(10px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.085), 13px);
+  color: #ffffff;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  line-height: 1.2;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .card-info-rating {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: clamp(4px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.05), 6px);
+  gap: clamp(4px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.045), 6px);
   /* Scale font size based on card width - smaller when card is small */
-  font-size: clamp(10px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.1), 14px);
+  font-size: clamp(12px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.115), 16px);
   font-weight: 600;
-  margin-bottom: clamp(6px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.08), 10px);
+  margin: 0;
   color: inherit;
-  padding: clamp(4px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.05), 6px) 0;
 }
 
 .card-info-rating svg {
   /* Scale icon size based on card width - smaller when card is small */
-  width: clamp(10px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.1), 14px);
-  height: clamp(10px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.1), 14px);
+  width: clamp(11px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.11), 15px);
+  height: clamp(11px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.11), 15px);
   flex-shrink: 0;
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
 }
 
 .card-info-rating span {
@@ -2279,40 +2293,79 @@
   font-variant-numeric: tabular-nums;
 }
 
-.card-owned-badge {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  /* Scale badge size based on card width - smaller when card is small */
-  width: clamp(16px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.15), 24px);
-  height: clamp(16px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.15), 24px);
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%);
-  border: 1px solid rgba(99, 102, 241, 0.4);
-  border-radius: 50%;
-  color: #a78bfa;
-  flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2);
+.card-promo-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: clamp(70px, calc((var(--content-width, 1090px) * 0.22) * 0.35), 90px);
+  height: clamp(70px, calc((var(--content-width, 1090px) * 0.22) * 0.35), 90px);
+  z-index: 10;
   cursor: help;
   transition: all 0.2s ease;
+  box-shadow: none;
+  overflow: visible;
 }
 
-.card-owned-badge:hover {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.3) 0%, rgba(139, 92, 246, 0.3) 100%);
-  border-color: rgba(99, 102, 241, 0.6);
-  transform: scale(1.1);
+.card-promo-badge::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 clamp(70px, calc((var(--content-width, 1090px) * 0.22) * 0.35), 90px) clamp(70px, calc((var(--content-width, 1090px) * 0.22) * 0.35), 90px) 0;
+  border-color: transparent var(--promo-color, rgba(255, 87, 34, 1)) transparent transparent;
 }
 
-.card-owned-badge svg {
-  /* Scale icon size based on card width - smaller when card is small */
-  width: clamp(10px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.1), 14px);
-  height: clamp(10px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.1), 14px);
+.card-promo-badge:hover::before {
+  filter: brightness(1.1);
+}
+
+.card-promo-percent {
+  position: absolute;
+  top: 35%;
+  left: 70%;
+  transform: translate(-50%, -50%) rotate(45deg);
+  font-size: clamp(14px, calc((var(--content-width, 1090px) * 0.22) * 0.1), 20px);
+  font-weight: 800;
+  color: #ffffff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  line-height: 1;
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+  z-index: 11;
+  transform-origin: center;
+  text-align: center;
+  width: auto;
+  max-width: 80%;
+}
+
+.card-promo-reason {
+  position: absolute;
+  top: 50%;
+  left: -20%;
+  transform: rotate(45deg);
+  font-size: clamp(8px, calc((var(--content-width, 1090px) * 0.22) * 0.045), 11px);
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 0px 4px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+  letter-spacing: 0.8px;
+  z-index: 11;
+  width: auto;
+  max-width: clamp(100px, calc((var(--content-width, 1090px) * 0.22) * 0.5), 140px);
+  overflow: visible;
+  text-transform: uppercase;
+  text-align: center;
+  pointer-events: none;
 }
 
 .card-info-desc {
-  margin: 0 0 clamp(8px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.1), 12px) 0;
-  color: rgba(255, 255, 255, 0.6);
+  margin: 0 0 clamp(8px, calc(var(--content-width, 1090px) * 0.01), 12px) 0;
+  color: rgba(255, 255, 255, 0.75);
   /* Scale font size based on card width - smaller when card is small */
-  font-size: clamp(9px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.09), 13px);
+  font-size: clamp(10px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.09), 13px);
   line-height: 1.5;
   flex: 1;
   overflow: hidden;
@@ -2320,17 +2373,66 @@
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
-  min-height: clamp(24px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.22), 39px);
+  min-height: 0;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  flex-shrink: 1;
 }
 
 .card-info-price {
-  margin: auto 0 clamp(8px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.1), 12px) 0;
+  margin: 0 calc(-1 * clamp(12px, calc(var(--content-width, 1090px) * 0.015), 20px)) 0 calc(-1 * clamp(12px, calc(var(--content-width, 1090px) * 0.015), 20px));
   color: #ffffff;
-  /* Scale font size based on card width - smaller when card is small */
-  font-size: clamp(12px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.13), 20px);
+  /* Fixed font size for all prices (free, regular, promo) */
+  font-size: clamp(14px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.13), 20px);
   font-weight: 700;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.3px;
   font-variant-numeric: tabular-nums;
+  padding: 10px clamp(12px, calc(var(--content-width, 1090px) * 0.015), 20px);
+  height: 48px;
+  min-height: 48px;
+  max-height: 48px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: row;
+  gap: clamp(8px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.06), 12px);
+  align-items: center;
+  justify-content: flex-start;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.card-info-price.has-promo {
+  gap: clamp(8px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.06), 12px);
+}
+
+.card-price-old {
+  font-size: clamp(10px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.09), 14px);
+  color: rgba(255, 255, 255, 0.35);
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: rgba(255, 255, 255, 0.4);
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1;
+  margin: 0;
+  padding: 0;
+}
+
+.card-price-new {
+  font-size: clamp(14px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.13), 20px);
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  line-height: 1;
+  margin: 0;
+  padding: 0;
+}
+
+/* Ensure all price displays use the same size */
+.card-info-price:not(.has-promo) {
+  font-size: clamp(14px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.13), 20px);
 }
 
 .card-info-metrics {
@@ -2406,58 +2508,122 @@
 .card-info-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 0;
+  gap: 0;
+  margin-top: auto;
+  margin-left: calc(-1 * clamp(12px, calc(var(--content-width, 1090px) * 0.015), 20px));
+  margin-right: calc(-1 * clamp(12px, calc(var(--content-width, 1090px) * 0.015), 20px));
+  margin-bottom: 0;
+  padding: 0;
+  width: calc(100% + 2 * clamp(12px, calc(var(--content-width, 1090px) * 0.015), 20px));
+  flex-shrink: 0;
+}
+
+.card-info-cart {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(40px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.32), 50px);
+  height: 100%;
+  min-height: clamp(44px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.35), 56px);
+  padding: 0;
+  background: rgba(0, 0, 0, 0.3);
+  border: none;
+  border-left: none;
+  border-radius: 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.card-info-cart:hover {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.card-info-cart.in-cart {
+  background: rgba(34, 197, 94, 0.2);
+}
+
+.card-info-cart.in-cart:hover {
+  background: rgba(34, 197, 94, 0.3);
+}
+
+.card-info-cart svg {
+  width: clamp(14px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.11), 18px);
+  height: clamp(14px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.11), 18px);
+  color: rgba(255, 255, 255, 0.7) !important;
+  stroke: rgba(255, 255, 255, 0.7) !important;
+  fill: none !important;
+  transition: color 0.2s ease, stroke 0.2s ease, fill 0.2s ease;
+}
+
+.card-info-cart:hover svg {
+  color: rgba(255, 255, 255, 0.95) !important;
+  stroke: rgba(255, 255, 255, 0.95) !important;
+}
+
+.card-info-cart.in-cart svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+  fill: #ffffff !important;
+}
+
+.card-info-cart.in-cart:hover svg {
+  color: #ffffff !important;
+  stroke: #ffffff !important;
+  fill: #ffffff !important;
 }
 
 .card-info-primary {
   flex: 1;
-  /* Scale padding based on card width - smaller when card is small */
-  padding: clamp(6px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.08), 12px) clamp(8px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.1), 16px);
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.9) 0%, rgba(99, 102, 241, 0.9) 100%);
+  /* Scale padding based on card width - smaller when card is small, increased vertical padding for height */
+  padding: clamp(16px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.13), 22px) clamp(12px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.12), 20px);
+  background: rgba(59, 130, 246, 1);
   border: none;
-  border-radius: clamp(4px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.05), 6px);
+  border-right: none;
+  border-radius: 0;
   color: #ffffff;
   font-weight: 600;
   /* Scale font size based on card width - smaller when card is small */
-  font-size: clamp(9px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.08), 11px);
+  font-size: clamp(11px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.095), 14px);
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-  letter-spacing: 0.3px;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
+  width: 100%;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .card-info-primary.buy {
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.9) 0%, rgba(22, 163, 74, 0.9) 100%);
+  background: linear-gradient(135deg, rgba(34, 197, 94, 1) 0%, rgba(22, 163, 74, 1) 100%);
   color: #ffffff;
-  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
+  border-right: none;
 }
 .card-info-primary.buy:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(34, 197, 94, 0.4);
-  background: linear-gradient(135deg, rgba(34, 197, 94, 1) 0%, rgba(22, 163, 74, 1) 100%);
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.9) 0%, rgba(22, 163, 74, 0.9) 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
 }
 
 .card-info-primary.install {
-  background: linear-gradient(135deg, rgba(59, 130, 246, 0.9) 0%, rgba(99, 102, 241, 0.9) 100%);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 1) 0%, rgba(37, 99, 235, 1) 100%);
+  color: #ffffff;
 }
 .card-info-primary.install:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
-  background: linear-gradient(135deg, rgba(59, 130, 246, 1) 0%, rgba(99, 102, 241, 1) 100%);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.9) 0%, rgba(37, 99, 235, 0.9) 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 
 .card-info-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
-  background: linear-gradient(135deg, rgba(59, 130, 246, 1) 0%, rgba(99, 102, 241, 1) 100%);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.9) 0%, rgba(37, 99, 235, 0.9) 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 
 .card-info-primary:active {
   transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
 .card-info-fav {
@@ -2514,4 +2680,254 @@
   font-size: 12px;
   font-weight: 500;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
+}
+
+/* Purchase Modal Styles */
+.purchase-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.purchase-modal-content {
+  background: rgba(15, 17, 21, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: clamp(12px, calc(var(--content-width, 1090px) * 0.015), 20px);
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.purchase-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: clamp(16px, calc(var(--content-width, 1090px) * 0.02), 24px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.purchase-modal-header h2 {
+  margin: 0;
+  font-size: clamp(18px, calc(var(--content-width, 1090px) * 0.022), 24px);
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.purchase-modal-close {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
+}
+
+.purchase-modal-close:hover {
+  color: #ffffff;
+}
+
+.purchase-modal-body {
+  padding: clamp(16px, calc(var(--content-width, 1090px) * 0.02), 24px);
+}
+
+.purchase-game-info {
+  display: flex;
+  gap: clamp(12px, calc(var(--content-width, 1090px) * 0.015), 20px);
+  margin-bottom: clamp(20px, calc(var(--content-width, 1090px) * 0.025), 32px);
+}
+
+.purchase-game-image {
+  width: clamp(80px, calc(var(--content-width, 1090px) * 0.1), 120px);
+  height: clamp(80px, calc(var(--content-width, 1090px) * 0.1), 120px);
+  flex-shrink: 0;
+  border-radius: clamp(8px, calc(var(--content-width, 1090px) * 0.01), 12px);
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.purchase-game-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.purchase-game-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(32px, calc(var(--content-width, 1090px) * 0.04), 48px);
+}
+
+.purchase-game-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.purchase-game-details h3 {
+  margin: 0 0 4px 0;
+  font-size: clamp(16px, calc(var(--content-width, 1090px) * 0.02), 20px);
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.purchase-game-developer {
+  margin: 0;
+  font-size: clamp(12px, calc(var(--content-width, 1090px) * 0.015), 14px);
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.purchase-price-section {
+  margin-bottom: clamp(20px, calc(var(--content-width, 1090px) * 0.025), 32px);
+  padding: clamp(12px, calc(var(--content-width, 1090px) * 0.015), 20px);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: clamp(8px, calc(var(--content-width, 1090px) * 0.01), 12px);
+}
+
+.purchase-price-label {
+  font-size: clamp(12px, calc(var(--content-width, 1090px) * 0.015), 14px);
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 8px;
+}
+
+.purchase-price-value {
+  font-size: clamp(20px, calc(var(--content-width, 1090px) * 0.025), 28px);
+  font-weight: 700;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.purchase-price-new {
+  font-size: clamp(20px, calc(var(--content-width, 1090px) * 0.025), 28px);
+  font-weight: 700;
+}
+
+.purchase-price-old {
+  font-size: clamp(14px, calc(var(--content-width, 1090px) * 0.018), 18px);
+  color: rgba(255, 255, 255, 0.4);
+  text-decoration: line-through;
+}
+
+.purchase-payment-section {
+  margin-bottom: clamp(20px, calc(var(--content-width, 1090px) * 0.025), 32px);
+}
+
+.purchase-payment-section h4 {
+  margin: 0 0 clamp(12px, calc(var(--content-width, 1090px) * 0.015), 16px) 0;
+  font-size: clamp(14px, calc(var(--content-width, 1090px) * 0.018), 18px);
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.purchase-payment-methods {
+  display: flex;
+  gap: clamp(8px, calc(var(--content-width, 1090px) * 0.01), 12px);
+}
+
+.purchase-payment-method {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: clamp(10px, calc(var(--content-width, 1090px) * 0.012), 14px);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: clamp(6px, calc(var(--content-width, 1090px) * 0.008), 8px);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: clamp(12px, calc(var(--content-width, 1090px) * 0.015), 14px);
+  font-weight: 500;
+}
+
+.purchase-payment-method:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.purchase-payment-method.active {
+  background: rgba(74, 158, 255, 0.15);
+  border-color: rgba(74, 158, 255, 0.3);
+  color: #4a9eff;
+}
+
+.purchase-modal-actions {
+  display: flex;
+  gap: clamp(8px, calc(var(--content-width, 1090px) * 0.01), 12px);
+  margin-top: clamp(20px, calc(var(--content-width, 1090px) * 0.025), 32px);
+}
+
+.purchase-cancel-btn,
+.purchase-confirm-btn {
+  flex: 1;
+  padding: clamp(10px, calc(var(--content-width, 1090px) * 0.012), 14px) clamp(16px, calc(var(--content-width, 1090px) * 0.02), 24px);
+  border: none;
+  border-radius: clamp(6px, calc(var(--content-width, 1090px) * 0.008), 8px);
+  font-size: clamp(13px, calc(var(--content-width, 1090px) * 0.016), 16px);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.purchase-cancel-btn {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.purchase-cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.purchase-confirm-btn {
+  background: #22c55e;
+  color: #ffffff;
+}
+
+.purchase-confirm-btn:hover {
+  background: #16a34a;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
 }

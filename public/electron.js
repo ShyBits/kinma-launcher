@@ -4,9 +4,13 @@ const fs = require('fs');
 const isDev = require('electron-is-dev');
 const Store = require('electron-store');
 const { autoUpdater } = require('electron-updater');
+const { getDatabaseManager } = require(path.join(__dirname, '../src/utils/DatabaseManager'));
 
 const store = new Store();
 const settingsStore = new Store({ name: 'settings' });
+
+// Initialize database manager
+let dbManager = null;
 
 let mainWindow;
 let authWindow;
@@ -37,6 +41,13 @@ function createMainWindow() {
   // This prevents main window from being created when user is trying to log in
   if (authWindow && !authWindow.isDestroyed()) {
     console.log('⚠️ Auth window exists - not creating main window');
+    return;
+  }
+  
+  // IMPORTANT: Check if admin window exists - if so, don't create main window
+  // This prevents main window from being created when admin window is open
+  if (adminWindow && !adminWindow.isDestroyed()) {
+    console.log('⚠️ Admin window exists - not creating main window');
     return;
   }
   
@@ -211,7 +222,12 @@ const ADMIN_CREDENTIALS = {
 
 // Check if current user matches admin credentials
 function isAdminUser(user) {
-  if (!user) return false;
+  if (!user) {
+    console.log('isAdminUser: No user provided');
+    return false;
+  }
+  
+  console.log('isAdminUser: Checking user:', { id: user.id, email: user.email, username: user.username, name: user.name });
   
   // Check email
   const emailMatch = user.email && user.email.toLowerCase() === ADMIN_CREDENTIALS.email.toLowerCase();
@@ -219,6 +235,8 @@ function isAdminUser(user) {
   // Check username
   const usernameMatch = (user.username && user.username.toLowerCase() === ADMIN_CREDENTIALS.username.toLowerCase()) ||
                        (user.name && user.name.toLowerCase() === ADMIN_CREDENTIALS.username.toLowerCase());
+  
+  console.log('isAdminUser: Email match:', emailMatch, 'Username match:', usernameMatch);
   
   // Get password from users.json
   try {
@@ -235,17 +253,33 @@ function isAdminUser(user) {
     
     if (fs.existsSync(usersFile)) {
       const users = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
-      const userData = users.find(u => u.id === user.id || u.email === user.email);
+      // Try multiple ways to find the user
+      const userData = users.find(u => 
+        u.id === user.id || 
+        u.email === user.email || 
+        (user.email && u.email && u.email.toLowerCase() === user.email.toLowerCase()) ||
+        (user.id && u.id && u.id.toLowerCase() === user.id.toLowerCase())
+      );
+      
+      console.log('isAdminUser: Found userData:', userData ? { id: userData.id, email: userData.email, username: userData.username } : 'null');
       
       if (userData) {
         const passwordMatch = userData.password === ADMIN_CREDENTIALS.password;
-        return emailMatch && usernameMatch && passwordMatch;
+        console.log('isAdminUser: Password match:', passwordMatch);
+        const isAdmin = emailMatch && usernameMatch && passwordMatch;
+        console.log('isAdminUser: Final result:', isAdmin);
+        return isAdmin;
+      } else {
+        console.log('isAdminUser: User data not found in users.json');
       }
+    } else {
+      console.log('isAdminUser: users.json file not found at:', usersFile);
     }
   } catch (error) {
     console.error('Error checking admin credentials:', error);
   }
   
+  console.log('isAdminUser: Returning false');
   return false;
 }
 
@@ -256,16 +290,46 @@ function createAdminWindow() {
     return { success: true };
   }
   
-  // Check if current user is admin
-  const authUser = settingsStore.get('authUser');
+  // Get admin user from users.json
+  let authUser = null;
+  try {
+    const appPath = isDev ? __dirname : path.join(app.getAppPath());
+    let projectRoot = appPath;
+    if (isDev) {
+      projectRoot = path.resolve(appPath, '..');
+    } else {
+      projectRoot = path.join(appPath, '..');
+    }
+    
+    const usersPath = path.join(projectRoot, 'user');
+    const usersFile = path.join(usersPath, 'users.json');
+    
+    if (fs.existsSync(usersFile)) {
+      const users = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
+      // Find logged in admin user
+      authUser = users.find(u => 
+        u.isLoggedIn && 
+        u.email && u.email.toLowerCase() === ADMIN_CREDENTIALS.email.toLowerCase()
+      );
+    }
+  } catch (error) {
+    console.error('Error getting admin user:', error);
+  }
+  
+  // Also check settingsStore as fallback
+  if (!authUser) {
+    authUser = settingsStore.get('authUser');
+  }
+  
   if (!authUser || !isAdminUser(authUser)) {
     console.log('Cannot create admin window - user is not admin');
     return { success: false, error: 'Unauthorized: Admin access required' };
   }
   
+  // Create the admin window
   adminWindow = new BrowserWindow({
-    width: 1000,
-    height: 600,
+    width: 1200,
+    height: 800,
     minWidth: 1000,
     minHeight: 600,
     webPreferences: {
@@ -277,42 +341,40 @@ function createAdminWindow() {
     frame: false,
     titleBarStyle: 'hidden',
     show: false,
-    icon: path.join(__dirname, 'assets/icon.png')
+    icon: path.join(__dirname, 'assets/icon.png'),
+    parent: null // Make it independent
   });
 
+  // Set the URL with hash route
   const startUrl = isDev 
     ? 'http://localhost:3000#/admin-window' 
     : `file://${path.join(__dirname, '../build/index.html')}#/admin-window`;
 
+  console.log('Creating admin window with URL:', startUrl);
   adminWindow.loadURL(startUrl);
 
+  // Show window when ready
   adminWindow.once('ready-to-show', () => {
-    // Verify user is still admin before showing
     if (adminWindow && !adminWindow.isDestroyed()) {
-      const authUser = settingsStore.get('authUser');
-      if (authUser && isAdminUser(authUser)) {
-        adminWindow.center();
-        adminWindow.show();
-        adminWindow.focus();
-      } else {
-        console.log('Admin window ready but user is no longer admin - closing window');
-        adminWindow.close();
-        adminWindow = null;
-      }
+      adminWindow.center();
+      adminWindow.show();
+      adminWindow.focus();
+      console.log('Admin window shown');
     }
   });
 
-  // Ensure the renderer is on the /admin-window route
+  // Ensure route is correct after load
   adminWindow.webContents.once('did-finish-load', () => {
-    const navigateToAdmin = `
-      try {
-        if (window.location.hash !== '#/admin-window') {
-          window.location.hash = '/admin-window';
-          window.dispatchEvent(new Event('hashchange'));
-        }
-      } catch (e) {}
-    `;
-    adminWindow.webContents.executeJavaScript(navigateToAdmin).catch(() => {});
+    adminWindow.webContents.executeJavaScript(`
+      if (window.location.hash !== '#/admin-window') {
+        window.location.hash = '/admin-window';
+      }
+    `).catch(() => {});
+  });
+
+  // Handle window close
+  adminWindow.on('closed', () => {
+    adminWindow = null;
   });
 
   if (isDev) {
@@ -322,7 +384,105 @@ function createAdminWindow() {
   return { success: true };
 }
 
-// Helper function to get users from file
+// Helper function to convert ISO datetime string to MySQL datetime format
+function convertToMySQLDateTime(isoString) {
+  if (!isoString) return null;
+  try {
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) return null;
+    // Convert to MySQL datetime format: YYYY-MM-DD HH:MM:SS
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  } catch (error) {
+    console.error('Error converting datetime:', error);
+    return null;
+  }
+}
+
+// Helper function to get users from database
+async function getUsersFromDatabase() {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        console.warn('Database initialization failed, falling back to file');
+        return getUsersFromFile();
+      }
+    }
+    const users = await dbManager.query('SELECT * FROM users ORDER BY createdAt DESC');
+    // Ensure we always return an array
+    return Array.isArray(users) ? users : [];
+  } catch (error) {
+    console.error('Error reading users from database:', error);
+    // Fallback to file if database fails
+    const fileUsers = getUsersFromFile();
+    return Array.isArray(fileUsers) ? fileUsers : [];
+  }
+}
+
+// Helper function to save users to database
+async function saveUsersToDatabase(users) {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      await dbManager.initialize();
+    }
+    
+    // Save each user to database
+    for (const user of users) {
+    const existing = await dbManager.query('SELECT id FROM users WHERE id = ?', [user.id]);
+    
+    if (existing && Array.isArray(existing) && existing.length > 0) {
+        // Update existing user
+        await dbManager.query(
+          `UPDATE users SET username = ?, email = ?, password = ?, name = ?, fullName = ?, 
+           phone = ?, dateOfBirth = ?, gender = ?, address = ?, city = ?, zipCode = ?, 
+           country = ?, acceptTerms = ?, devIntent = ?, lastLoginTime = ?, isLoggedIn = ?, 
+           stayLoggedIn = ?, hiddenInSwitcher = ? WHERE id = ?`,
+          [
+            user.username, user.email, user.password, user.name, user.fullName,
+            user.phone || null, convertToMySQLDateTime(user.dateOfBirth), user.gender || 'none',
+            user.address || null, user.city || null, user.zipCode || null,
+            user.country || null, user.acceptTerms || false, user.devIntent || false,
+            convertToMySQLDateTime(user.lastLoginTime), user.isLoggedIn || false,
+            user.stayLoggedIn !== undefined ? user.stayLoggedIn : true,
+            user.hiddenInSwitcher || false, user.id
+          ]
+        );
+      } else {
+        // Insert new user
+        await dbManager.query(
+          `INSERT INTO users (id, username, email, password, name, fullName, phone, dateOfBirth, 
+           gender, address, city, zipCode, country, acceptTerms, devIntent, createdAt, 
+           lastLoginTime, isLoggedIn, stayLoggedIn, hiddenInSwitcher) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            user.id, user.username, user.email, user.password, user.name, user.fullName,
+            user.phone || null, convertToMySQLDateTime(user.dateOfBirth), user.gender || 'none',
+            user.address || null, user.city || null, user.zipCode || null,
+            user.country || null, user.acceptTerms || false, user.devIntent || false,
+            convertToMySQLDateTime(user.createdAt) || convertToMySQLDateTime(new Date().toISOString()), convertToMySQLDateTime(user.lastLoginTime),
+            user.isLoggedIn || false, user.stayLoggedIn !== undefined ? user.stayLoggedIn : true,
+            user.hiddenInSwitcher || false
+          ]
+        );
+      }
+    }
+    return true;
+  } catch (error) {
+    console.error('Error saving users to database:', error);
+    // Fallback to file if database fails
+    return saveUsersToFile(users);
+  }
+}
+
+// Fallback: Helper function to get users from file (for migration/backup)
 function getUsersFromFile() {
   try {
     const appPath = isDev ? __dirname : path.join(app.getAppPath());
@@ -346,7 +506,7 @@ function getUsersFromFile() {
   return [];
 }
 
-// Helper function to save users to file
+// Fallback: Helper function to save users to file (for migration/backup)
 function saveUsersToFile(users) {
   try {
     const appPath = isDev ? __dirname : path.join(app.getAppPath());
@@ -372,10 +532,87 @@ function saveUsersToFile(users) {
   }
 }
 
-// Helper function to find and auto-login user
-function findAutoLoginUser() {
+// Migration function to transfer existing data from localStorage/users.json to database
+async function migrateDataToDatabase() {
   try {
-    const users = getUsersFromFile();
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      await dbManager.initialize();
+    }
+
+    console.log('🔄 Starting data migration...');
+
+    // 1. Migrate users from users.json
+    try {
+      const fileUsers = getUsersFromFile();
+      if (fileUsers && fileUsers.length > 0) {
+        console.log(`📦 Migrating ${fileUsers.length} users from users.json...`);
+        for (const user of fileUsers) {
+          const [existing] = await dbManager.query('SELECT id FROM users WHERE id = ?', [user.id]);
+          if (!existing) {
+            await dbManager.query(
+              `INSERT INTO users (id, username, email, password, name, fullName, phone, dateOfBirth, 
+               gender, address, city, zipCode, country, acceptTerms, devIntent, createdAt, 
+               lastLoginTime, isLoggedIn, stayLoggedIn, hiddenInSwitcher) 
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                user.id, user.username, user.email, user.password, user.name, user.fullName,
+                user.phone || null, convertToMySQLDateTime(user.dateOfBirth), user.gender || 'none',
+                user.address || null, user.city || null, user.zipCode || null,
+                user.country || null, user.acceptTerms || false, user.devIntent || false,
+                convertToMySQLDateTime(user.createdAt) || convertToMySQLDateTime(new Date().toISOString()), 
+                convertToMySQLDateTime(user.lastLoginTime),
+                user.isLoggedIn || false, user.stayLoggedIn !== undefined ? user.stayLoggedIn : true,
+                user.hiddenInSwitcher || false
+              ]
+            );
+            console.log(`  ✓ Migrated user: ${user.email || user.username}`);
+          }
+        }
+        console.log(`✅ Migrated ${fileUsers.length} users to database`);
+      }
+    } catch (error) {
+      console.error('Error migrating users:', error);
+    }
+
+    // 2. Migrate games from localStorage (for each user)
+    try {
+      // Get all users from database
+      const dbUsers = await dbManager.query('SELECT id FROM users');
+      
+      for (const dbUser of dbUsers) {
+        const userId = dbUser.id;
+        
+        // Try to get games from localStorage (scoped by user)
+        // Note: This requires access to localStorage, which is only available in renderer process
+        // We'll handle this through IPC or by reading from a file if games are stored there
+        
+        // Check for customGames in localStorage format (would need IPC to access)
+        // For now, we'll note that games migration happens when UserDataManager is used
+        console.log(`  ℹ Games for user ${userId} will be migrated on first access`);
+      }
+    } catch (error) {
+      console.error('Error migrating games:', error);
+    }
+
+    // 3. Migrate settings from localStorage
+    // Settings migration will happen automatically when UserDataManager is used
+    console.log('  ℹ Settings will be migrated on first access');
+
+    // 4. Migrate ratings from localStorage
+    // Ratings migration will happen automatically when accessed
+    console.log('  ℹ Ratings will be migrated on first access');
+
+    console.log('✅ Data migration completed');
+  } catch (error) {
+    console.error('Error during data migration:', error);
+  }
+}
+
+// Helper function to find and auto-login user
+async function findAutoLoginUser() {
+  try {
+    const users = await getUsersFromDatabase();
     if (!Array.isArray(users) || users.length === 0) {
       return null;
     }
@@ -405,9 +642,9 @@ function findAutoLoginUser() {
 }
 
 // Helper function to check if there are any logged-in accounts
-function hasLoggedInAccounts() {
+async function hasLoggedInAccounts() {
   try {
-    const users = getUsersFromFile();
+    const users = await getUsersFromDatabase();
     if (!Array.isArray(users) || users.length === 0) {
       return false;
     }
@@ -422,9 +659,9 @@ function hasLoggedInAccounts() {
 }
 
 // Helper function to check if there are any accounts that haven't been removed from switcher
-function hasAccountsInSwitcher() {
+async function hasAccountsInSwitcher() {
   try {
-    const users = getUsersFromFile();
+    const users = await getUsersFromDatabase();
     if (!Array.isArray(users) || users.length === 0) {
       return false;
     }
@@ -439,6 +676,39 @@ function hasAccountsInSwitcher() {
 }
 
 app.whenReady().then(async () => {
+  // Initialize database
+  try {
+    dbManager = getDatabaseManager();
+    const initialized = await dbManager.initialize();
+    if (initialized) {
+      console.log('Database initialized');
+      
+      // Run migration if not already completed OR if no users exist in database
+      try {
+        const migrationCompleted = await dbManager.isMigrationCompleted();
+        const dbUsers = await dbManager.query('SELECT COUNT(*) as count FROM users');
+        const userCount = dbUsers && Array.isArray(dbUsers) && dbUsers.length > 0 ? dbUsers[0].count : 0;
+        
+        if (!migrationCompleted || userCount === 0) {
+          console.log('Starting data migration from localStorage/users.json to database...');
+          await migrateDataToDatabase();
+          await dbManager.markMigrationCompleted();
+          console.log('Data migration completed');
+        } else {
+          console.log('Migration already completed, skipping...');
+        }
+      } catch (migrationError) {
+        console.error('Migration error (non-critical):', migrationError);
+        // Continue even if migration fails
+      }
+    } else {
+      console.warn('Database initialization failed, continuing with file-based storage');
+    }
+  } catch (error) {
+    console.error('Failed to initialize database:', error);
+    console.warn('Application will continue with file-based storage as fallback');
+  }
+
   const forceAuth = process.env.KINMA_FORCE_AUTH === '1';
   if (forceAuth) {
     createAuthWindow();
@@ -447,23 +717,34 @@ app.whenReady().then(async () => {
   
   // FIRST: Check if there's a user that should be auto-logged in (didn't log out)
   // This takes priority - if user didn't log out, auto-login them directly
-  const autoLoginUser = findAutoLoginUser();
-  
-  if (autoLoginUser) {
-    // User didn't log out - auto-login them directly to main window
-    const authUserData = {
-      id: autoLoginUser.id,
-      email: autoLoginUser.email,
-      name: autoLoginUser.name || autoLoginUser.username || autoLoginUser.email?.split('@')[0] || 'User'
-    };
-    settingsStore.set('authUser', authUserData);
-    console.log('✅ Auto-logging in with user (didn\'t log out):', authUserData.name || authUserData.email);
-    createMainWindow();
-    return;
+  try {
+    const autoLoginUser = await findAutoLoginUser();
+    
+    if (autoLoginUser) {
+      // User didn't log out - auto-login them directly to main window
+      const authUserData = {
+        id: autoLoginUser.id,
+        email: autoLoginUser.email,
+        name: autoLoginUser.name || autoLoginUser.username || autoLoginUser.email?.split('@')[0] || 'User'
+      };
+      settingsStore.set('authUser', authUserData);
+      console.log('✅ Auto-logging in with user (didn\'t log out):', authUserData.name || authUserData.email);
+      createMainWindow();
+      return;
+    }
+  } catch (error) {
+    console.error('Error finding auto-login user:', error);
+    // Continue to next check
   }
   
   // SECOND: If no auto-login user, check if there are any accounts in the switcher (not removed)
-  const hasAccounts = hasAccountsInSwitcher();
+  let hasAccounts = false;
+  try {
+    hasAccounts = await hasAccountsInSwitcher();
+  } catch (error) {
+    console.error('Error checking accounts in switcher:', error);
+    // Continue to next check
+  }
   
   if (hasAccounts) {
     // There are accounts in the switcher - open account switcher window
@@ -533,10 +814,10 @@ app.on('window-all-closed', () => {
   }
 });
 
-app.on('activate', () => {
+app.on('activate', async () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     // FIRST: Check if there's a user that should be auto-logged in (didn't log out)
-    const autoLoginUser = findAutoLoginUser();
+    const autoLoginUser = await findAutoLoginUser();
     
     if (autoLoginUser) {
       // User didn't log out - auto-login them directly to main window
@@ -552,7 +833,7 @@ app.on('activate', () => {
     }
     
     // SECOND: If no auto-login user, check if there are any accounts in the switcher (not removed)
-    const hasAccounts = hasAccountsInSwitcher();
+    const hasAccounts = await hasAccountsInSwitcher();
     
     if (hasAccounts) {
       // There are accounts in the switcher - open account switcher window
@@ -748,6 +1029,7 @@ ipcMain.handle('close-window', async (event) => {
         console.log('✅ Account switcher will close, auth window will remain open');
         // IMPORTANT: Don't open main window - just close the account switcher
         // The auth window should handle the login flow
+        senderWindow.close();
         return; // Just close the account switcher, don't open main window
       }
       
@@ -756,6 +1038,7 @@ ipcMain.handle('close-window', async (event) => {
       const authUser = settingsStore.get('authUser');
       if (!authUser || !authUser.id) {
         console.log('⚠️ No authUser in settingsStore - not opening main window');
+        senderWindow.close();
         return; // Just close the account switcher, don't open main window
       }
       
@@ -765,7 +1048,7 @@ ipcMain.handle('close-window', async (event) => {
       // Get users and find one that is actually logged in (isLoggedIn === true)
       let loggedInUser = null;
       try {
-        const users = getUsersFromFile();
+        const users = await getUsersFromDatabase();
           
           if (Array.isArray(users) && users.length > 0) {
           // Filter for users that are actually logged in
@@ -801,6 +1084,9 @@ ipcMain.handle('close-window', async (event) => {
         };
         settingsStore.set('authUser', authUserData);
         
+        // Close account switcher window first
+        senderWindow.close();
+        
         // Ensure main window exists and is shown (only if user is authenticated)
         if (!mainWindow || mainWindow.isDestroyed()) {
           createMainWindow();
@@ -828,6 +1114,7 @@ ipcMain.handle('close-window', async (event) => {
         // No logged-in user - don't open main window or auth window
         // The auth window should already be open if user clicked on a logged-out account
         // Just close the account switcher
+        senderWindow.close();
       }
     } catch (error) {
       console.error('Error handling account switcher close:', error);
@@ -968,7 +1255,7 @@ ipcMain.handle('get-last-logged-in-user', async () => {
   }
 });
 
-ipcMain.handle('auth-success', (event, user) => {
+ipcMain.handle('auth-success', async (event, user) => {
   // IMPORTANT: If main window is already open and visible, and user is already authenticated,
   // don't do anything - this prevents interference with normal operation
   const currentAuthUser = settingsStore.get('authUser');
@@ -976,14 +1263,14 @@ ipcMain.handle('auth-success', (event, user) => {
     console.log('⚠️ Main window already open and user already authenticated - skipping auth-success handler');
     // Still update user data (login time, etc.) but don't mess with windows
     try {
-      const users = getUsersFromFile();
-      const userIndex = users.findIndex(u => u.id === user.id);
-      if (userIndex !== -1) {
-        users[userIndex].isLoggedIn = true;
-        users[userIndex].lastLoginTime = new Date().toISOString();
-        users[userIndex].hiddenInSwitcher = false;
-        saveUsersToFile(users);
+      if (!dbManager) {
+        dbManager = getDatabaseManager();
+        await dbManager.initialize();
       }
+      await dbManager.query(
+        'UPDATE users SET isLoggedIn = ?, lastLoginTime = ?, hiddenInSwitcher = ? WHERE id = ?',
+        [true, convertToMySQLDateTime(new Date().toISOString()), false, user.id]
+      );
     } catch (error) {
       console.error('Error updating user data:', error);
     }
@@ -1006,35 +1293,56 @@ ipcMain.handle('auth-success', (event, user) => {
       return;
     }
     
-    // Mark user as logged in in users.json
-    const users = getUsersFromFile();
-    const userIndex = users.findIndex(u => u.id === user.id);
-    if (userIndex !== -1) {
-      users[userIndex].isLoggedIn = true;
-      users[userIndex].lastLoginTime = new Date().toISOString();
-      // IMPORTANT: Clear hiddenInSwitcher flag when user logs in - account should be visible again
-      users[userIndex].hiddenInSwitcher = false;
-      saveUsersToFile(users);
-      console.log('Marked user as logged in and made visible in switcher:', user.email || user.username);
-    } else {
-      // User doesn't exist in users.json - add them
-      const newUser = {
-        ...user,
-        isLoggedIn: true,
-        lastLoginTime: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-        hiddenInSwitcher: false // New users should be visible
-      };
-      users.push(newUser);
-      saveUsersToFile(users);
-      console.log('Added new user and marked as logged in:', user.email || user.username);
+    // Mark user as logged in in database
+    try {
+      if (!dbManager) {
+        dbManager = getDatabaseManager();
+        await dbManager.initialize();
+      }
+      const [existing] = await dbManager.query('SELECT id FROM users WHERE id = ?', [user.id]);
+      if (existing) {
+        await dbManager.query(
+          'UPDATE users SET isLoggedIn = ?, lastLoginTime = ?, hiddenInSwitcher = ? WHERE id = ?',
+          [true, convertToMySQLDateTime(new Date().toISOString()), false, user.id]
+        );
+        console.log('Marked user as logged in and made visible in switcher:', user.email || user.username);
+      } else {
+        // User doesn't exist in database - add them
+        await dbManager.query(
+          `INSERT INTO users (id, username, email, password, name, fullName, phone, dateOfBirth, 
+           gender, address, city, zipCode, country, acceptTerms, devIntent, createdAt, 
+           lastLoginTime, isLoggedIn, stayLoggedIn, hiddenInSwitcher) 
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            user.id, user.username || '', user.email || '', user.password || '',
+            user.name || '', user.fullName || '', user.phone || null, convertToMySQLDateTime(user.dateOfBirth),
+            user.gender || 'none', user.address || null, user.city || null, user.zipCode || null,
+            user.country || null, user.acceptTerms || false, user.devIntent || false,
+            convertToMySQLDateTime(new Date().toISOString()), convertToMySQLDateTime(new Date().toISOString()), true,
+            user.stayLoggedIn !== undefined ? user.stayLoggedIn : true, false
+          ]
+        );
+        console.log('Added new user and marked as logged in:', user.email || user.username);
+      }
+    } catch (error) {
+      console.error('Error saving user to database:', error);
     }
   } catch (error) {
     console.error('Error setting authUser:', error);
     return;
   }
   
-  const senderWindow = BrowserWindow.fromWebContents(event.sender);
+  // Check if sender window still exists before accessing it
+  let senderWindow = null;
+  try {
+    senderWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!senderWindow || senderWindow.isDestroyed()) {
+      senderWindow = null;
+    }
+  } catch (error) {
+    // Window was destroyed, continue without it
+    senderWindow = null;
+  }
   
   // Check if this is coming from account switcher
   let isFromAccountSwitcher = false;
@@ -1185,13 +1493,18 @@ ipcMain.handle('logout', async () => {
     // Mark current user as logged out (temporary session termination)
     // IMPORTANT: Only set isLoggedIn: false, NEVER set hiddenInSwitcher: true
     // Accounts should remain visible in the account switcher until explicitly removed
-    const users = getUsersFromFile();
-        const userIndex = users.findIndex(u => u.id === currentAuthUser.id);
-        if (userIndex !== -1) {
-          users[userIndex].isLoggedIn = false;
-      // IMPORTANT: Do NOT set hiddenInSwitcher: true here - account should remain visible
-      saveUsersToFile(users);
+    try {
+      if (!dbManager) {
+        dbManager = getDatabaseManager();
+        await dbManager.initialize();
+      }
+      await dbManager.query(
+        'UPDATE users SET isLoggedIn = ? WHERE id = ?',
+        [false, currentAuthUser.id]
+      );
       console.log('Marked user as logged out (temporary session termination)');
+    } catch (error) {
+      console.error('Error updating user logout status:', error);
     }
     
     // Clear auth user from settingsStore
@@ -1517,12 +1830,102 @@ ipcMain.handle('open-logs', () => {
   return true;
 });
 
+// Update state
+let updateAvailable = false;
+let updateInfo = null;
+let updateDownloaded = false;
+
+// Configure autoUpdater
+if (!isDev) {
+  autoUpdater.setAutoDownload(false);
+  
+  autoUpdater.on('checking-for-update', () => {
+    console.log('Checking for update...');
+  });
+  
+  autoUpdater.on('update-available', (info) => {
+    console.log('Update available:', info.version);
+    updateAvailable = true;
+    updateInfo = info;
+    // Notify renderer
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-available', info);
+    }
+  });
+  
+  autoUpdater.on('update-not-available', () => {
+    console.log('Update not available');
+    updateAvailable = false;
+    updateInfo = null;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-not-available');
+    }
+  });
+  
+  autoUpdater.on('error', (err) => {
+    console.error('Error in auto-updater:', err);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-error', err.message);
+    }
+  });
+  
+  autoUpdater.on('download-progress', (progressObj) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-download-progress', progressObj);
+    }
+  });
+  
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log('Update downloaded:', info.version);
+    updateDownloaded = true;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('update-downloaded', info);
+    }
+  });
+}
+
 ipcMain.handle('check-for-updates', async () => {
   try {
     if (!isDev) {
-      await autoUpdater.checkForUpdatesAndNotify();
+      await autoUpdater.checkForUpdates();
     }
     return { success: true, message: 'Update check completed' };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('get-app-version', async () => {
+  return { version: app.getVersion() };
+});
+
+ipcMain.handle('get-update-status', async () => {
+  return { 
+    updateAvailable, 
+    updateInfo,
+    updateDownloaded 
+  };
+});
+
+ipcMain.handle('download-update', async () => {
+  try {
+    if (!isDev && updateAvailable && !updateDownloaded) {
+      await autoUpdater.downloadUpdate();
+      return { success: true, message: 'Update download started' };
+    }
+    return { success: false, message: 'No update available or already downloaded' };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('install-update', async () => {
+  try {
+    if (!isDev && updateDownloaded) {
+      autoUpdater.quitAndInstall(false, true);
+      return { success: true, message: 'Installing update...' };
+    }
+    return { success: false, message: 'No update to install' };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -1672,6 +2075,28 @@ ipcMain.handle('get-game-folder-path', async (event, gameId) => {
   } catch (error) {
     console.error('Error getting game folder path:', error);
     return null;
+  }
+});
+
+// Check if game folder exists
+ipcMain.handle('game-folder-exists', async (event, gameId) => {
+  try {
+    const appPath = isDev 
+      ? __dirname
+      : path.join(app.getAppPath());
+    
+    let projectRoot = appPath;
+    if (isDev) {
+      projectRoot = path.resolve(appPath, '..');
+    } else {
+      projectRoot = path.join(appPath, '..');
+    }
+    
+    const gamesPath = path.join(projectRoot, 'games', gameId);
+    return fs.existsSync(gamesPath);
+  } catch (error) {
+    console.error('Error checking game folder existence:', error);
+    return false;
   }
 });
 
@@ -1887,82 +2312,27 @@ ipcMain.handle('delete-game-folder', async (event, gameId) => {
   }
 });
 
-// Save users to file system
+// Save users to database
 ipcMain.handle('save-users', async (event, users) => {
   try {
-    // Use the app's base directory
-    const appPath = isDev 
-      ? __dirname  // In development, this is the public folder
-      : path.join(app.getAppPath());
-    
-    // Navigate to the project root (same logic as games)
-    let projectRoot = appPath;
-    if (isDev) {
-      // In development, go up from public/electron.js to get to project root
-      projectRoot = path.resolve(appPath, '..');
+    const success = await saveUsersToDatabase(users);
+    if (success) {
+      console.log('Users saved successfully to database');
+      return { success: true };
     } else {
-      // In production, go up from app path
-      projectRoot = path.join(appPath, '..');
+      return { success: false, error: 'Failed to save users' };
     }
-    
-    const usersPath = path.join(projectRoot, 'user');
-    
-    // Log the path for debugging
-    console.log('Saving users to:', usersPath);
-    
-    // Create user folder if it doesn't exist
-    if (!fs.existsSync(usersPath)) {
-      fs.mkdirSync(usersPath, { recursive: true });
-      console.log('Created user directory:', usersPath);
-    }
-    
-    // Save users as JSON file
-    const usersFile = path.join(usersPath, 'users.json');
-    fs.writeFileSync(usersFile, JSON.stringify(users, null, 2), 'utf8');
-    
-    console.log('Users saved successfully to:', usersFile);
-    return { success: true, path: usersFile };
   } catch (error) {
     console.error('Error saving users:', error);
     return { success: false, error: error.message };
   }
 });
 
-// Load users from file system
+// Load users from database
 ipcMain.handle('get-users', async () => {
   try {
-    // Use the app's base directory (same logic as save-users)
-    const appPath = isDev 
-      ? __dirname  // In development, this is the public folder
-      : path.join(app.getAppPath());
-    
-    // Navigate to the project root
-    let projectRoot = appPath;
-    if (isDev) {
-      // In development, go up from public/electron.js to get to project root
-      projectRoot = path.resolve(appPath, '..');
-    } else {
-      // In production, go up from app path
-      projectRoot = path.join(appPath, '..');
-    }
-    
-    const usersPath = path.join(projectRoot, 'user');
-    const usersFile = path.join(usersPath, 'users.json');
-    
-    // Log the path for debugging
-    console.log('Loading users from:', usersFile);
-    
-    // Check if users file exists
-    if (!fs.existsSync(usersFile)) {
-      console.log('Users file does not exist, returning empty array');
-      return { success: true, users: [] };
-    }
-    
-    // Read and parse users file
-    const fileContent = fs.readFileSync(usersFile, 'utf8');
-    const users = JSON.parse(fileContent);
-    
-    console.log('Loaded', users.length, 'users from file');
+    const users = await getUsersFromDatabase();
+    console.log('Loaded', users.length, 'users from database');
     return { success: true, users: Array.isArray(users) ? users : [] };
   } catch (error) {
     console.error('Error loading users:', error);
@@ -2312,5 +2682,1191 @@ ipcMain.handle('open-admin-window', (event) => {
   } catch (error) {
     console.error('Error opening admin window:', error);
     return { success: false, error: error.message };
+  }
+});
+
+// ==================== DATABASE IPC HANDLERS ====================
+
+// Users handlers
+ipcMain.handle('db-get-users', async () => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available', users: [] };
+      }
+    }
+    const users = await dbManager.query('SELECT * FROM users ORDER BY createdAt DESC');
+    // Ensure all users are serializable and convert MySQL TINYINT(1) booleans to JavaScript booleans
+    const serializableUsers = Array.isArray(users) ? users.map(user => {
+      try {
+        const serialized = JSON.parse(JSON.stringify(user));
+        // Convert MySQL TINYINT(1) booleans to JavaScript booleans
+        if (serialized.hiddenInSwitcher !== undefined) {
+          serialized.hiddenInSwitcher = serialized.hiddenInSwitcher === 1 || serialized.hiddenInSwitcher === true || serialized.hiddenInSwitcher === '1';
+        }
+        if (serialized.isLoggedIn !== undefined) {
+          serialized.isLoggedIn = serialized.isLoggedIn === 1 || serialized.isLoggedIn === true || serialized.isLoggedIn === '1';
+        }
+        if (serialized.stayLoggedIn !== undefined) {
+          serialized.stayLoggedIn = serialized.stayLoggedIn === 1 || serialized.stayLoggedIn === true || serialized.stayLoggedIn === '1';
+        }
+        if (serialized.acceptTerms !== undefined) {
+          serialized.acceptTerms = serialized.acceptTerms === 1 || serialized.acceptTerms === true || serialized.acceptTerms === '1';
+        }
+        if (serialized.devIntent !== undefined) {
+          serialized.devIntent = serialized.devIntent === 1 || serialized.devIntent === true || serialized.devIntent === '1';
+        }
+        return serialized;
+      } catch {
+        return user;
+      }
+    }) : [];
+    return { success: true, users: serializableUsers };
+  } catch (error) {
+    console.error('Error getting users from database:', error);
+    return { success: false, error: String(error.message || 'Unknown error'), users: [] };
+  }
+});
+
+ipcMain.handle('db-save-user', async (event, user) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available' };
+      }
+    }
+    const existing = await dbManager.query('SELECT id FROM users WHERE id = ?', [user.id]);
+    
+    if (existing && Array.isArray(existing) && existing.length > 0) {
+      // Update existing user
+      await dbManager.query(
+        `UPDATE users SET username = ?, email = ?, password = ?, name = ?, fullName = ?, 
+         phone = ?, dateOfBirth = ?, gender = ?, address = ?, city = ?, zipCode = ?, 
+         country = ?, acceptTerms = ?, devIntent = ?, lastLoginTime = ?, isLoggedIn = ?, 
+         stayLoggedIn = ?, hiddenInSwitcher = ? WHERE id = ?`,
+        [
+          user.username, user.email, user.password, user.name, user.fullName,
+          user.phone || null, convertToMySQLDateTime(user.dateOfBirth), user.gender || 'none',
+          user.address || null, user.city || null, user.zipCode || null,
+          user.country || null, user.acceptTerms || false, user.devIntent || false,
+          convertToMySQLDateTime(user.lastLoginTime), user.isLoggedIn || false,
+          user.stayLoggedIn !== undefined ? user.stayLoggedIn : true,
+          user.hiddenInSwitcher === true || user.hiddenInSwitcher === 1 || user.hiddenInSwitcher === '1' ? 1 : 0, user.id
+        ]
+      );
+    } else {
+      // Insert new user
+      await dbManager.query(
+        `INSERT INTO users (id, username, email, password, name, fullName, phone, dateOfBirth, 
+         gender, address, city, zipCode, country, acceptTerms, devIntent, createdAt, 
+         lastLoginTime, isLoggedIn, stayLoggedIn, hiddenInSwitcher) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          user.id, user.username, user.email, user.password, user.name, user.fullName,
+          user.phone || null, convertToMySQLDateTime(user.dateOfBirth), user.gender || 'none',
+          user.address || null, user.city || null, user.zipCode || null,
+          user.country || null, user.acceptTerms || false, user.devIntent || false,
+          convertToMySQLDateTime(user.createdAt) || convertToMySQLDateTime(new Date().toISOString()), 
+          convertToMySQLDateTime(user.lastLoginTime),
+          user.isLoggedIn || false, user.stayLoggedIn !== undefined ? user.stayLoggedIn : true,
+          user.hiddenInSwitcher === true || user.hiddenInSwitcher === 1 || user.hiddenInSwitcher === '1' ? 1 : 0
+        ]
+      );
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving user to database:', error);
+    return { success: false, error: String(error.message || 'Unknown error') };
+  }
+});
+
+ipcMain.handle('db-delete-user', async (event, userId) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available' };
+      }
+    }
+    await dbManager.query('DELETE FROM users WHERE id = ?', [userId]);
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting user from database:', error);
+    return { success: false, error: String(error.message || 'Unknown error') };
+  }
+});
+
+// Games handlers
+ipcMain.handle('db-get-games', async (event, userId) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available', games: [] };
+      }
+    }
+    
+    // Check if we need to migrate games from localStorage
+    try {
+      const migrationCheck = await dbManager.query(
+        "SELECT value FROM settings WHERE userId = ? AND key_name = ?",
+        [userId, 'games_migrated']
+      );
+      
+      if (!migrationCheck || !Array.isArray(migrationCheck) || migrationCheck.length === 0 || migrationCheck[0].value !== 'true') {
+        // Trigger migration from localStorage (will be handled by renderer)
+        event.sender.send('migrate-localStorage-data', { userId, dataType: 'games' });
+      }
+    } catch (migrationError) {
+      // Ignore migration check errors
+      console.warn('Migration check failed:', migrationError);
+    }
+    
+    const games = await dbManager.query(
+      'SELECT * FROM games WHERE userId = ? ORDER BY createdAt DESC',
+      [userId]
+    );
+    // Parse JSON fields and ensure serializability
+    const parsedGames = [];
+    if (Array.isArray(games)) {
+      for (const game of games) {
+        try {
+          const screenshots = game.screenshots ? JSON.parse(game.screenshots) : [];
+          const metadata = game.metadata ? JSON.parse(game.metadata) : {};
+          // Ensure all data is serializable by deep cloning
+          const serializableGame = JSON.parse(JSON.stringify({
+            id: String(game.id || ''),
+            gameId: String(game.gameId || ''),
+            userId: String(game.userId || ''),
+            name: String(game.name || ''),
+            description: game.description ? String(game.description) : null,
+            developer: game.developer ? String(game.developer) : null,
+            version: game.version ? String(game.version) : null,
+            status: String(game.status || 'public'),
+            downloads: Number(game.downloads || 0),
+            banner: game.banner ? String(game.banner) : null,
+            logo: game.logo ? String(game.logo) : null,
+            title: game.title ? String(game.title) : null,
+            screenshots: Array.isArray(screenshots) ? screenshots : [],
+            metadata: typeof metadata === 'object' && metadata !== null ? metadata : {},
+            addedToLibraryAt: game.addedToLibraryAt ? String(game.addedToLibraryAt) : null,
+            purchasedAt: game.purchasedAt ? String(game.purchasedAt) : null,
+            createdAt: game.createdAt ? String(game.createdAt) : null,
+            lastUpdated: game.lastUpdated ? String(game.lastUpdated) : null
+          }));
+          parsedGames.push(serializableGame);
+        } catch (e) {
+          // If parsing fails, return game with minimal safe data
+          parsedGames.push({
+            id: String(game.id || ''),
+            gameId: String(game.gameId || ''),
+            userId: String(game.userId || ''),
+            name: String(game.name || ''),
+            screenshots: [],
+            metadata: {}
+          });
+        }
+      }
+    }
+    return { success: true, games: parsedGames };
+  } catch (error) {
+    console.error('Error getting games from database:', error);
+    return { success: false, error: String(error.message || 'Unknown error'), games: [] };
+  }
+});
+
+// Handler to migrate games from localStorage to database
+ipcMain.handle('db-migrate-games', async (event, userId, games) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      await dbManager.initialize();
+    }
+    
+    let migratedCount = 0;
+    for (const game of games) {
+      try {
+        const gameId = game.id || game.gameId;
+        if (!gameId) {
+          console.warn('Skipping game without id:', game);
+          continue;
+        }
+        
+        const existing = await dbManager.query('SELECT id FROM games WHERE id = ?', [gameId]);
+        // existing is an array, check if it has any results
+        if (!existing || existing.length === 0) {
+          const screenshots = Array.isArray(game.screenshots) ? JSON.stringify(game.screenshots) : (game.screenshots || '[]');
+          const metadata = typeof game.metadata === 'object' ? JSON.stringify(game.metadata) : (game.metadata || '{}');
+          
+          await dbManager.query(
+            `INSERT INTO games (id, gameId, userId, name, description, developer, version, status, 
+             downloads, banner, logo, title, screenshots, metadata, addedToLibraryAt, purchasedAt) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              gameId, game.gameId || gameId, userId, game.name, game.description || null,
+              game.developer || null, game.version || null, game.status || 'public',
+              game.downloads || 0, game.banner || null, game.logo || null,
+              game.title || null, screenshots, metadata,
+              convertToMySQLDateTime(game.addedToLibraryAt), convertToMySQLDateTime(game.purchasedAt)
+            ]
+          );
+          migratedCount++;
+        } else {
+          console.log(`Game ${gameId} already exists in database, skipping migration`);
+        }
+      } catch (error) {
+        // If it's a duplicate entry error, just skip it
+        if (error.code === 'ER_DUP_ENTRY') {
+          console.log(`Game ${game.id || game.gameId} already exists, skipping`);
+          continue;
+        }
+        // Otherwise, log the error but continue with other games
+        console.error(`Error migrating game ${game.id || game.gameId}:`, error.message);
+      }
+    }
+    
+    // Mark migration as completed
+    await dbManager.query(
+      `INSERT INTO settings (userId, key_name, value) VALUES (?, 'games_migrated', 'true')
+       ON DUPLICATE KEY UPDATE value = 'true'`,
+      [userId]
+    );
+    
+    console.log(`✅ Migrated ${migratedCount} games for user ${userId}`);
+    return { success: true, migratedCount };
+  } catch (error) {
+    console.error('Error migrating games:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('db-save-game', async (event, game) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available' };
+      }
+    }
+    const existing = await dbManager.query('SELECT id FROM games WHERE id = ?', [game.id]);
+    
+    const screenshots = Array.isArray(game.screenshots) ? JSON.stringify(game.screenshots) : (game.screenshots || '[]');
+    const metadata = typeof game.metadata === 'object' ? JSON.stringify(game.metadata) : (game.metadata || '{}');
+    
+    if (existing && Array.isArray(existing) && existing.length > 0) {
+      // Update existing game
+      await dbManager.query(
+        `UPDATE games SET gameId = ?, name = ?, description = ?, developer = ?, version = ?, 
+         status = ?, downloads = ?, banner = ?, logo = ?, title = ?, screenshots = ?, 
+         metadata = ?, addedToLibraryAt = ?, purchasedAt = ? WHERE id = ?`,
+        [
+          game.gameId, game.name, game.description || null, game.developer || null,
+          game.version || null, game.status || 'public', game.downloads || 0,
+          game.banner || null, game.logo || null, game.title || null,
+          screenshots, metadata, convertToMySQLDateTime(game.addedToLibraryAt), convertToMySQLDateTime(game.purchasedAt),
+          game.id
+        ]
+      );
+    } else {
+      // Insert new game
+      await dbManager.query(
+        `INSERT INTO games (id, gameId, userId, name, description, developer, version, status, 
+         downloads, banner, logo, title, screenshots, metadata, addedToLibraryAt, purchasedAt) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          game.id, game.gameId, game.userId, game.name, game.description || null,
+          game.developer || null, game.version || null, game.status || 'public',
+          game.downloads || 0, game.banner || null, game.logo || null,
+          game.title || null, screenshots, metadata,
+          convertToMySQLDateTime(game.addedToLibraryAt), convertToMySQLDateTime(game.purchasedAt)
+        ]
+      );
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving game to database:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('db-delete-game', async (event, gameId, userId) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available' };
+      }
+    }
+    await dbManager.query('DELETE FROM games WHERE id = ? AND userId = ?', [gameId, userId]);
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting game from database:', error);
+    return { success: false, error: String(error.message || 'Unknown error') };
+  }
+});
+
+ipcMain.handle('db-get-all-games', async () => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available', games: [] };
+      }
+    }
+    const games = await dbManager.query('SELECT * FROM games ORDER BY createdAt DESC');
+    const parsedGames = [];
+    if (Array.isArray(games)) {
+      for (const game of games) {
+        try {
+          const screenshots = game.screenshots ? JSON.parse(game.screenshots) : [];
+          const metadata = game.metadata ? JSON.parse(game.metadata) : {};
+          // Ensure all data is serializable
+          const serializableGame = JSON.parse(JSON.stringify({
+            id: String(game.id || ''),
+            gameId: String(game.gameId || ''),
+            userId: String(game.userId || ''),
+            name: String(game.name || ''),
+            description: game.description ? String(game.description) : null,
+            developer: game.developer ? String(game.developer) : null,
+            version: game.version ? String(game.version) : null,
+            status: String(game.status || 'public'),
+            downloads: Number(game.downloads || 0),
+            banner: game.banner ? String(game.banner) : null,
+            logo: game.logo ? String(game.logo) : null,
+            title: game.title ? String(game.title) : null,
+            screenshots: Array.isArray(screenshots) ? screenshots : [],
+            metadata: typeof metadata === 'object' && metadata !== null ? metadata : {},
+            addedToLibraryAt: game.addedToLibraryAt ? String(game.addedToLibraryAt) : null,
+            purchasedAt: game.purchasedAt ? String(game.purchasedAt) : null,
+            createdAt: game.createdAt ? String(game.createdAt) : null,
+            lastUpdated: game.lastUpdated ? String(game.lastUpdated) : null
+          }));
+          parsedGames.push(serializableGame);
+        } catch (e) {
+          // If parsing fails, return game with minimal safe data
+          parsedGames.push({
+            id: String(game.id || ''),
+            gameId: String(game.gameId || ''),
+            userId: String(game.userId || ''),
+            name: String(game.name || ''),
+            screenshots: [],
+            metadata: {}
+          });
+        }
+      }
+    }
+    return { success: true, games: parsedGames };
+  } catch (error) {
+    console.error('Error getting all games from database:', error);
+    return { success: false, error: String(error.message || 'Unknown error'), games: [] };
+  }
+});
+
+// Settings handlers
+ipcMain.handle('db-get-setting', async (event, userId, key) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available', value: null };
+      }
+    }
+    const result = await dbManager.query(
+      'SELECT value FROM settings WHERE userId = ? AND key_name = ?',
+      [userId, key]
+    );
+    if (result && Array.isArray(result) && result.length > 0 && result[0].value) {
+      try {
+        const parsed = JSON.parse(result[0].value);
+        // Ensure the value is serializable
+        const serializable = JSON.parse(JSON.stringify(parsed));
+        return { success: true, value: serializable };
+      } catch {
+        // If it's not JSON, return as string
+        return { success: true, value: String(result[0].value) };
+      }
+    }
+    return { success: true, value: null };
+  } catch (error) {
+    console.error('Error getting setting from database:', error);
+    // Return a safe, serializable error response
+    return { success: false, error: String(error.message || 'Unknown error'), value: null };
+  }
+});
+
+ipcMain.handle('db-save-setting', async (event, userId, key, value) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available' };
+      }
+    }
+    // Ensure value is serializable before stringifying
+    let valueStr;
+    try {
+      const serializable = JSON.parse(JSON.stringify(value));
+      valueStr = typeof serializable === 'object' ? JSON.stringify(serializable) : String(serializable);
+    } catch {
+      valueStr = String(value);
+    }
+    await dbManager.query(
+      `INSERT INTO settings (userId, key_name, value) VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE value = ?, updatedAt = CURRENT_TIMESTAMP`,
+      [userId, key, valueStr, valueStr]
+    );
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving setting to database:', error);
+    return { success: false, error: String(error.message || 'Unknown error') };
+  }
+});
+
+ipcMain.handle('db-get-all-settings', async (event, userId) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available', settings: {} };
+      }
+    }
+    const settings = await dbManager.query(
+      'SELECT key_name, value FROM settings WHERE userId = ?',
+      [userId]
+    );
+    const result = {};
+    if (Array.isArray(settings)) {
+      settings.forEach(setting => {
+        try {
+          if (setting.value) {
+            const parsed = JSON.parse(setting.value);
+            // Ensure the value is serializable
+            result[setting.key_name] = JSON.parse(JSON.stringify(parsed));
+          } else {
+            result[setting.key_name] = null;
+          }
+        } catch {
+          result[setting.key_name] = setting.value ? String(setting.value) : null;
+        }
+      });
+    }
+    return { success: true, settings: result };
+  } catch (error) {
+    console.error('Error getting all settings from database:', error);
+    return { success: false, error: String(error.message || 'Unknown error'), settings: {} };
+  }
+});
+
+// Ratings handlers
+ipcMain.handle('db-get-rating', async (event, gameId, userId) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available', rating: null };
+      }
+    }
+    const result = await dbManager.query(
+      'SELECT * FROM ratings WHERE gameId = ? AND userId = ?',
+      [gameId, userId]
+    );
+    const rating = (Array.isArray(result) && result.length > 0) ? result[0] : null;
+    // Ensure rating is serializable
+    const serializableRating = rating ? JSON.parse(JSON.stringify(rating)) : null;
+    return { success: true, rating: serializableRating };
+  } catch (error) {
+    console.error('Error getting rating from database:', error);
+    return { success: false, error: String(error.message || 'Unknown error'), rating: null };
+  }
+});
+
+ipcMain.handle('db-save-rating', async (event, gameId, userId, rating, comment) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available' };
+      }
+    }
+    await dbManager.query(
+      `INSERT INTO ratings (gameId, userId, rating, comment) VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE rating = ?, comment = ?, updatedAt = CURRENT_TIMESTAMP`,
+      [gameId, userId, rating, comment || null, rating, comment || null]
+    );
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving rating to database:', error);
+    return { success: false, error: String(error.message || 'Unknown error') };
+  }
+});
+
+ipcMain.handle('db-get-game-ratings', async (event, gameId) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available', ratings: [] };
+      }
+    }
+    const ratings = await dbManager.query(
+      'SELECT * FROM ratings WHERE gameId = ?',
+      [gameId]
+    );
+    // Ensure all ratings are serializable
+    const serializableRatings = Array.isArray(ratings) ? ratings.map(rating => {
+      try {
+        return JSON.parse(JSON.stringify(rating));
+      } catch {
+        return rating;
+      }
+    }) : [];
+    return { success: true, ratings: serializableRatings };
+  } catch (error) {
+    console.error('Error getting game ratings from database:', error);
+    return { success: false, error: String(error.message || 'Unknown error'), ratings: [] };
+  }
+});
+
+// Playing games handlers
+ipcMain.handle('db-save-playing-game', async (event, gameId, userId, startTime, endTime, duration) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available' };
+      }
+    }
+    await dbManager.query(
+      `INSERT INTO playing_games (gameId, userId, startTime, endTime, duration) 
+       VALUES (?, ?, ?, ?, ?)`,
+      [gameId, userId, convertToMySQLDateTime(startTime), convertToMySQLDateTime(endTime), duration || 0]
+    );
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving playing game to database:', error);
+    return { success: false, error: String(error.message || 'Unknown error') };
+  }
+});
+
+ipcMain.handle('db-get-playing-games', async (event, userId) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available', games: [] };
+      }
+    }
+    const games = await dbManager.query(
+      'SELECT * FROM playing_games WHERE userId = ? AND endTime IS NULL ORDER BY startTime DESC',
+      [userId]
+    );
+    // Ensure all games are serializable
+    const serializableGames = Array.isArray(games) ? games.map(game => {
+      try {
+        return JSON.parse(JSON.stringify(game));
+      } catch {
+        return game;
+      }
+    }) : [];
+    return { success: true, games: serializableGames };
+  } catch (error) {
+    console.error('Error getting playing games from database:', error);
+    return { success: false, error: String(error.message || 'Unknown error'), games: [] };
+  }
+});
+
+// Game states handlers
+ipcMain.handle('db-get-game-state', async (event, gameId, userId) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available', state: null, status: null };
+      }
+    }
+    const result = await dbManager.query(
+      'SELECT * FROM game_states WHERE gameId = ? AND userId = ?',
+      [gameId, userId]
+    );
+    if (result && Array.isArray(result) && result.length > 0) {
+      const stateData = result[0];
+      try {
+        const state = stateData.state_data ? JSON.parse(stateData.state_data) : {};
+        // Ensure state is serializable
+        const serializableState = JSON.parse(JSON.stringify(state));
+        return {
+          success: true,
+          state: serializableState,
+          status: stateData.status ? String(stateData.status) : null
+        };
+      } catch {
+        return {
+          success: true,
+          state: {},
+          status: stateData.status ? String(stateData.status) : null
+        };
+      }
+    }
+    return { success: true, state: null, status: null };
+  } catch (error) {
+    console.error('Error getting game state from database:', error);
+    return { success: false, error: String(error.message || 'Unknown error'), state: null, status: null };
+  }
+});
+
+ipcMain.handle('db-save-game-state', async (event, gameId, userId, state, status) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available' };
+      }
+    }
+    // Ensure state is serializable before stringifying
+    let stateStr;
+    try {
+      const serializable = JSON.parse(JSON.stringify(state));
+      stateStr = typeof serializable === 'object' ? JSON.stringify(serializable) : String(serializable);
+    } catch {
+      stateStr = String(state);
+    }
+    await dbManager.query(
+      `INSERT INTO game_states (gameId, userId, state_data, status) VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE state_data = ?, status = ?, updatedAt = CURRENT_TIMESTAMP`,
+      [gameId, userId, stateStr, status || null, stateStr, status || null]
+    );
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving game state to database:', error);
+    return { success: false, error: String(error.message || 'Unknown error') };
+  }
+});
+
+ipcMain.handle('db-delete-game-state', async (event, gameId, userId) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available' };
+      }
+    }
+    await dbManager.query('DELETE FROM game_states WHERE gameId = ? AND userId = ?', [gameId, userId]);
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting game state from database:', error);
+    return { success: false, error: String(error.message || 'Unknown error') };
+  }
+});
+
+// Inventory handlers
+ipcMain.handle('db-get-inventory', async (event, userId) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available', items: [] };
+      }
+    }
+    const items = await dbManager.query(
+      'SELECT * FROM inventory WHERE userId = ? ORDER BY acquiredAt DESC',
+      [userId]
+    );
+    const parsedItems = [];
+    if (Array.isArray(items)) {
+      for (const item of items) {
+        try {
+          const itemData = item.itemData ? JSON.parse(item.itemData) : {};
+          // Ensure all data is serializable
+          const serializableItem = JSON.parse(JSON.stringify({
+            ...item,
+            itemData: typeof itemData === 'object' && itemData !== null ? itemData : {}
+          }));
+          parsedItems.push(serializableItem);
+        } catch {
+          parsedItems.push({
+            id: String(item.id || ''),
+            userId: String(item.userId || ''),
+            itemId: String(item.itemId || ''),
+            itemType: String(item.itemType || ''),
+            itemData: {},
+            quantity: Number(item.quantity || 0)
+          });
+        }
+      }
+    }
+    return { success: true, items: parsedItems };
+  } catch (error) {
+    console.error('Error getting inventory from database:', error);
+    return { success: false, error: String(error.message || 'Unknown error'), items: [] };
+  }
+});
+
+ipcMain.handle('db-save-inventory-item', async (event, userId, itemId, itemType, itemData, quantity) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available' };
+      }
+    }
+    // Ensure itemData is serializable before stringifying
+    let itemDataStr;
+    try {
+      const serializable = JSON.parse(JSON.stringify(itemData));
+      itemDataStr = typeof serializable === 'object' ? JSON.stringify(serializable) : String(serializable);
+    } catch {
+      itemDataStr = String(itemData);
+    }
+    await dbManager.query(
+      `INSERT INTO inventory (userId, itemId, itemType, itemData, quantity) 
+       VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE quantity = quantity + ?`,
+      [userId, itemId, itemType, itemDataStr, quantity || 1, quantity || 1]
+    );
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving inventory item to database:', error);
+    return { success: false, error: String(error.message || 'Unknown error') };
+  }
+});
+
+// Developer access requests handlers
+ipcMain.handle('db-get-developer-requests', async () => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available', requests: [] };
+      }
+    }
+    const requests = await dbManager.query(
+      'SELECT * FROM developer_access_requests ORDER BY createdAt DESC'
+    );
+    // Ensure all requests are serializable
+    const serializableRequests = Array.isArray(requests) ? requests.map(request => {
+      try {
+        return JSON.parse(JSON.stringify(request));
+      } catch {
+        return request;
+      }
+    }) : [];
+    return { success: true, requests: serializableRequests };
+  } catch (error) {
+    console.error('Error getting developer requests from database:', error);
+    return { success: false, error: String(error.message || 'Unknown error'), requests: [] };
+  }
+});
+
+ipcMain.handle('db-save-developer-request', async (event, request) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available' };
+      }
+    }
+    await dbManager.query(
+      `INSERT INTO developer_access_requests (userId, username, email, reason, status) 
+       VALUES (?, ?, ?, ?, ?)`,
+      [request.userId, request.username, request.email, request.reason || null, request.status || 'pending']
+    );
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving developer request to database:', error);
+    return { success: false, error: String(error.message || 'Unknown error') };
+  }
+});
+
+ipcMain.handle('db-update-developer-request', async (event, requestId, status) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      await dbManager.initialize();
+    }
+    await dbManager.query(
+      'UPDATE developer_access_requests SET status = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?',
+      [status, requestId]
+    );
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating developer request in database:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Sidebar settings handlers
+ipcMain.handle('db-get-sidebar-settings', async (event, userId) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      await dbManager.initialize();
+    }
+    const [result] = await dbManager.query(
+      'SELECT * FROM sidebar_settings WHERE userId = ?',
+      [userId]
+    );
+    return { success: true, settings: result || { width: 260, manuallyResized: false, collapsed: false } };
+  } catch (error) {
+    console.error('Error getting sidebar settings from database:', error);
+    return { success: false, error: error.message, settings: { width: 260, manuallyResized: false, collapsed: false } };
+  }
+});
+
+ipcMain.handle('db-save-sidebar-settings', async (event, userId, settings) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      await dbManager.initialize();
+    }
+    await dbManager.query(
+      `INSERT INTO sidebar_settings (userId, width, manuallyResized, collapsed) 
+       VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE width = ?, manuallyResized = ?, collapsed = ?`,
+      [
+        userId, settings.width || 260, settings.manuallyResized || false, settings.collapsed || false,
+        settings.width || 260, settings.manuallyResized || false, settings.collapsed || false
+      ]
+    );
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving sidebar settings to database:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Market settings handlers
+ipcMain.handle('db-get-market-settings', async (event, userId) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      await dbManager.initialize();
+    }
+    const [result] = await dbManager.query(
+      'SELECT * FROM market_settings WHERE userId = ?',
+      [userId]
+    );
+    return { success: true, settings: result || { rightSidebarWidth: 300, sidebarCollapsed: false } };
+  } catch (error) {
+    console.error('Error getting market settings from database:', error);
+    return { success: false, error: error.message, settings: { rightSidebarWidth: 300, sidebarCollapsed: false } };
+  }
+});
+
+ipcMain.handle('db-save-market-settings', async (event, userId, settings) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      await dbManager.initialize();
+    }
+    await dbManager.query(
+      `INSERT INTO market_settings (userId, rightSidebarWidth, sidebarCollapsed) 
+       VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE rightSidebarWidth = ?, sidebarCollapsed = ?`,
+      [
+        userId, settings.rightSidebarWidth || 300, settings.sidebarCollapsed || false,
+        settings.rightSidebarWidth || 300, settings.sidebarCollapsed || false
+      ]
+    );
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving market settings to database:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Store settings handlers
+ipcMain.handle('db-get-store-settings', async (event, userId) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      await dbManager.initialize();
+    }
+    const [result] = await dbManager.query(
+      'SELECT * FROM store_settings WHERE userId = ?',
+      [userId]
+    );
+    return { success: true, settings: result || { activeFilter: 'grid', currency: 'USD' } };
+  } catch (error) {
+    console.error('Error getting store settings from database:', error);
+    return { success: false, error: error.message, settings: { activeFilter: 'grid', currency: 'USD' } };
+  }
+});
+
+ipcMain.handle('db-save-store-settings', async (event, userId, settings) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      await dbManager.initialize();
+    }
+    await dbManager.query(
+      `INSERT INTO store_settings (userId, activeFilter, currency) 
+       VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE activeFilter = ?, currency = ?`,
+      [
+        userId, settings.activeFilter || 'grid', settings.currency || 'USD',
+        settings.activeFilter || 'grid', settings.currency || 'USD'
+      ]
+    );
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving store settings to database:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Library settings handlers
+ipcMain.handle('db-get-library-settings', async (event, userId) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      await dbManager.initialize();
+    }
+    const [result] = await dbManager.query(
+      'SELECT * FROM library_settings WHERE userId = ?',
+      [userId]
+    );
+    if (result && result.expandedFolders) {
+      try {
+        return { success: true, expandedFolders: JSON.parse(result.expandedFolders) };
+      } catch {
+        return { success: true, expandedFolders: [] };
+      }
+    }
+    return { success: true, expandedFolders: [] };
+  } catch (error) {
+    console.error('Error getting library settings from database:', error);
+    return { success: false, error: error.message, expandedFolders: [] };
+  }
+});
+
+ipcMain.handle('db-save-library-settings', async (event, userId, expandedFolders) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      await dbManager.initialize();
+    }
+    const foldersStr = Array.isArray(expandedFolders) ? JSON.stringify(expandedFolders) : '[]';
+    await dbManager.query(
+      `INSERT INTO library_settings (userId, expandedFolders) 
+       VALUES (?, ?) ON DUPLICATE KEY UPDATE expandedFolders = ?`,
+      [userId, foldersStr, foldersStr]
+    );
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving library settings to database:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Reset migration status to force re-migration
+ipcMain.handle('db-reset-migration', async () => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      await dbManager.initialize();
+    }
+    await dbManager.query(
+      "DELETE FROM settings WHERE userId = 'system' AND key_name = 'migration_completed'"
+    );
+    console.log('✅ Migration status reset - migration will run on next app start');
+    return { success: true };
+  } catch (error) {
+    console.error('Error resetting migration status:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Password reset handlers
+ipcMain.handle('request-password-reset', async (event, email) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available' };
+      }
+    }
+
+    // Find user by email
+    const users = await dbManager.query('SELECT id, email FROM users WHERE email = ?', [email.trim()]);
+    if (!users || !Array.isArray(users) || users.length === 0) {
+      // Don't reveal if email exists or not (security best practice)
+      return { success: true, message: 'If an account with that email exists, a password reset link has been sent.' };
+    }
+
+    const user = users[0];
+    const userId = user.id;
+
+    // Generate reset token
+    const crypto = require('crypto');
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1); // Token expires in 1 hour
+
+    // Save token to database
+    await dbManager.query(
+      `INSERT INTO password_reset_tokens (userId, token, email, expiresAt, used) 
+       VALUES (?, ?, ?, ?, FALSE)`,
+      [userId, token, email.trim(), convertToMySQLDateTime(expiresAt.toISOString())]
+    );
+
+    // Generate reset URL
+    // In a real app, this would be sent via email
+    // For now, we'll log it to console and return it (for development/testing)
+    const resetUrl = isDev 
+      ? `http://localhost:3000/auth?resetToken=${token}`
+      : `file://${path.join(__dirname, '../build/index.html')}/auth?resetToken=${token}`;
+
+    console.log('🔐 Password reset link generated:');
+    console.log(`   Email: ${email.trim()}`);
+    console.log(`   Token: ${token}`);
+    console.log(`   URL: ${resetUrl}`);
+    console.log('   ⚠️ In production, this should be sent via email!');
+
+    // TODO: Send email with reset link
+    // For now, we'll simulate success
+    return { 
+      success: true, 
+      message: 'If an account with that email exists, a password reset link has been sent.',
+      resetUrl: resetUrl // Only for development/testing
+    };
+  } catch (error) {
+    console.error('Error requesting password reset:', error);
+    return { success: false, error: 'An error occurred. Please try again.' };
+  }
+});
+
+ipcMain.handle('validate-password-reset-token', async (event, token) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { valid: false, error: 'Database not available' };
+      }
+    }
+
+    // Check if token exists and is valid
+    const tokens = await dbManager.query(
+      'SELECT * FROM password_reset_tokens WHERE token = ? AND used = FALSE',
+      [token]
+    );
+
+    if (!tokens || !Array.isArray(tokens) || tokens.length === 0) {
+      return { valid: false, error: 'Invalid or expired reset token.' };
+    }
+
+    const resetToken = tokens[0];
+    const expiresAt = new Date(resetToken.expiresAt);
+    const now = new Date();
+
+    if (now > expiresAt) {
+      // Mark token as used (expired)
+      await dbManager.query('UPDATE password_reset_tokens SET used = TRUE WHERE token = ?', [token]);
+      return { valid: false, error: 'This password reset link has expired.' };
+    }
+
+    return { valid: true, userId: resetToken.userId, email: resetToken.email };
+  } catch (error) {
+    console.error('Error validating password reset token:', error);
+    return { valid: false, error: 'An error occurred while validating the reset link.' };
+  }
+});
+
+ipcMain.handle('reset-password', async (event, token, newPassword) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return { success: false, error: 'Database not available' };
+      }
+    }
+
+    // Validate token first
+    const validation = await ipcMain.emit('validate-password-reset-token', null, token);
+    // Since emit doesn't work like that, we'll query directly
+    const tokens = await dbManager.query(
+      'SELECT * FROM password_reset_tokens WHERE token = ? AND used = FALSE',
+      [token]
+    );
+
+    if (!tokens || !Array.isArray(tokens) || tokens.length === 0) {
+      return { success: false, error: 'Invalid or expired reset token.' };
+    }
+
+    const resetToken = tokens[0];
+    const expiresAt = new Date(resetToken.expiresAt);
+    const now = new Date();
+
+    if (now > expiresAt) {
+      await dbManager.query('UPDATE password_reset_tokens SET used = TRUE WHERE token = ?', [token]);
+      return { success: false, error: 'This password reset link has expired.' };
+    }
+
+    const userId = resetToken.userId;
+
+    // Check if new password is the same as previous password
+    const previousPasswords = await dbManager.query(
+      'SELECT password FROM previous_passwords WHERE userId = ? ORDER BY changedAt DESC LIMIT 1',
+      [userId]
+    );
+
+    // Also check current password
+    const currentUser = await dbManager.query('SELECT password FROM users WHERE id = ?', [userId]);
+    if (currentUser && Array.isArray(currentUser) && currentUser.length > 0) {
+      if (currentUser[0].password === newPassword) {
+        return { success: false, error: 'The new password cannot be the same as your current password.' };
+      }
+    }
+
+    // Check previous passwords
+    if (previousPasswords && Array.isArray(previousPasswords) && previousPasswords.length > 0) {
+      for (const prevPass of previousPasswords) {
+        if (prevPass.password === newPassword) {
+          return { success: false, error: 'The new password cannot be the same as a previously used password.' };
+        }
+      }
+    }
+
+    // Save current password to previous_passwords before updating
+    if (currentUser && Array.isArray(currentUser) && currentUser.length > 0) {
+      await dbManager.query(
+        'INSERT INTO previous_passwords (userId, password) VALUES (?, ?)',
+        [userId, currentUser[0].password]
+      );
+    }
+
+    // Update user password
+    await dbManager.query('UPDATE users SET password = ? WHERE id = ?', [newPassword, userId]);
+
+    // Mark token as used
+    await dbManager.query('UPDATE password_reset_tokens SET used = TRUE WHERE token = ?', [token]);
+
+    console.log(`✅ Password reset successful for user ${userId}`);
+    return { success: true, message: 'Password has been reset successfully.' };
+  } catch (error) {
+    console.error('Error resetting password:', error);
+    return { success: false, error: 'An error occurred while resetting your password.' };
   }
 });

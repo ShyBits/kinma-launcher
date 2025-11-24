@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Star, Download, Play, Users, TrendingUp, TrendingDown, Share2, Bookmark, MessageSquare, Bell, Search, X, ChevronDown, DollarSign, Settings, Save, Volume2, VolumeX, ChevronLeft, ChevronRight, CheckCircle2, Flame, Gift } from 'lucide-react';
+import { Star, Download, Play, Users, TrendingUp, TrendingDown, Share2, Bookmark, MessageSquare, Bell, Search, X, ChevronDown, DollarSign, Settings, Save, Volume2, VolumeX, ChevronLeft, ChevronRight, CheckCircle2, Flame, Gift, User, CreditCard, ShoppingCart } from 'lucide-react';
 import { getUserData, getUserScopedKey, getAllUsersData, saveUserData, getCurrentUserId } from '../utils/UserDataManager';
+import { startDownload as startGlobalDownload } from '../utils/DownloadSpeedStore';
 import CustomVideoPlayer from '../components/CustomVideoPlayer';
 import './Store.css';
 
@@ -13,6 +14,11 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
   const [isBannerHovered, setIsBannerHovered] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const [bannerColors, setBannerColors] = useState({}); // Store extracted colors: { gameId: 'rgb(r, g, b)' }
+  const [bannerAverageColors, setBannerAverageColors] = useState({}); // Store average colors (not darkened): { gameId: { r, g, b } }
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [selectedGameForPurchase, setSelectedGameForPurchase] = useState(null);
+  const [cartItems, setCartItems] = useState(new Set());
   const [activeFilter, setActiveFilter] = useState(() => {
     // Load saved filter from localStorage, default to 'grid'
     try {
@@ -166,6 +172,12 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
     };
   };
 
+  // Store current game ID to preserve it across recalculations
+  const currentGameIdRef = React.useRef(null);
+  // Track if we're currently resizing to prevent conflicts with auto-switch
+  const isResizingRef = React.useRef(false);
+  const resizeTimeoutRef = React.useRef(null);
+
   const featuredGames = React.useMemo(() => {
     const disableBuiltIns = (()=>{ try { return localStorage.getItem('disableBuiltinGames') !== 'false'; } catch(_) { return true; } })();
     // Collect candidates from gamesData prop
@@ -223,6 +235,7 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
     if (candidates.length === 0) return [];
 
     // Weighted random pick without replacement (up to 5)
+    // Use stable seed based on game IDs to ensure consistent order
     const weight = (g) => {
       const now = toNumber(g.currentPlaying);
       const total = toNumber(g.players);
@@ -230,21 +243,53 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
       return Math.max(1, w);
     };
 
-    const pool = candidates.map(g => ({ g, w: weight(g) }));
+    // Sort candidates by ID first for stable ordering, then apply weights
+    const sortedCandidates = [...candidates].sort((a, b) => {
+      const idA = a.id || '';
+      const idB = b.id || '';
+      return idA.localeCompare(idB);
+    });
+
+    const pool = sortedCandidates.map(g => ({ g, w: weight(g) }));
     const picks = [];
     const count = Math.min(5, pool.length);
-    for (let i = 0; i < count; i++) {
-      const sum = pool.reduce((s, x) => s + x.w, 0);
-      let r = Math.random() * sum;
-      let idx = 0;
-      for (; idx < pool.length; idx++) {
-        if ((r -= pool[idx].w) <= 0) break;
+    
+    // If we have a current game ID, try to preserve it
+    let preservedGame = null;
+    if (currentGameIdRef.current) {
+      const preserved = pool.find(p => p.g.id === currentGameIdRef.current);
+      if (preserved) {
+        preservedGame = preserved.g;
+        pool.splice(pool.indexOf(preserved), 1);
       }
-      const picked = pool.splice(Math.min(idx, pool.length - 1), 1)[0];
-      if (picked) picks.push(picked.g);
     }
-    return picks;
-  }, [gamesData, customGames]);
+    
+    // Sort remaining pool by weight (descending) for deterministic selection
+    // This ensures consistent order when games have same weights
+    pool.sort((a, b) => {
+      if (b.w !== a.w) return b.w - a.w; // Higher weight first
+      // If weights are equal, sort by ID for stability
+      const idA = a.g.id || '';
+      const idB = b.g.id || '';
+      return idA.localeCompare(idB);
+    });
+    
+    // Pick top games by weight (deterministic, no random)
+    const remainingCount = preservedGame ? count - 1 : count;
+    for (let i = 0; i < remainingCount && i < pool.length; i++) {
+      picks.push(pool[i].g);
+    }
+    
+    // Add preserved game at the beginning to maintain current index
+    const result = preservedGame ? [preservedGame, ...picks] : picks;
+    
+    // Update ref with current game ID
+    if (result.length > 0 && !currentGameIdRef.current) {
+      currentGameIdRef.current = result[0].id;
+    }
+    
+    return result;
+  }, [gamesData, customGames, isPreview]);
 
   // Use preview data when in preview mode, otherwise use the game from topGames array
   const currentFeaturedGame = isPreview && previewGameData 
@@ -261,6 +306,57 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
         image: previewGameData.bannerImage ? URL.createObjectURL(previewGameData.bannerImage) : null
       }
     : (featuredGames[currentBannerIndex] || featuredGames[0] || null);
+
+  // Update current game ID ref when banner index changes
+  React.useEffect(() => {
+    if (currentFeaturedGame && currentFeaturedGame.id) {
+      currentGameIdRef.current = currentFeaturedGame.id;
+    }
+  }, [currentFeaturedGame?.id]);
+
+  // Track previous featured games IDs to detect actual changes
+  const prevFeaturedGamesIdsRef = React.useRef(null);
+
+  // Update banner index when featuredGames array changes to preserve current game
+  React.useEffect(() => {
+    if (featuredGames.length === 0) return;
+    
+    // Create a stable key from game IDs to detect actual changes
+    const currentIds = featuredGames.map(g => g.id).join(',');
+    const prevIds = prevFeaturedGamesIdsRef.current;
+    
+    // Only update if the array actually changed (different game IDs)
+    if (prevIds !== null && currentIds !== prevIds) {
+      if (currentGameIdRef.current) {
+        const newIndex = featuredGames.findIndex(g => g.id === currentGameIdRef.current);
+        if (newIndex !== -1) {
+          // Use a small delay to avoid conflicts with auto-switch
+          const timeoutId = setTimeout(() => {
+            // Double-check we're not resizing before updating
+            if (!isResizingRef.current) {
+              setCurrentBannerIndex(prevIndex => {
+                // Only update if the index actually needs to change
+                return prevIndex !== newIndex ? newIndex : prevIndex;
+              });
+            }
+          }, 100);
+          return () => clearTimeout(timeoutId);
+        } else {
+          // Current game not found, reset to first game
+          const timeoutId = setTimeout(() => {
+            if (!isResizingRef.current) {
+              setCurrentBannerIndex(0);
+              currentGameIdRef.current = featuredGames[0]?.id || null;
+            }
+          }, 100);
+          return () => clearTimeout(timeoutId);
+        }
+      }
+    }
+    
+    // Update ref with current IDs
+    prevFeaturedGamesIdsRef.current = currentIds;
+  }, [featuredGames]); // Only depend on featuredGames, not currentBannerIndex
 
   const safeFeaturedGame = currentFeaturedGame || {
     id: 'none',
@@ -302,11 +398,22 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
   useEffect(() => {
     if (isPreview || isBannerHovered) return; // Disabled in preview mode or when hovered
     if (!featuredGames.length) return;
+    
     const interval = setInterval(() => {
-      setCurrentBannerIndex((prev) => (prev + 1) % featuredGames.length);
+      // Skip if currently resizing - pause auto-switch during resize
+      if (isResizingRef.current) return;
+      
+      setCurrentBannerIndex((prev) => {
+        const nextIndex = (prev + 1) % featuredGames.length;
+        // Update ref to track current game
+        if (featuredGames[nextIndex]?.id) {
+          currentGameIdRef.current = featuredGames[nextIndex].id;
+        }
+        return nextIndex;
+      });
     }, 5000);
     return () => clearInterval(interval);
-  }, [isPreview, isBannerHovered, featuredGames.length]);
+  }, [isPreview, isBannerHovered, featuredGames.length, featuredGames]);
 
   // Get media from current featured game
   const currentMedia = getGameMedia(safeFeaturedGame);
@@ -372,16 +479,46 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
 
   // Load ALL published games from ALL users for store listing (marketplace)
   useEffect(() => {
-    const load = () => {
+    const load = async () => {
       try {
         // Get all games from all users for the Store (shared marketplace)
         const allGames = getAllUsersData('customGames');
+        
         // Filter to only show published games
         const publishedGames = allGames.filter(game => {
           const status = game.status || game.fullFormData?.status || 'draft';
           return status === 'public' || status === 'published';
         });
-        setCustomGames(publishedGames);
+        
+        // Remove duplicates based on gameId (keep first occurrence)
+        const uniqueGamesMap = new Map();
+        publishedGames.forEach(game => {
+          const gameId = game.gameId || game.id;
+          if (gameId && !uniqueGamesMap.has(gameId)) {
+            uniqueGamesMap.set(gameId, game);
+          }
+        });
+        
+        // Check which games actually exist in the games folder
+        const existingGames = [];
+        for (const [gameId, game] of uniqueGamesMap) {
+          try {
+            if (window.electronAPI && window.electronAPI.gameFolderExists) {
+              const exists = await window.electronAPI.gameFolderExists(gameId);
+              if (exists) {
+                existingGames.push(game);
+              }
+            } else {
+              // Fallback: if Electron API is not available, include the game anyway
+              existingGames.push(game);
+            }
+          } catch (error) {
+            console.error(`Error checking game folder for ${gameId}:`, error);
+            // Skip games that can't be verified
+          }
+        }
+        
+        setCustomGames(existingGames);
         
         // Load current user's games to check ownership
         const myGames = getUserData('customGames', []);
@@ -438,6 +575,65 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
     } catch (_) {}
   }, [bookmarkedGames]);
 
+  // Extract average color from banner image
+  const extractBannerColor = (imageUrl, gameId) => {
+    if (!imageUrl || bannerColors[gameId]) return; // Skip if already extracted or no image
+    
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 50; // Small size for performance
+        canvas.height = 50;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        
+        ctx.drawImage(img, 0, 0, 50, 50);
+        const imageData = ctx.getImageData(0, 0, 50, 50);
+        const data = imageData.data;
+        
+        let r = 0, g = 0, b = 0, count = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          r += data[i];
+          g += data[i + 1];
+          b += data[i + 2];
+          count++;
+        }
+        
+        const avgR = Math.round(r / count);
+        const avgG = Math.round(g / count);
+        const avgB = Math.round(b / count);
+        
+        // Store average color (not darkened) for version box
+        setBannerAverageColors(prev => ({
+          ...prev,
+          [gameId]: { r: avgR, g: avgG, b: avgB }
+        }));
+        
+        // Darken the color (multiply by 0.3 for darker background)
+        const darkR = Math.round(avgR * 0.3);
+        const darkG = Math.round(avgG * 0.3);
+        const darkB = Math.round(avgB * 0.3);
+        
+        setBannerColors(prev => ({
+          ...prev,
+          [gameId]: `rgb(${darkR}, ${darkG}, ${darkB})`
+        }));
+      } catch (error) {
+        console.error('Error extracting color:', error);
+      }
+    };
+    img.onerror = () => {
+      // Fallback to default dark color if image fails to load
+      setBannerColors(prev => ({
+        ...prev,
+        [gameId]: 'rgb(15, 17, 21)'
+      }));
+    };
+    img.src = imageUrl;
+  };
+
   // Helper to check if current user owns a game
   const isGameOwnedByMe = (game) => {
     if (!game) return false;
@@ -449,6 +645,105 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
       const myGameId = myGame.gameId || myGame.id;
       return myGameId === gameId;
     });
+  };
+
+  // Helper to check if a game has a promo/discount
+  const hasPromo = (game) => {
+    if (!game) return false;
+    const original = game.original || game;
+    // Check for various promo/discount fields
+    const discountPercent = original.discountPercent || original.discountPercentage || original.fullFormData?.discountPercent;
+    const hasDiscount = discountPercent && parseFloat(discountPercent) > 0;
+    return !!(
+      original.promo ||
+      original.discount ||
+      hasDiscount ||
+      original.onSale ||
+      original.isPromo ||
+      original.sale ||
+      (original.discountPrice && original.discountPrice < original.price)
+    );
+  };
+
+  const getPromoPercent = (game) => {
+    if (!game) return null;
+    const original = game.original || game;
+    const discountPercent = original.discountPercent || original.discountPercentage || original.fullFormData?.discountPercent;
+    if (discountPercent && parseFloat(discountPercent) > 0) {
+      return Math.round(parseFloat(discountPercent));
+    }
+    // Calculate from discount price if available
+    if (original.discountPrice && original.price && original.discountPrice < original.price) {
+      const percent = Math.round(((original.price - original.discountPrice) / original.price) * 100);
+      return percent > 0 ? percent : null;
+    }
+    return null;
+  };
+
+  const getDiscountedPrice = (game) => {
+    if (!game) return null;
+    const originalPrice = getPriceValue(game);
+    if (originalPrice <= 0) return null;
+    
+    const promoPercent = getPromoPercent(game);
+    if (!promoPercent || promoPercent <= 0) return null;
+    
+    const discount = originalPrice * (promoPercent / 100);
+    const discountedPrice = originalPrice - discount;
+    // Return 0 if 100% discount, otherwise return the discounted price if > 0
+    return discountedPrice >= 0 ? discountedPrice : null;
+  };
+
+  // Get the final price considering promo discounts
+  const getFinalPrice = (game) => {
+    if (!game) return 0;
+    const originalPrice = getPriceValue(game);
+    if (originalPrice <= 0) return 0;
+    
+    const discountedPrice = getDiscountedPrice(game);
+    return discountedPrice !== null ? discountedPrice : originalPrice;
+  };
+
+  const getPromoColor = (percent) => {
+    if (!percent || percent <= 0) return 'rgba(255, 87, 34, 1)'; // Default orange
+    
+    // Scale from orange to green based on discount percentage
+    // 0-25%: Orange (255, 87, 34)
+    // 25-50%: Orange-Yellow (255, 150, 50)
+    // 50-75%: Yellow-Green (200, 200, 50)
+    // 75-100%: Green (34, 197, 94)
+    
+    if (percent <= 25) {
+      // Orange to Orange-Yellow
+      const ratio = percent / 25;
+      const r = 255;
+      const g = Math.round(87 + (150 - 87) * ratio);
+      const b = Math.round(34 + (50 - 34) * ratio);
+      return `rgba(${r}, ${g}, ${b}, 1)`;
+    } else if (percent <= 50) {
+      // Orange-Yellow to Yellow-Green
+      const ratio = (percent - 25) / 25;
+      const r = Math.round(255 - (255 - 200) * ratio);
+      const g = Math.round(150 + (200 - 150) * ratio);
+      const b = Math.round(50);
+      return `rgba(${r}, ${g}, ${b}, 1)`;
+    } else if (percent <= 75) {
+      // Yellow-Green to Green
+      const ratio = (percent - 50) / 25;
+      const r = Math.round(200 - (200 - 34) * ratio);
+      const g = Math.round(200 - (200 - 197) * ratio);
+      const b = Math.round(50 - (50 - 94) * ratio);
+      return `rgba(${r}, ${g}, ${b}, 1)`;
+    } else {
+      // 75-100%: Green
+      return 'rgba(34, 197, 94, 1)';
+    }
+  };
+
+  const getPromoReason = (game) => {
+    if (!game) return null;
+    const original = game.original || game;
+    return original.promoReason || original.discountReason || original.fullFormData?.promoReason || original.fullFormData?.discountReason || null;
   };
 
   const toggleBookmark = (gameId) => {
@@ -690,6 +985,161 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
     setCurrentBannerIndex(index);
   };
 
+  // Add game to library (without starting download)
+  const handleAddToLibrary = (game) => {
+    console.log('handleAddToLibrary called with game:', game);
+    
+    if (!game) {
+      console.error('No game provided to handleAddToLibrary');
+      return;
+    }
+    
+    // Get gameId from various possible locations
+    const gameId = game.id || game.gameId || game.original?.gameId || game.original?.id;
+    
+    if (!gameId) {
+      console.error('No gameId found in game object:', game);
+      alert('Error: Game ID not found. Please try again.');
+      return;
+    }
+    
+    try {
+      const currentUserId = getCurrentUserId();
+      if (!currentUserId) {
+        alert('Please log in to add games to library.');
+        return;
+      }
+
+      // Get current user's customGames
+      const userCustomGames = getUserData('customGames', []);
+      console.log('Current user customGames:', userCustomGames);
+      
+      // Check if game is already in library (check both gameId and id for compatibility)
+      const gameExists = userCustomGames.some(g => {
+        const existingGameId = g.gameId || g.id;
+        return String(existingGameId) === String(gameId);
+      });
+      
+      if (gameExists) {
+        console.log('Game already in library, navigating...');
+        // Game already in library, just navigate
+        if (navigate) {
+          navigate(`/game/${gameId}`);
+        }
+        return;
+      }
+
+      // Find the original game data from customGames (published games)
+      // Also check in the normalized game object's original property
+      let originalGame = customGames.find(g => {
+        const gId = g.gameId || g.id;
+        return String(gId) === String(gameId);
+      });
+      
+      // If not found in customGames, use the game.original if available
+      if (!originalGame && game.original) {
+        originalGame = game.original;
+      }
+      
+      // If still not found, use the game itself as fallback
+      if (!originalGame) {
+        originalGame = game;
+      }
+
+      console.log('Original game found:', originalGame);
+
+      // Check if this is the user's own game (check if it exists in myCustomGames)
+      const isOwnGame = myCustomGames.some(g => {
+        const gId = g.gameId || g.id;
+        return String(gId) === String(gameId);
+      });
+
+      // Create a new game entry for the user's library
+      const newLibraryGame = {
+        ...originalGame,
+        gameId: gameId,
+        id: gameId, // Ensure both gameId and id are set
+        name: game.name || originalGame.name || originalGame.gameName || 'Untitled Game',
+        banner: game.banner || originalGame.banner || originalGame.bannerImage || null,
+        isInstalled: false,
+        addedToLibraryAt: new Date().toISOString(),
+        // Mark as own game if it's the developer's game
+        isOwnGame: isOwnGame,
+        // Store ownership information
+        owned: true,
+        ownedBy: currentUserId,
+        purchasedAt: new Date().toISOString()
+      };
+
+      // Add to user's customGames (remove any duplicates first)
+      const uniqueGames = userCustomGames.filter(g => {
+        const existingGameId = g.gameId || g.id;
+        return String(existingGameId) !== String(gameId);
+      });
+      const updatedCustomGames = [...uniqueGames, newLibraryGame];
+      
+      console.log('Saving updated customGames:', updatedCustomGames);
+      saveUserData('customGames', updatedCustomGames);
+
+      // Verify it was saved
+      const verifySaved = getUserData('customGames', []);
+      console.log('Verified saved games:', verifySaved);
+
+      // Update local state immediately
+      setMyCustomGames(updatedCustomGames);
+
+      // Dispatch event to notify other components (sidebar and library menu)
+      // Dispatch immediately to ensure all components update
+      console.log('Dispatching customGameUpdate event');
+      window.dispatchEvent(new CustomEvent('customGameUpdate'));
+
+      // Small delay before navigation to ensure UI updates are visible
+      // This gives time for the sidebar and library to update
+      setTimeout(() => {
+        // Navigate to game page (without starting download)
+        if (navigate) {
+          navigate(`/game/${gameId}`);
+        }
+      }, 150);
+    } catch (error) {
+      console.error('Error adding game to library:', error);
+      alert('Failed to add game to library. Please try again.');
+    }
+  };
+
+  // Open purchase modal
+  const handleBuyGame = (game) => {
+    if (!game || !game.id) return;
+    setSelectedGameForPurchase(game);
+    setShowPurchaseModal(true);
+  };
+
+  // Handle purchase completion
+  const handlePurchaseComplete = () => {
+    if (!selectedGameForPurchase) return;
+    
+    // After purchase, add game to library (download can be started manually in game menu)
+    handleAddToLibrary(selectedGameForPurchase);
+    
+    // Close modal
+    setShowPurchaseModal(false);
+    setSelectedGameForPurchase(null);
+  };
+
+  // Add/remove game from cart
+  const handleToggleCart = (game) => {
+    if (!game || !game.id) return;
+    setCartItems(prev => {
+      const newCart = new Set(prev);
+      if (newCart.has(game.id)) {
+        newCart.delete(game.id);
+      } else {
+        newCart.add(game.id);
+      }
+      return newCart;
+    });
+  };
+
   // Filter games based on search query
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -728,7 +1178,20 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
 
   useEffect(() => {
     const updateContentWidth = () => {
+      // Mark as resizing
+      isResizingRef.current = true;
+      
+      // Clear any existing timeout
+      if (resizeTimeoutRef.current) {
+        clearTimeout(resizeTimeoutRef.current);
+      }
+      
       setContentWidth(window.innerWidth - sidebarWidth);
+      
+      // Reset resizing flag after resize completes (debounce)
+      resizeTimeoutRef.current = setTimeout(() => {
+        isResizingRef.current = false;
+      }, 150);
     };
 
     window.addEventListener('resize', updateContentWidth);
@@ -736,6 +1199,9 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
 
     return () => {
       window.removeEventListener('resize', updateContentWidth);
+      if (resizeTimeoutRef.current) {
+        clearTimeout(resizeTimeoutRef.current);
+      }
     };
   }, [sidebarWidth]);
 
@@ -763,23 +1229,23 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
           }}
         >
           <div className="featured-background">
-            <div 
-              className="featured-images-container"
-              style={{
-                transform: `translateX(-${currentBannerIndex * 100}%)`,
-                transition: 'transform 0.5s ease-in-out'
-              }}
-            >
+            <div className="featured-images-container">
               {featuredGames.map((game, index) => (
                 <div 
                   key={game.id || index}
                   className="featured-image"
-                  style={game.image ? {
-                    backgroundImage: `url(${game.image})`,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                    backgroundRepeat: 'no-repeat'
-                  } : undefined}
+                  style={{
+                    ...(game.image ? {
+                      backgroundImage: `url(${game.image})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                      backgroundRepeat: 'no-repeat'
+                    } : {}),
+                    opacity: index === currentBannerIndex ? 1 : 0,
+                    transform: `translateX(${(index - currentBannerIndex) * 100}%)`,
+                    transition: 'opacity 0.5s ease-in-out, transform 0.5s ease-in-out',
+                    pointerEvents: index === currentBannerIndex ? 'auto' : 'none'
+                  }}
                 >
                   {!game.image && (
                     <div className="featured-placeholder">🎮</div>
@@ -792,19 +1258,17 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
           
         {/* Inline bookmark will be rendered next to CTA below */}
 
-        <div 
-          className="featured-content"
-          style={{
-            width: `calc(100% * ${featuredGames.length})`,
-            transform: `translateX(calc(-${currentBannerIndex} * 100% / ${featuredGames.length}))`,
-            transition: 'transform 0.5s ease-in-out',
-            '--banner-count': featuredGames.length
-          }}
-        >
+        <div className="featured-content">
           {featuredGames.map((game, index) => (
             <div 
               key={game.id || index}
               className="featured-content-wrapper"
+              style={{
+                opacity: index === currentBannerIndex ? 1 : 0,
+                transform: `translateX(${(index - currentBannerIndex) * 100}%)`,
+                transition: 'opacity 0.5s ease-in-out, transform 0.5s ease-in-out',
+                pointerEvents: index === currentBannerIndex ? 'auto' : 'none'
+              }}
             >
               <div className="featured-content-left">
                 <div className="featured-badges">
@@ -1097,42 +1561,98 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                         <path d="M6 3h12v18l-6-4-6 4V3z" stroke="currentColor" strokeWidth="2" strokeLinejoin="miter" strokeLinecap="butt"/>
                       </svg>
                     </button>
-                    <div className="banner-cta">
-                      <div className="banner-game-name">{g.name || 'Untitled Game'}</div>
-                      <div className="banner-free-text">{displayPrice(g)}</div>
-                    </div>
-                    <div className="banner-hover-hint">
-                      <ChevronRight size={14} />
-                    </div>
-                  </div>
-                  <div className="featured-card-info">
-                    <div className="card-info-header">
-                      <div className="card-info-header-row">
-                        <h3 title={g.name || 'Untitled Game'}>{g.name || 'Untitled Game'}</h3>
-                        {isGameOwnedByMe(g) && (
-                          <div className="card-owned-badge" title="You own this game">
-                            <CheckCircle2 size={14} />
-                          </div>
+                    {hasPromo(g) && getPromoPercent(g) && (
+                      <div 
+                        className="card-promo-badge" 
+                        title={`${getPromoPercent(g)}% off`}
+                        style={{ '--promo-color': getPromoColor(getPromoPercent(g)) }}
+                      >
+                        <span className="card-promo-percent">{getPromoPercent(g)}%</span>
+                        {getPromoReason(g) && (
+                          <span className="card-promo-reason">{getPromoReason(g)}</span>
                         )}
                       </div>
-                      {g.version && <p className="card-info-version">Version {g.version}</p>}
-                    </div>
+                    )}
                     <div 
-                      className="card-info-rating"
+                      className="banner-rating"
                       style={{
                         color: getColorForRating(getGameStats(g).rating),
                       }}
                     >
-                      <Star size={14} fill={getColorForRating(getGameStats(g).rating)} color={getColorForRating(getGameStats(g).rating)} />
+                      <Star size={16} fill={getColorForRating(getGameStats(g).rating)} color={getColorForRating(getGameStats(g).rating)} />
                       <span>{getGameStats(g).rating || '0'}</span>
                     </div>
+                  </div>
+                  <div 
+                    className="featured-card-info"
+                    style={bannerColors[g.id] ? { '--banner-color': bannerColors[g.id] } : {}}
+                    ref={(el) => {
+                      if (el && g.banner && !bannerColors[g.id]) {
+                        extractBannerColor(g.banner, g.id);
+                      }
+                    }}
+                  >
+                    <div className="card-info-header">
+                      <h3 title={g.name || 'Untitled Game'}>{g.name || 'Untitled Game'}</h3>
+                    </div>
+                    {g.version && (
+                      <div 
+                        className="card-info-version-separator"
+                        style={bannerAverageColors[g.id] ? {
+                          background: `rgba(${bannerAverageColors[g.id].r}, ${bannerAverageColors[g.id].g}, ${bannerAverageColors[g.id].b}, 1)`
+                        } : {}}
+                      >
+                        <p className="card-info-version">{g.version}</p>
+                      </div>
+                    )}
                     <div className="card-info-desc">{g.description || 'No description provided.'}</div>
-                    <div className={`card-info-price ${!(getPriceValue(g) > 0) ? 'is-free' : ''}`}>{displayPrice(g)}</div>
-                    <div className="card-info-actions">
-                      {isGameOwnedByMe(g) ? (
-                        <button className="card-info-primary install" onClick={(e) => e.stopPropagation()}>Play Now</button>
+                    <div className={`card-info-price ${!(getPriceValue(g) > 0) ? 'is-free' : ''} ${hasPromo(g) && getPromoPercent(g) ? 'has-promo' : ''}`}>
+                      {hasPromo(g) && getPromoPercent(g) && getPriceValue(g) > 0 ? (
+                        (() => {
+                          const discountedPrice = getDiscountedPrice(g);
+                          return discountedPrice !== null ? (
+                            <>
+                              <span 
+                                className="card-price-new" 
+                                style={{ color: getPromoColor(getPromoPercent(g)) }}
+                              >
+                                {discountedPrice === 0 ? 'Free' : formatPrice(discountedPrice)}
+                              </span>
+                              <span className="card-price-old">{displayPrice(g)}</span>
+                            </>
+                          ) : (
+                            displayPrice(g)
+                          );
+                        })()
                       ) : (
-                        <button className={`card-info-primary ${getPriceValue(g) > 0 ? 'buy' : 'install'}`} onClick={(e) => e.stopPropagation()}>{getPriceValue(g) > 0 ? 'Buy Now' : 'Install Now'}</button>
+                        displayPrice(g)
+                      )}
+                    </div>
+                    <div className="card-info-actions">
+                      <button 
+                        className={`card-info-primary ${getFinalPrice(g) > 0 ? 'buy' : 'install'}`} 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (getFinalPrice(g) > 0) {
+                            handleBuyGame(g);
+                          } else {
+                            handleAddToLibrary(g);
+                          }
+                        }}
+                      >
+                        {getFinalPrice(g) > 0 ? 'Buy Now' : 'Add to Library'}
+                      </button>
+                      {getFinalPrice(g) > 0 && (
+                        <button 
+                          className={`card-info-cart ${cartItems.has(g.id) ? 'in-cart' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleCart(g);
+                          }}
+                          title={cartItems.has(g.id) ? 'Remove from cart' : 'Add to cart'}
+                        >
+                          <ShoppingCart size={18} />
+                        </button>
                       )}
                     </div>
                   </div>
@@ -1180,47 +1700,102 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                         <path d="M6 3h12v18l-6-4-6 4V3z" stroke="currentColor" strokeWidth="2" strokeLinejoin="miter" strokeLinecap="butt"/>
                       </svg>
                     </button>
-                    <div className="banner-cta">
-                      <div className="banner-game-name">{g.name || 'Untitled Game'}</div>
-                      <div className="banner-free-text">{displayPrice(g)}</div>
-                    </div>
-                    <div className="banner-hover-hint">
-                      <ChevronRight size={14} />
-                    </div>
-
-                  </div>
-                  <div className="featured-card-info">
-                    <div className="card-info-header">
-                      <div className="card-info-header-row">
-                        <h3 title={g.name || 'Untitled Game'}>{g.name || 'Untitled Game'}</h3>
-                        {isGameOwnedByMe(g) && (
-                          <div className="card-owned-badge" title="You own this game">
-                            <CheckCircle2 size={14} />
-                          </div>
+                    {hasPromo(g) && getPromoPercent(g) && (
+                      <div 
+                        className="card-promo-badge" 
+                        title={`${getPromoPercent(g)}% off`}
+                        style={{ '--promo-color': getPromoColor(getPromoPercent(g)) }}
+                      >
+                        <span className="card-promo-percent">{getPromoPercent(g)}%</span>
+                        {getPromoReason(g) && (
+                          <span className="card-promo-reason">{getPromoReason(g)}</span>
                         )}
                       </div>
-                      {g.version && <p className="card-info-version">Version {g.version}</p>}
-                    </div>
+                    )}
                     <div 
-                      className="card-info-rating"
+                      className="banner-rating"
                       style={{
                         color: getColorForRating(getGameStats(g).rating),
                       }}
                     >
-                      <Star size={14} fill={getColorForRating(getGameStats(g).rating)} color={getColorForRating(getGameStats(g).rating)} />
+                      <Star size={16} fill={getColorForRating(getGameStats(g).rating)} color={getColorForRating(getGameStats(g).rating)} />
                       <span>{getGameStats(g).rating || '0'}</span>
+                    </div>
+                  </div>
+                  <div 
+                    className="featured-card-info"
+                    style={bannerColors[g.id] ? { '--banner-color': bannerColors[g.id] } : {}}
+                    ref={(el) => {
+                      if (el && g.banner && !bannerColors[g.id]) {
+                        extractBannerColor(g.banner, g.id);
+                      }
+                    }}
+                  >
+                    <div className="card-info-header">
+                      <h3 title={g.name || 'Untitled Game'}>{g.name || 'Untitled Game'}</h3>
+                      <div className="card-info-header-meta">
+                        {g.version && <p className="card-info-version">{g.version}</p>}
+                        <div 
+                          className="card-info-rating"
+                          style={{
+                            color: getColorForRating(getGameStats(g).rating),
+                          }}
+                        >
+                          <Star size={14} fill={getColorForRating(getGameStats(g).rating)} color={getColorForRating(getGameStats(g).rating)} />
+                          <span>{getGameStats(g).rating || '0'}</span>
+                        </div>
+                      </div>
                     </div>
                     <div className="card-info-desc">
                       {g.description || 'No description provided.'}
                     </div>
-                    <div className={`card-info-price ${!(getPriceValue(g) > 0) ? 'is-free' : ''}`}>
-                      {displayPrice(g)}
+                    <div className={`card-info-price ${!(getPriceValue(g) > 0) ? 'is-free' : ''} ${hasPromo(g) && getPromoPercent(g) ? 'has-promo' : ''}`}>
+                      {hasPromo(g) && getPromoPercent(g) && getPriceValue(g) > 0 ? (
+                        (() => {
+                          const discountedPrice = getDiscountedPrice(g);
+                          return discountedPrice !== null ? (
+                            <>
+                              <span 
+                                className="card-price-new" 
+                                style={{ color: getPromoColor(getPromoPercent(g)) }}
+                              >
+                                {discountedPrice === 0 ? 'Free' : formatPrice(discountedPrice)}
+                              </span>
+                              <span className="card-price-old">{displayPrice(g)}</span>
+                            </>
+                          ) : (
+                            displayPrice(g)
+                          );
+                        })()
+                      ) : (
+                        displayPrice(g)
+                      )}
                     </div>
                     <div className="card-info-actions">
-                      {isGameOwnedByMe(g) ? (
-                        <button className="card-info-primary install" onClick={(e) => e.stopPropagation()}>Play Now</button>
-                      ) : (
-                        <button className={`card-info-primary ${getPriceValue(g) > 0 ? 'buy' : 'install'}`} onClick={(e) => e.stopPropagation()}>{getPriceValue(g) > 0 ? 'Buy Now' : 'Install Now'}</button>
+                      <button 
+                        className={`card-info-primary ${getFinalPrice(g) > 0 ? 'buy' : 'install'}`} 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (getFinalPrice(g) > 0) {
+                            handleBuyGame(g);
+                          } else {
+                            handleAddToLibrary(g);
+                          }
+                        }}
+                      >
+                        {getFinalPrice(g) > 0 ? 'Buy Now' : 'Add to Library'}
+                      </button>
+                      {getFinalPrice(g) > 0 && (
+                        <button 
+                          className={`card-info-cart ${cartItems.has(g.id) ? 'in-cart' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleCart(g);
+                          }}
+                          title={cartItems.has(g.id) ? 'Remove from cart' : 'Add to cart'}
+                        >
+                          <ShoppingCart size={18} />
+                        </button>
                       )}
                     </div>
                   </div>
@@ -1233,6 +1808,102 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
 
       {/* Discover - include custom games (banner-style cards like Library) */}
       {/* Discover grid intentionally removed */}
+
+      {/* Purchase Modal */}
+      {showPurchaseModal && selectedGameForPurchase && (
+        <div 
+          className="purchase-modal-overlay" 
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowPurchaseModal(false);
+              setSelectedGameForPurchase(null);
+            }
+          }}
+        >
+          <div className="purchase-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="purchase-modal-header">
+              <h2>Purchase Game</h2>
+              <button 
+                className="purchase-modal-close" 
+                onClick={() => {
+                  setShowPurchaseModal(false);
+                  setSelectedGameForPurchase(null);
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="purchase-modal-body">
+              <div className="purchase-game-info">
+                <div className="purchase-game-image">
+                  {selectedGameForPurchase.banner ? (
+                    <img src={selectedGameForPurchase.banner} alt={selectedGameForPurchase.name} />
+                  ) : (
+                    <div className="purchase-game-placeholder">🎮</div>
+                  )}
+                </div>
+                <div className="purchase-game-details">
+                  <h3>{selectedGameForPurchase.name || 'Untitled Game'}</h3>
+                  <p className="purchase-game-developer">{selectedGameForPurchase.developer || 'Unknown Developer'}</p>
+                </div>
+              </div>
+              <div className="purchase-price-section">
+                <div className="purchase-price-label">Price</div>
+                <div className="purchase-price-value">
+                  {getFinalPrice(selectedGameForPurchase) > 0 ? (
+                    <>
+                      {selectedGameForPurchase.original?.discountPercent > 0 ? (
+                        <>
+                          <span className="purchase-price-new" style={{ color: getPromoColor(selectedGameForPurchase.original.discountPercent) }}>
+                            {new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(getFinalPrice(selectedGameForPurchase))}
+                          </span>
+                          <span className="purchase-price-old">
+                            {displayPrice(selectedGameForPurchase)}
+                          </span>
+                        </>
+                      ) : (
+                        <span>{displayPrice(selectedGameForPurchase)}</span>
+                      )}
+                    </>
+                  ) : (
+                    <span>Free</span>
+                  )}
+                </div>
+              </div>
+              <div className="purchase-payment-section">
+                <h4>Payment Method</h4>
+                <div className="purchase-payment-methods">
+                  <button className="purchase-payment-method active">
+                    <CreditCard size={20} />
+                    <span>Credit Card</span>
+                  </button>
+                  <button className="purchase-payment-method">
+                    <ShoppingCart size={20} />
+                    <span>PayPal</span>
+                  </button>
+                </div>
+              </div>
+              <div className="purchase-modal-actions">
+                <button 
+                  className="purchase-cancel-btn"
+                  onClick={() => {
+                    setShowPurchaseModal(false);
+                    setSelectedGameForPurchase(null);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className="purchase-confirm-btn"
+                  onClick={handlePurchaseComplete}
+                >
+                  Complete Purchase
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

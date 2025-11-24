@@ -67,7 +67,7 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: none;
     flex-shrink: 0;
 }
 
@@ -104,7 +104,7 @@
     cursor: pointer;
     font-size: 14px;
     font-weight: 500;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: none;
 }
 
 .sidebar-btn:hover {
@@ -139,7 +139,7 @@
     flex: 1;
     min-width: 0;
     height: 36px;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: none;
 }
 
 .sidebar-search:hover {
@@ -182,11 +182,23 @@
 .sidebar-content {
     flex: 1;
     overflow-y: auto;
-    padding: 12px 12px 12px 20px;
-    padding-bottom: 12px;
+    overflow-x: hidden;
+    padding: 12px 0 12px 20px;
+    padding-right: 0;
     position: relative;
     min-height: 0;
     cursor: context-menu; /* Show context menu cursor */
+}
+
+/* Root-level game items should extend to the left edge and full width */
+/* Account for left padding (20px) and scrollbar (5px) */
+.sidebar-content > .game-item {
+    margin-left: -20px;
+    padding-left: 20px;
+    padding-right: 0;
+    width: calc(100% + 25px);
+    box-sizing: border-box;
+    position: relative;
 }
 
 .sidebar-content::-webkit-scrollbar {
@@ -224,6 +236,12 @@
     position: relative;
 }
 
+/* Section headers should also extend to left edge */
+.sidebar-content > .sidebar-section > .section-header {
+    margin-left: -20px;
+    padding-left: 20px;
+}
+
 .section-header:hover {
     color: var(--text-primary);
     background: rgba(255, 255, 255, 0.02);
@@ -255,24 +273,24 @@
 /* Game Items */
 .section-list {
     margin-top: 6px;
-    margin-left: 16px;
+    margin-left: 0;
     display: flex;
     flex-direction: column;
     gap: 4px;
     align-items: flex-start;
-    width: calc(100% - 16px);
+    width: 100%;
     padding-left: 8px;
     position: relative;
 }
 
-/* Base vertical line - continuous gray line for entire section */
+/* Base vertical line - continuous gray line for entire section, centered below folder icon (16px icon / 2 = 8px center) */
 .section-list::before {
     content: '';
     position: absolute;
-    left: -9px;
-    top: -17px;
+    left: 8px;
+    top: 0;
     width: 1px;
-    height: calc(100%);
+    height: 100%;
     background: rgba(255, 255, 255, 0.08);
     z-index: 0;
 }
@@ -281,10 +299,10 @@
 .section-list::after {
     content: '';
     position: absolute;
-    left: -9px;
-    top: -17px;
+    left: 8px;
+    top: 0;
     width: 1px;
-    background: rgba(59, 130, 246, 0.3);
+    background: var(--accent-primary);
     z-index: 1;
     display: none;
     transition: height 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -304,7 +322,7 @@
 
 /* For updating active items - use orange color */
 .section-list:has(.game-item.updating.active)::after {
-    background: rgba(255, 167, 38, 0.3);
+    background: var(--accent-warning);
 }
 
 .sidebar-section {
@@ -333,7 +351,7 @@
     border-radius: 0;
     padding: 0;
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: none;
     overflow: visible;
     width: 100%;
     align-items: flex-start;
@@ -343,43 +361,22 @@
 
 /* Horizontal line connecting each game item to the vertical line */
 .game-item::before {
-    content: '';
-    position: absolute;
-    left: -17px;
-    top: 20px;
-    width: 15px;
-    height: 1px;
-    background: rgba(255, 255, 255, 0.08);
-    z-index: 2;
-    transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: none;
 }
 
 /* Connection point dot - positioned at intersection */
 .game-item::after {
-    content: '';
-    position: absolute;
-    left: -19.25px;
-    top: 20px;
-    width: 5px;
-    height: 5px;
-    background: rgba(77, 73, 73);
-    border-radius: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 5;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0);
+    display: none;
 }
 
 .game-item.updating {
     background: rgba(255, 167, 38, 0.08);
     border: 1px solid rgba(255, 167, 38, 0.4);
-    animation: update-pulse 2s ease-in-out infinite;
 }
 
 .game-item.downloading {
     background: rgba(var(--download-blue-rgb), 0.08);
     border: 1px solid rgba(var(--download-blue-rgb), 0.4);
-    animation: download-pulse 2s ease-in-out infinite;
 }
 
 .game-item.playing {
@@ -400,14 +397,7 @@
 
 /* Connection lines and points should always show, even for updating items */
 .game-item.updating::before {
-    content: '';
-    position: absolute;
-    left: -17px;
-    top: 20px;
-    width: 10px;
-    height: 1px;
-    background: rgba(255, 255, 255, 0.08);
-    z-index: 0;
+    display: none;
 }
 
 .game-item.updating .game-row,
@@ -455,19 +445,28 @@
     background-size: 100% 100%;
     background-repeat: no-repeat;
     background-position: left center;
-    border-left: 3px solid transparent;
+    border-left: 3px solid var(--accent-primary);
     position: relative;
     box-sizing: border-box;
     overflow: visible;
-    animation: active-gradient-expand 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Root-level active items should extend highlight from absolute left edge to far right with no padding */
+/* Account for left padding (20px) and scrollbar (5px) */
+.sidebar-content > .game-item.active {
+    margin-left: -20px;
+    padding-left: 20px;
+    padding-right: 0;
+    margin-right: 0;
+    width: calc(100% + 25px);
+    box-sizing: border-box;
+    border-left: 3px solid var(--accent-primary);
 }
 
 /* Animated vertical line that expands from center - using box-shadow with clip-path */
 /* The clip-path only affects the element itself, not the pseudo-elements positioned outside */
 .game-item.active {
     position: relative;
-    box-shadow: inset 3px 0 0 var(--accent-primary);
-    animation: active-line-expand 0.4s cubic-bezier(0.4, 0, 0.2, 1), active-gradient-expand 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 @keyframes active-line-expand {
@@ -490,35 +489,12 @@
 
 /* Horizontal line for active items - keep original position and always visible */
 .game-item.active::before {
-    background: rgba(59, 130, 246, 0.4) !important;
-    z-index: 2 !important;
-    left: -17px !important;
-    top: 20px !important;
-    width: 15px !important;
-    height: 1px !important;
-    content: '';
-    position: absolute;
-    transform: none !important;
-    animation: none !important;
-    pointer-events: none;
+    display: none;
 }
 
 /* Color connection dot when item is active - ensure it's always visible and not clipped */
 .game-item.active::after {
-    background: var(--accent-primary) !important;
-    box-shadow: 0 0 8px rgba(59, 130, 246, 0.6), 0 0 12px rgba(59, 130, 246, 0.3) !important;
-    z-index: 10 !important;
-    position: absolute !important;
-    left: -19.25px !important;
-    top: 20px !important;
-    width: 5px !important;
-    height: 5px !important;
-    border-radius: 50% !important;
-    transform: translate(-50%, -50%) !important;
-    content: '';
-    display: block;
-    pointer-events: none;
-    animation: none !important;
+    display: none;
 }
 
 .game-item.active .game-row {
@@ -550,8 +526,19 @@
     border-top: none;
     border-right: none;
     border-bottom: none;
-    animation: active-gradient-expand 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards, active-border-expand-orange 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     box-sizing: border-box;
+}
+
+/* Root-level updating active items should also extend from left edge to far right with no padding */
+/* Account for left padding (20px) and scrollbar (5px) */
+.sidebar-content > .game-item.updating.active {
+    margin-left: -20px;
+    padding-left: 20px;
+    padding-right: 0;
+    margin-right: 0;
+    width: calc(100% + 25px);
+    box-sizing: border-box;
+    border-left: 3px solid var(--accent-warning);
 }
 
 @keyframes active-border-expand-orange {
@@ -564,15 +551,12 @@
 }
 
 .game-item.updating.active::before {
-    background: rgba(255, 167, 38, 0.4);
-    z-index: 2;
+    display: none;
 }
 
 /* Color connection dot when updating item is active */
 .game-item.updating.active::after {
-    background: var(--accent-warning);
-    box-shadow: 0 0 8px rgba(255, 167, 38, 0.6), 0 0 12px rgba(255, 167, 38, 0.3);
-    z-index: 3;
+    display: none;
 }
 
 .game-item.updating.active .game-row {
@@ -637,10 +621,32 @@
     justify-content: space-between;
     padding: 8px 0px 8px 8px;
     color: rgba(255, 255, 255, 0.9);
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: none;
     border-radius: 0;
     min-height: 40px; /* lock row height */
     text-align: left;
+}
+
+/* Game items at root level (not in section-list) should align with section headers */
+.sidebar-content > .game-item .game-row {
+    padding-left: 0px;
+    width: 100%;
+}
+
+/* Adjust gap for root-level game items to align icons with folder icons */
+/* Folder icon: 16px, Game icon: 22px, difference: 6px */
+/* To align left edges: game icon needs 3px offset to right, or we align centers */
+/* Aligning left edges: game icon at same position as folder icon */
+.sidebar-content > .game-item .game-clickable {
+    gap: 2px;
+}
+
+/* Align game icon left edge with folder icon left edge */
+/* Both icons start at the same position (after -20px margin + 20px padding) */
+/* Folder icon: 16px, Game icon: 22px - left edges align, game icon extends 6px more to the right */
+.sidebar-content > .game-item .game-icon {
+    margin-left: 0;
+    flex-shrink: 0;
 }
 
 /* Clickable */
@@ -668,7 +674,7 @@
     background: rgba(59, 130, 246, 0.08);
     flex-shrink: 0;
     overflow: hidden;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: none;
 }
 
 .game-icon img {
@@ -986,6 +992,50 @@ svg[data-pause="true"] {
     opacity: 0.6;
 }
 
+.footer-update-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--accent-primary);
+    border: none;
+    border-radius: 4px;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.footer-update-btn:hover:not(:disabled) {
+    background: #2563eb;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.footer-update-btn:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.footer-update-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+.footer-update-btn .spinning {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 /* Side Menu for Footer Downloads */
 .footer-download-item,
 .footer-update-item {
@@ -1176,7 +1226,7 @@ svg[data-pause="true"] {
     border: 1.5px solid rgba(255, 255, 255, 0.15);
     border-radius: 0;
     padding: 10px 12px;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: none;
     backdrop-filter: blur(4px);
 }
 

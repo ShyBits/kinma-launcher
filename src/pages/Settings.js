@@ -13,6 +13,7 @@ const Settings = () => {
     closeToTray: true,
     notifications: true,
     soundEffects: true,
+    enableGameStudio: false,
     
     // Display Settings
     theme: 'dark',
@@ -47,7 +48,8 @@ const Settings = () => {
     // Load settings from localStorage or electron store
     const savedSettings = localStorage.getItem('launcherSettings');
     if (savedSettings) {
-      setSettings(JSON.parse(savedSettings));
+      const parsed = JSON.parse(savedSettings);
+      setSettings(parsed);
     }
   }, []);
 
@@ -80,8 +82,8 @@ const Settings = () => {
         minimizeToTray: true,
         closeToTray: true,
         notifications: true,
-        soundEffects: true,
-        theme: 'dark',
+    soundEffects: true,
+    theme: 'dark',
         fontSize: 'medium',
         language: 'en',
         resolution: '1920x1080',
@@ -188,6 +190,7 @@ const Settings = () => {
           <span className="slider"></span>
         </label>
       </div>
+
     </div>
   );
 
@@ -512,78 +515,6 @@ const Settings = () => {
               </button>
             );
           })}
-          
-          {/* Developer onboarding shortcut */}
-          <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <button 
-              onClick={() => navigate('/developer-onboarding')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                width: '100%',
-                padding: '10px 14px',
-                background: 'rgba(0, 212, 255, 0.08)',
-                border: '1px solid rgba(0, 212, 255, 0.35)',
-                borderRadius: '8px',
-                color: 'var(--accent-primary)',
-                cursor: 'pointer',
-                fontSize: '13px',
-                fontWeight: 600,
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(0, 212, 255, 0.12)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(0, 212, 255, 0.08)';
-              }}
-            >
-              Continue Developer Setup
-            </button>
-            
-            {/* Admin Panel Button */}
-            <button 
-              onClick={async () => {
-                try {
-                  const api = window.electronAPI;
-                  if (api?.openAdminWindow) {
-                    const result = await api.openAdminWindow();
-                    if (!result.success) {
-                      alert('Unauthorized: Admin access required');
-                    }
-                  }
-                } catch (error) {
-                  console.error('Error opening admin window:', error);
-                }
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                width: '100%',
-                padding: '10px 14px',
-                background: 'rgba(239, 68, 68, 0.08)',
-                border: '1px solid rgba(239, 68, 68, 0.35)',
-                borderRadius: '8px',
-                color: '#ef4444',
-                cursor: 'pointer',
-                fontSize: '13px',
-                fontWeight: 600,
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)';
-              }}
-            >
-              <SettingsIcon size={18} />
-              Open Admin Panel
-            </button>
-          </div>
-          
         </div>
 
         <div className="settings-main">

@@ -14,13 +14,14 @@
 }
 
 .game-banner {
-  height: 120vh;
-  min-height: 750px;
+  /* Height is controlled by inline style from calculatedBannerHeight */
   position: relative;
   overflow: hidden;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   transition: height 0.2s ease-out;
   will-change: height;
+  background: rgba(0, 0, 0, 0.3);
+  /* Min height is 1/3 of max, set via inline style */
 }
 
 .game-banner-video {
@@ -30,6 +31,40 @@
   position: absolute;
   top: 0;
   left: 0;
+}
+
+/* Banner image styles based on aspect ratio */
+.game-banner img {
+  position: absolute;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Portrait or square (height >= width): fit width, attach to left and right */
+.game-banner img.portrait,
+.game-banner img.square {
+  width: 100%;
+  height: 100%;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  object-fit: cover;
+  object-position: center center;
+  transform-origin: center center;
+}
+
+/* Landscape (width > height): fit height, attach to top and bottom */
+.game-banner img.landscape {
+  width: 100%;
+  height: 100%;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  object-fit: cover;
+  object-position: center center;
+  transform-origin: center center;
 }
 
 .game-banner-overlay {
@@ -46,7 +81,11 @@
     rgba(0, 0, 0, 0.2) 0%,
     rgba(0, 0, 0, 0.8) 100%
   );
-  padding: 60px 80px;
+  /* Responsive padding: scales with banner height */
+  /* Vertical: 5% of banner height, clamped 50-70px */
+  /* Horizontal: 7% of banner height, clamped 60-90px */
+  padding: clamp(50px, calc(var(--banner-height, 800px) * 0.05), 70px) clamp(60px, calc(var(--banner-height, 800px) * 0.07), 90px);
+  transition: padding 0s;
 }
 
 .game-banner-content {
@@ -54,33 +93,41 @@
 }
 
 .game-title {
-  font-size: 80px;
+  /* Title: Largest element, scales with banner height */
+  /* Font size: 5.5% of banner height, clamped 44-72px */
+  font-size: clamp(44px, calc(var(--banner-height, 800px) * 0.055), 72px);
   color: white;
-  margin: 0 0 32px 0;
+  /* Margin bottom: 2.5% of banner height, clamped 20-35px */
+  margin: 0 0 clamp(20px, calc(var(--banner-height, 800px) * 0.025), 35px) 0;
   font-weight: 800;
   letter-spacing: 0;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+  line-height: 1.1;
 }
 
 .game-stats-banner {
   display: flex;
-  gap: 48px;
+  /* Gap between stat items: 2.5% of banner height, clamped 28-35px */
+  gap: clamp(28px, calc(var(--banner-height, 800px) * 0.025), 35px);
   flex-wrap: wrap;
 }
 
 .game-stats-banner .stat-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  /* Gap between icon and text: 1% of banner height, clamped 12-16px */
+  gap: clamp(12px, calc(var(--banner-height, 800px) * 0.01), 16px);
   color: white;
-  font-size: 16px;
+  /* Stat text: 1% of banner height, clamped 14-20px */
+  font-size: clamp(14px, calc(var(--banner-height, 800px) * 0.01), 20px);
   font-weight: 500;
   letter-spacing: 0.3px;
 }
 
 .game-stats-banner .stat-item svg {
-  width: 20px;
-  height: 20px;
+  /* Stat icons: 1.5% of banner height, clamped 22-26px */
+  width: clamp(22px, calc(var(--banner-height, 800px) * 0.015), 26px);
+  height: clamp(22px, calc(var(--banner-height, 800px) * 0.015), 26px);
   flex-shrink: 0;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
 }
@@ -123,10 +170,10 @@
 }
 
 .game-content-section {
-  padding: 20px 80px 20px 80px;
+  padding: clamp(16px, calc(var(--content-width, 1120px) * 0.0179), 20px) clamp(24px, calc(var(--content-width, 1120px) * 0.0714), 80px) clamp(16px, calc(var(--content-width, 1120px) * 0.0179), 20px) clamp(24px, calc(var(--content-width, 1120px) * 0.0714), 80px);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: clamp(8px, calc(var(--content-width, 1120px) * 0.0089), 10px);
 }
 
 /* Action Bar */
@@ -134,20 +181,20 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 0;
+  padding: clamp(8px, calc(var(--content-width, 1120px) * 0.0089), 10px) 0;
 }
 
 .game-action-left {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: clamp(16px, calc(var(--content-width, 1120px) * 0.0214), 24px);
   flex: 1;
 }
 
 .action-morpher {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: clamp(16px, calc(var(--content-width, 1120px) * 0.0214), 24px);
   width: 100%;
 }
 
@@ -168,15 +215,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  width: 160px;
-  height: 54px;
-  padding: 14px 0;
+  gap: clamp(6px, calc(var(--content-width, 1120px) * 0.0089), 10px);
+  width: clamp(120px, calc(var(--content-width, 1120px) * 0.1429), 160px);
+  height: clamp(42px, calc(var(--content-width, 1120px) * 0.0482), 54px);
+  padding: clamp(10px, calc(var(--content-width, 1120px) * 0.0125), 14px) 0;
   background: linear-gradient(135deg, var(--accent-primary) 0%, #4A9EFF 100%);
   color: white;
   border: none;
   border-radius: 0;
-  font-size: 16px;
+  font-size: clamp(14px, calc(var(--content-width, 1120px) * 0.0143), 16px);
   font-weight: 600;
   cursor: pointer;
   transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
@@ -240,8 +287,8 @@
 }
 
 .game-settings-btn {
-  width: 54px;
-  height: 54px;
+  width: clamp(42px, calc(var(--content-width, 1120px) * 0.0482), 54px);
+  height: clamp(42px, calc(var(--content-width, 1120px) * 0.0482), 54px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -292,15 +339,15 @@
 
 .settings-menu-item {
   width: 100%;
-  padding: 12px 16px;
+  padding: clamp(10px, calc(var(--content-width, 1120px) * 0.0107), 12px) clamp(14px, calc(var(--content-width, 1120px) * 0.0143), 16px);
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: clamp(10px, calc(var(--content-width, 1120px) * 0.0107), 12px);
   text-align: left;
   background: none;
   border: none;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: clamp(12px, calc(var(--content-width, 1120px) * 0.0125), 14px);
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -350,12 +397,12 @@
 .game-info-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: clamp(3px, calc(var(--content-width, 1120px) * 0.0036), 4px);
   transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .game-info-label {
-  font-size: 12px;
+  font-size: clamp(10px, calc(var(--content-width, 1120px) * 0.0107), 12px);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -364,14 +411,14 @@
 .game-info-value {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: clamp(4px, calc(var(--content-width, 1120px) * 0.0054), 6px);
   color: var(--text-secondary);
-  font-size: 16px;
+  font-size: clamp(14px, calc(var(--content-width, 1120px) * 0.0143), 16px);
 }
 
 .game-info-value svg {
-  width: 18px;
-  height: 18px;
+  width: clamp(16px, calc(var(--content-width, 1120px) * 0.0161), 18px);
+  height: clamp(16px, calc(var(--content-width, 1120px) * 0.0161), 18px);
 }
 
 .game-info-value--stack {
@@ -389,15 +436,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  width: 220px;
-  height: 54px;
-  padding: 14px 0;
+  gap: clamp(6px, calc(var(--content-width, 1120px) * 0.0089), 10px);
+  width: clamp(180px, calc(var(--content-width, 1120px) * 0.1964), 220px);
+  height: clamp(42px, calc(var(--content-width, 1120px) * 0.0482), 54px);
+  padding: clamp(10px, calc(var(--content-width, 1120px) * 0.0125), 14px) 0;
   background: linear-gradient(135deg, var(--accent-primary) 0%, #4A9EFF 100%);
   color: white;
   border: none;
   border-radius: 0;
-  font-size: 16px;
+  font-size: clamp(14px, calc(var(--content-width, 1120px) * 0.0143), 16px);
   font-weight: 600;
   cursor: pointer;
   transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
@@ -444,14 +491,14 @@
 
 .download-size {
   color: var(--text-secondary);
-  font-size: 16px;
+  font-size: clamp(14px, calc(var(--content-width, 1120px) * 0.0143), 16px);
   font-weight: 500;
   letter-spacing: 0.3px;
   white-space: nowrap;
   display: flex;
   align-items: center;
-  padding: 0 16px;
-  gap: 12px;
+  padding: 0 clamp(12px, calc(var(--content-width, 1120px) * 0.0143), 16px);
+  gap: clamp(8px, calc(var(--content-width, 1120px) * 0.0107), 12px);
   transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -496,13 +543,13 @@
 
 .progress-text {
   color: var(--text-primary);
-  font-size: 15px;
+  font-size: clamp(13px, calc(var(--content-width, 1120px) * 0.0134), 15px);
   font-weight: 600;
 }
 
 .progress-speed {
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: clamp(11px, calc(var(--content-width, 1120px) * 0.0116), 13px);
   font-weight: 500;
 }
 
@@ -572,7 +619,7 @@
   gap: 12px;
 }
 
-.progress-percentage { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.progress-percentage { font-size: clamp(12px, calc(var(--content-width, 1120px) * 0.0125), 14px); font-weight: 600; color: var(--text-primary); }
 
 .progress-controls { display: flex; align-items: center; gap: 8px; }
 
@@ -655,19 +702,19 @@
 
 .game-action-right {
   display: flex;
-  gap: 12px;
+  gap: clamp(8px, calc(var(--content-width, 1120px) * 0.0107), 12px);
 }
 
 .nav-aux-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
+  gap: clamp(6px, calc(var(--content-width, 1120px) * 0.0071), 8px);
+  padding: clamp(8px, calc(var(--content-width, 1120px) * 0.0089), 10px) clamp(16px, calc(var(--content-width, 1120px) * 0.0179), 20px);
   background: transparent;
   border: none;
   border-radius: 5px;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: clamp(12px, calc(var(--content-width, 1120px) * 0.0125), 14px);
   font-weight: 500;
   cursor: pointer;
   transition: all 0.25s ease;
@@ -681,17 +728,17 @@
 /* Game Info Section */
 .game-content-tabs {
   display: flex;
-  gap: 8px;
-  padding: 8px 80px 0 0;
+  gap: clamp(6px, calc(var(--content-width, 1120px) * 0.0071), 8px);
+  padding: clamp(6px, calc(var(--content-width, 1120px) * 0.0071), 8px) clamp(24px, calc(var(--content-width, 1120px) * 0.0714), 80px) 0 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .content-tab {
-  padding: 12px 24px;
+  padding: clamp(10px, calc(var(--content-width, 1120px) * 0.0107), 12px) clamp(20px, calc(var(--content-width, 1120px) * 0.0214), 24px);
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  font-size: 15px;
+  font-size: clamp(13px, calc(var(--content-width, 1120px) * 0.0134), 15px);
   font-weight: 600;
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -799,9 +846,9 @@
 }
 
 .patch-action-btn {
-  min-width: 48px;
-  height: 36px;
-  padding: 0 8px;
+  min-width: clamp(40px, calc(var(--content-width, 1120px) * 0.0429), 48px);
+  height: clamp(30px, calc(var(--content-width, 1120px) * 0.0321), 36px);
+  padding: 0 clamp(6px, calc(var(--content-width, 1120px) * 0.0071), 8px);
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
@@ -811,8 +858,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: clamp(4px, calc(var(--content-width, 1120px) * 0.0054), 6px);
+  font-size: clamp(11px, calc(var(--content-width, 1120px) * 0.0116), 13px);
   font-weight: 600;
 }
 
@@ -856,7 +903,7 @@
 }
 
 .patch-version-large {
-  font-size: 24px;
+  font-size: clamp(18px, calc(var(--content-width, 1120px) * 0.0214), 24px);
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
@@ -864,7 +911,7 @@
 }
 
 .patch-title {
-  font-size: 24px;
+  font-size: clamp(18px, calc(var(--content-width, 1120px) * 0.0214), 24px);
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
@@ -880,7 +927,7 @@
 }
 
 .patch-description {
-  font-size: 15px;
+  font-size: clamp(13px, calc(var(--content-width, 1120px) * 0.0134), 15px);
   color: var(--text-secondary);
   line-height: 1.6;
   margin: 0;
@@ -1593,7 +1640,7 @@
 }
 
 .section-title {
-  font-size: 28px;
+  font-size: clamp(20px, calc(var(--content-width, 1120px) * 0.025), 28px);
   font-weight: 800;
   color: var(--text-primary);
   margin: 0;
@@ -1602,17 +1649,17 @@
 
 .game-description {
   color: var(--text-secondary);
-  font-size: 16px;
+  font-size: clamp(14px, calc(var(--content-width, 1120px) * 0.0143), 16px);
   line-height: 1.7;
   text-align: left;
-  max-width: 900px;
+  max-width: min(900px, calc(var(--content-width, 1120px) * 0.8036));
 }
 
 .game-info-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 16px;
-  max-width: 900px;
+  max-width: min(900px, calc(var(--content-width, 1120px) * 0.8036));
 }
 
 .info-card {
@@ -1638,16 +1685,16 @@
 }
 
 .info-card-label {
-  font-size: 10px;
+  font-size: clamp(9px, calc(var(--content-width, 1120px) * 0.0089), 10px);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 1px;
-  margin-bottom: 6px;
+  margin-bottom: clamp(4px, calc(var(--content-width, 1120px) * 0.0054), 6px);
   font-weight: 600;
 }
 
 .info-card-value {
-  font-size: 16px;
+  font-size: clamp(14px, calc(var(--content-width, 1120px) * 0.0143), 16px);
   font-weight: 700;
   color: var(--text-primary);
 }
@@ -1656,42 +1703,42 @@
 .game-comments-section {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding-top: 48px;
+  gap: clamp(16px, calc(var(--content-width, 1120px) * 0.0179), 20px);
+  padding-top: clamp(32px, calc(var(--content-width, 1120px) * 0.0429), 48px);
 }
 
 .comments-container {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: clamp(18px, calc(var(--content-width, 1120px) * 0.0214), 24px);
 }
 
 .new-comment-box {
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: 12px;
-  padding: 20px;
-  max-width: 800px;
+  padding: clamp(16px, calc(var(--content-width, 1120px) * 0.0179), 20px);
+  max-width: min(800px, calc(var(--content-width, 1120px) * 0.7143));
   width: 100%;
 }
 
 .comment-input-area {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: clamp(10px, calc(var(--content-width, 1120px) * 0.0107), 12px);
 }
 
 .comment-input-area textarea {
   width: 100%;
-  padding: 12px;
+  padding: clamp(10px, calc(var(--content-width, 1120px) * 0.0107), 12px);
   background: var(--bg-primary);
   border: 1px solid var(--border-primary);
   border-radius: 8px;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: clamp(12px, calc(var(--content-width, 1120px) * 0.0125), 14px);
   font-family: inherit;
   resize: vertical;
-  min-height: 80px;
+  min-height: clamp(60px, calc(var(--content-width, 1120px) * 0.0714), 80px);
 }
 
 .comment-input-area textarea::placeholder {
@@ -1710,8 +1757,8 @@
 }
 
 .attach-btn {
-  width: 42px;
-  height: 42px;
+  width: clamp(36px, calc(var(--content-width, 1120px) * 0.0375), 42px);
+  height: clamp(36px, calc(var(--content-width, 1120px) * 0.0375), 42px);
   background: var(--bg-primary);
   border: 1px solid var(--border-primary);
   border-radius: 10px;
@@ -1899,12 +1946,12 @@
 }
 
 .post-comment-btn {
-  padding: 12px 32px;
+  padding: clamp(10px, calc(var(--content-width, 1120px) * 0.0107), 12px) clamp(24px, calc(var(--content-width, 1120px) * 0.0286), 32px);
   background: linear-gradient(135deg, var(--accent-primary) 0%, #4A9EFF 100%);
   color: white;
   border: none;
   border-radius: 10px;
-  font-size: 15px;
+  font-size: clamp(13px, calc(var(--content-width, 1120px) * 0.0134), 15px);
   font-weight: 700;
   cursor: pointer;
   transition: all 0.25s ease;
@@ -1934,13 +1981,13 @@
 .comments-list {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: clamp(16px, calc(var(--content-width, 1120px) * 0.0179), 20px);
 }
 
 .comment-item {
   display: flex;
-  gap: 12px;
-  padding: 16px;
+  gap: clamp(10px, calc(var(--content-width, 1120px) * 0.0107), 12px);
+  padding: clamp(12px, calc(var(--content-width, 1120px) * 0.0143), 16px);
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: 12px;
@@ -1949,8 +1996,8 @@
 }
 
 .comment-avatar {
-  width: 40px;
-  height: 40px;
+  width: clamp(32px, calc(var(--content-width, 1120px) * 0.0357), 40px);
+  height: clamp(32px, calc(var(--content-width, 1120px) * 0.0357), 40px);
   background: var(--gradient-primary);
   border-radius: 50%;
   display: flex;
@@ -1972,19 +2019,19 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: clamp(6px, calc(var(--content-width, 1120px) * 0.0071), 8px);
 }
 
 .comment-header {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: clamp(10px, calc(var(--content-width, 1120px) * 0.0107), 12px);
 }
 
 .comment-author {
   font-weight: 700;
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: clamp(12px, calc(var(--content-width, 1120px) * 0.0125), 14px);
   cursor: pointer;
   transition: color 0.25s ease;
 }
@@ -1995,12 +2042,12 @@
 
 .comment-time {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: clamp(11px, calc(var(--content-width, 1120px) * 0.0116), 13px);
 }
 
 .comment-text {
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: clamp(12px, calc(var(--content-width, 1120px) * 0.0125), 14px);
   line-height: 1.6;
   margin: 0;
 }
@@ -2132,7 +2179,7 @@
   border: 1px solid var(--border-primary);
   border-radius: 4px;
   width: 90%;
-  max-width: 900px;
+  max-width: min(900px, calc(var(--content-width, 1120px) * 0.8036));
   max-height: 80vh;
   display: flex;
   flex-direction: column;
@@ -2641,7 +2688,7 @@
 }
 
 .properties-modal {
-  width: 900px;
+  width: min(900px, calc(var(--content-width, 1120px) * 0.8036));
   max-width: 90%;
   height: 600px;
   background: var(--bg-primary);

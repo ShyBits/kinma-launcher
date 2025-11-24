@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ShoppingCart, Plus, ShoppingBag, Eye, EyeOff, Grid, List, ArrowLeft, Crown, TrendingUp, TrendingDown, Zap, Clock, Star, Users, Flame, ArrowRight, Sparkles, BarChart3, DollarSign, TrendingUp as TrendingUpIcon, PieChart, Target, Award, Activity, ArrowUpRight, ArrowDownRight, FileText, CheckCircle2, UserPlus, Search, X, ChevronLeft } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, ShoppingBag, Eye, EyeOff, Grid, List, ArrowLeft, Crown, TrendingUp, TrendingDown, Zap, Clock, Star, Users, Flame, ArrowRight, Sparkles, BarChart3, DollarSign, TrendingUp as TrendingUpIcon, PieChart, Target, Award, Activity, ArrowUpRight, ArrowDownRight, FileText, CheckCircle2, UserPlus, Search, X, ChevronLeft, RotateCw, RotateCcw, Maximize2, Minimize2, GitCompare, Flag, CheckSquare, Square } from 'lucide-react';
 import { getUserData, saveUserData, getAllUsersData } from '../utils/UserDataManager';
+import Item3DView from '../components/Item3DView';
 import './Market.css';
 
 
@@ -9,6 +10,75 @@ import './Market.css';
 const getUserInventory = (gameId) => {
   try {
     return getUserData(`inventory_${gameId}`, []);
+  } catch (_) {
+    return [];
+  }
+};
+
+// Get all inventory items from all games (same as Profile.js)
+const getAllInventoryItems = () => {
+  try {
+    const allItems = [];
+    
+    // Get all games from all users
+    const allGames = getAllUsersData('customGames');
+    
+    // Create a map of gameId to game name
+    const gameMap = {};
+    allGames.forEach(game => {
+      const gameId = game.gameId || game.id;
+      if (gameId) {
+        gameMap[gameId] = game.name || game.gameName || gameId;
+      }
+    });
+    
+    // Get inventory for each game
+    Object.keys(gameMap).forEach(gameId => {
+      const inventory = getUserData(`inventory_${gameId}`, []);
+      if (inventory && Array.isArray(inventory) && inventory.length > 0) {
+        inventory.forEach(item => {
+          allItems.push({
+            ...item,
+            gameId,
+            gameName: gameMap[gameId]
+          });
+        });
+      }
+    });
+    
+    // Also check localStorage directly for any inventory_ keys
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('inventory_')) {
+        const gameId = key.replace('inventory_', '');
+        if (!gameMap[gameId]) {
+          // Game not in customGames, use gameId as name
+          gameMap[gameId] = gameId;
+        }
+        try {
+          const inventory = JSON.parse(localStorage.getItem(key) || '[]');
+          if (Array.isArray(inventory) && inventory.length > 0) {
+            inventory.forEach(item => {
+              // Check if item already added
+              const exists = allItems.some(existing => 
+                existing.gameId === gameId && existing.id === item.id
+              );
+              if (!exists) {
+                allItems.push({
+                  ...item,
+                  gameId,
+                  gameName: gameMap[gameId]
+                });
+              }
+            });
+          }
+        } catch (_) {
+          // Skip invalid inventory data
+        }
+      }
+    }
+    
+    return allItems;
   } catch (_) {
     return [];
   }
@@ -22,14 +92,111 @@ const Market = () => {
   const [sortBy, setSortBy] = useState('price-low');
   const [rarityFilter, setRarityFilter] = useState('all');
   const [viewMode, setViewMode] = useState('grid');
+  const [itemSearch, setItemSearch] = useState('');
+  const [priceFilter, setPriceFilter] = useState('all');
   const [watchedItems, setWatchedItems] = useState(new Set());
   const [showSellModal, setShowSellModal] = useState(false);
   const [showQuickBuyModal, setShowQuickBuyModal] = useState(false);
+  const [showItemDetailModal, setShowItemDetailModal] = useState(false);
+  const [selectedItemDetail, setSelectedItemDetail] = useState(null);
+  const [comparisonItems, setComparisonItems] = useState([]);
+  const [showComparisonModal, setShowComparisonModal] = useState(false);
+  const [comparisonModalAutoOpened, setComparisonModalAutoOpened] = useState(false);
+  const [comparisonModalManuallyClosed, setComparisonModalManuallyClosed] = useState(false);
+  const [referenceItemId, setReferenceItemId] = useState(null);
+  const [comparisonRotations, setComparisonRotations] = useState({});
+  const [comparisonZooms, setComparisonZooms] = useState({});
+  const [comparisonPans, setComparisonPans] = useState({});
+  const [comparisonIsRotating, setComparisonIsRotating] = useState({});
+  const [comparisonIsPanning, setComparisonIsPanning] = useState({});
+  const [comparisonIsResetting, setComparisonIsResetting] = useState({});
+  const comparison3dRefs = useRef({});
+  const comparisonAnimationFrameRefs = useRef({});
+  const comparisonCurrentValuesRefs = useRef({});
+  const wheelThrottleRefs = useRef({});
+  const doubleClickThrottleRefs = useRef({});
+  const [comparisonViewMode, setComparisonViewMode] = useState('both'); // 'both', '3d', 'stats'
+  const [drawerHeight, setDrawerHeight] = useState(45);
+  const [isDraggingDrawer, setIsDraggingDrawer] = useState(false);
+  const [hasDragged, setHasDragged] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [showDrawerContent, setShowDrawerContent] = useState(false);
+
+  // Handle drawer resize from top
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (isDraggingDrawer) {
+        setHasDragged(true);
+        // Calculate height from bottom of viewport
+        const newHeight = window.innerHeight - e.clientY;
+        const height = Math.max(45, Math.min(newHeight, window.innerHeight - 100));
+        setDrawerHeight(height);
+        // Show/hide content based on height
+        if (height > 60) {
+          setShowDrawerContent(true);
+        } else {
+          setShowDrawerContent(false);
+        }
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (isDraggingDrawer) {
+        if (!hasDragged) {
+          // If clicked without dragging, toggle open/close
+          setIsDraggingDrawer(false);
+          // Small delay to allow transition to re-enable
+          setTimeout(() => {
+            if (drawerHeight <= 60) {
+              // Currently closed, open it to maximum (same as manual drag limit)
+              setIsAnimating(true);
+              setShowDrawerContent(true);
+              const maxHeight = Math.min(window.innerHeight * 0.8, window.innerHeight - 100);
+              setDrawerHeight(maxHeight);
+              // Reset animation state after transition
+              setTimeout(() => setIsAnimating(false), 400);
+            } else {
+              // Currently open, close it (same as manual drag minimum)
+              // Keep full width during height animation, then minimize
+              setIsAnimating(true);
+              setDrawerHeight(45);
+              // Hide content after animation completes
+              setTimeout(() => {
+                setShowDrawerContent(false);
+                setIsAnimating(false);
+              }, 400);
+            }
+          }, 10);
+        } else {
+          setIsDraggingDrawer(false);
+        }
+        setHasDragged(false);
+      }
+    };
+
+    if (isDraggingDrawer) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDraggingDrawer, hasDragged]);
+  const [isViewMaximized, setIsViewMaximized] = useState(false);
+  const [lastMouseX, setLastMouseX] = useState(0);
+  const [lastMouseY, setLastMouseY] = useState(0);
   const [selectedItems, setSelectedItems] = useState([]);
   const [sellStep, setSellStep] = useState(1); // 1: inventory selection, 2: pricing
   const [inventorySearch, setInventorySearch] = useState('');
   const [inventoryFilter, setInventoryFilter] = useState('all');
+  const [inventoryRarityFilter, setInventoryRarityFilter] = useState('all');
+  const [inventoryGameFilter, setInventoryGameFilter] = useState('all');
+  const [inventoryRefresh, setInventoryRefresh] = useState(0);
   const [itemPrices, setItemPrices] = useState({});
+  const [collapsedBannerHeight, setCollapsedBannerHeight] = useState(300);
+  const itemsGridRef = useRef(null);
+  const [marketItemsRefresh, setMarketItemsRefresh] = useState(0);
   const [marketView, setMarketView] = useState('browse'); // browse, petitions, featured, trending, favorites, stats
   const [customGames, setCustomGames] = useState([]);
   const [watchedGames, setWatchedGames] = useState(new Set());
@@ -74,6 +241,120 @@ const Market = () => {
   
   // Calculate responsive sidebar width based on window size
   // Scales between 15-25% of window width, clamped between 200px and 250px
+  // Get all inventory items (same as Profile.js)
+  const allInventoryItems = useMemo(() => getAllInventoryItems(), [inventoryRefresh]);
+  
+  // Get unique games from inventory
+  const inventoryGames = useMemo(() => {
+    const games = new Set();
+    allInventoryItems.forEach(item => {
+      if (item.gameId) games.add(item.gameId);
+    });
+    return Array.from(games).map(gameId => ({
+      id: gameId,
+      name: allInventoryItems.find(item => item.gameId === gameId)?.gameName || gameId
+    }));
+  }, [allInventoryItems]);
+  
+  // Filter and sort inventory items (same as Profile.js)
+  const filteredInventoryItems = useMemo(() => {
+    let filtered = [...allInventoryItems];
+    
+    // Search filter
+    if (inventorySearch) {
+      filtered = filtered.filter(item =>
+        item.name?.toLowerCase().includes(inventorySearch.toLowerCase()) ||
+        item.description?.toLowerCase().includes(inventorySearch.toLowerCase())
+      );
+    }
+    
+    // Game filter
+    if (inventoryGameFilter !== 'all') {
+      filtered = filtered.filter(item => item.gameId === inventoryGameFilter);
+    }
+    
+    // Rarity filter
+    if (inventoryRarityFilter !== 'all') {
+      filtered = filtered.filter(item =>
+        item.rarity?.toLowerCase() === inventoryRarityFilter.toLowerCase()
+      );
+    }
+    
+    // Filter out items that are already listed in the marketplace
+    if (selectedGame) {
+      const gameId = selectedGame.id || selectedGame.gameId;
+      if (gameId) {
+        const currentMarketItems = getUserData(`marketItems_${gameId}`, []);
+        const listedItemIds = new Set(
+          currentMarketItems
+            .filter(mi => mi.status === 'active')
+            .map(mi => `${mi.gameId || gameId}_${mi.originalItemId || mi.id}`)
+        );
+        
+        filtered = filtered.filter(item => {
+          const itemKey = `${item.gameId || gameId}_${item.id}`;
+          return !listedItemIds.has(itemKey);
+        });
+      }
+    }
+    
+    return filtered;
+  }, [allInventoryItems, inventorySearch, inventoryGameFilter, inventoryRarityFilter, selectedGame, marketItemsRefresh]);
+  
+  // Refresh inventory on storage changes
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setInventoryRefresh(prev => prev + 1);
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('user-changed', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('user-changed', handleStorageChange);
+    };
+  }, []);
+
+  // Reset banner height when game changes
+  useEffect(() => {
+    if (selectedGame) {
+      setCollapsedBannerHeight(300);
+    }
+  }, [selectedGame]);
+
+
+
+  // Handle banner collapsing on scroll
+  useEffect(() => {
+    const itemsGrid = itemsGridRef.current;
+    if (!itemsGrid || !selectedGame) return;
+
+    let lastScrollTop = 0;
+
+    const handleScroll = () => {
+      const scrollTop = itemsGrid.scrollTop;
+      const initialHeight = 300;
+      const minHeight = 60; // Minimum height for back button visibility
+      
+      // Switch directly to collapsed version on first scroll with smooth animation
+      if (scrollTop > 0 && lastScrollTop === 0) {
+        setCollapsedBannerHeight(minHeight);
+      } else if (scrollTop === 0 && lastScrollTop > 0) {
+        // Switch back to full height when scrolled to top with smooth animation
+        setCollapsedBannerHeight(initialHeight);
+      }
+      
+      lastScrollTop = scrollTop;
+    };
+
+    itemsGrid.addEventListener('scroll', handleScroll, { passive: true });
+    
+    return () => {
+      itemsGrid.removeEventListener('scroll', handleScroll);
+    };
+  }, [selectedGame]);
+
   const responsiveSidebarWidth = useMemo(() => {
     const minWidth = 200;
     const maxWidth = 250;
@@ -207,17 +488,47 @@ const Market = () => {
 
   // Load all games with marketplace enabled from all users (for Market browse view)
   useEffect(() => {
-    const loadCustomGames = () => {
+    const loadCustomGames = async () => {
       try {
         // Get all games from all users for the Market (shared marketplace)
         const allGames = getAllUsersData('customGames');
+        
         // Filter to only show published games with marketplace enabled
         const marketGames = allGames.filter(game => {
           const status = game.status || game.fullFormData?.status || 'draft';
           const marketEnabled = game.fullFormData?.marketEnabled !== false; // Default to true
           return (status === 'public' || status === 'published') && marketEnabled;
         });
-        setCustomGames(marketGames);
+        
+        // Remove duplicates based on gameId (keep first occurrence)
+        const uniqueGamesMap = new Map();
+        marketGames.forEach(game => {
+          const gameId = game.gameId || game.id;
+          if (gameId && !uniqueGamesMap.has(gameId)) {
+            uniqueGamesMap.set(gameId, game);
+          }
+        });
+        
+        // Check which games actually exist in the games folder
+        const existingGames = [];
+        for (const [gameId, game] of uniqueGamesMap) {
+          try {
+            if (window.electronAPI && window.electronAPI.gameFolderExists) {
+              const exists = await window.electronAPI.gameFolderExists(gameId);
+              if (exists) {
+                existingGames.push(game);
+              }
+            } else {
+              // Fallback: if Electron API is not available, include the game anyway
+              existingGames.push(game);
+            }
+          } catch (error) {
+            console.error(`Error checking game folder for ${gameId}:`, error);
+            // Skip games that can't be verified
+          }
+        }
+        
+        setCustomGames(existingGames);
       } catch (e) {
         console.error('Error loading custom games:', e);
         setCustomGames([]);
@@ -518,7 +829,7 @@ const Market = () => {
     } catch (_) {
       return [];
     }
-  }, [selectedGame]);
+  }, [selectedGame, marketItemsRefresh]);
 
   // Calculate market statistics from account-separated storage
   const marketStats = React.useMemo(() => {
@@ -626,11 +937,439 @@ const Market = () => {
   };
 
   const handleItemSelect = (item) => {
-    const isSelected = selectedItems.some(i => i.id === item.id);
+    const isSelected = selectedItems.some(i => 
+      i.id === item.id && i.gameId === item.gameId
+    );
     if (isSelected) {
-      setSelectedItems(selectedItems.filter(i => i.id !== item.id));
+      setSelectedItems(selectedItems.filter(i => 
+        !(i.id === item.id && i.gameId === item.gameId)
+      ));
     } else {
       setSelectedItems([...selectedItems, item]);
+    }
+  };
+
+  const handleAddToComparison = (item, e) => {
+    e.stopPropagation();
+    if (comparisonItems.some(i => i.id === item.id)) {
+      setComparisonItems(comparisonItems.filter(i => i.id !== item.id));
+    } else {
+      if (comparisonItems.length >= 8) {
+        alert('Maximum 8 items can be compared at once');
+        return;
+      }
+      const newComparisonItems = [...comparisonItems, item];
+      setComparisonItems(newComparisonItems);
+      
+      // Auto-open modal when 2 items are selected (only if not manually closed)
+      if (newComparisonItems.length === 2 && !comparisonModalManuallyClosed) {
+        setShowComparisonModal(true);
+        setComparisonModalAutoOpened(true);
+      }
+    }
+  };
+
+  const handleRemoveFromComparison = (itemId) => {
+    const newItems = comparisonItems.filter(i => i.id !== itemId);
+    setComparisonItems(newItems);
+    // If removed item was reference, set new reference
+    if (referenceItemId === itemId && newItems.length > 0) {
+      setReferenceItemId(newItems[0].id);
+    } else if (newItems.length === 0) {
+      // Only clear reference if no items remain
+      setReferenceItemId(null);
+    }
+    // Don't close modal - let user stay in comparison view
+    // Clean up rotations/zooms for removed item
+    setComparisonRotations(prev => {
+      const updated = { ...prev };
+      delete updated[itemId];
+      return updated;
+    });
+    setComparisonZooms(prev => {
+      const updated = { ...prev };
+      delete updated[itemId];
+      return updated;
+    });
+    setComparisonPans(prev => {
+      const updated = { ...prev };
+      delete updated[itemId];
+      return updated;
+    });
+  };
+
+  const handleClearComparison = () => {
+    setComparisonItems([]);
+    setShowComparisonModal(false);
+    setComparisonModalAutoOpened(false);
+    setComparisonModalManuallyClosed(false);
+    setReferenceItemId(null);
+    setComparisonRotations({});
+    setComparisonZooms({});
+    setComparisonPans({});
+  };
+
+  // Auto-open comparison modal when 2 items are selected (only if not manually closed)
+  useEffect(() => {
+    if (comparisonItems.length >= 2 && !comparisonModalManuallyClosed && !showComparisonModal) {
+      setShowComparisonModal(true);
+      setComparisonModalAutoOpened(true);
+    }
+    // Don't auto-close when items are removed - let user stay in comparison view
+  }, [comparisonItems.length, comparisonModalManuallyClosed, showComparisonModal]);
+
+  // Set first item as reference when modal opens
+  useEffect(() => {
+    if (showComparisonModal && comparisonItems.length > 0 && !referenceItemId) {
+      setReferenceItemId(comparisonItems[0].id);
+    }
+  }, [showComparisonModal, comparisonItems.length]);
+
+  // Initialize rotations and zooms for new items
+  useEffect(() => {
+    comparisonItems.forEach(item => {
+      if (!comparisonRotations[item.id]) {
+        setComparisonRotations(prev => ({
+          ...prev,
+          [item.id]: { x: 0, y: 0, z: 0 }
+        }));
+      }
+      if (!comparisonZooms[item.id]) {
+        setComparisonZooms(prev => ({
+          ...prev,
+          [item.id]: 1
+        }));
+      }
+      if (!comparisonPans[item.id]) {
+        setComparisonPans(prev => ({
+          ...prev,
+          [item.id]: { x: 0, y: 0 }
+        }));
+      }
+    });
+  }, [comparisonItems]);
+
+  // Reset 3D view when switching view modes
+  useEffect(() => {
+    if (!showComparisonModal) return;
+    
+    // Set resetting flag for smooth transition
+    const resettingFlags = {};
+    comparisonItems.forEach(item => {
+      resettingFlags[item.id] = true;
+    });
+    setComparisonIsResetting(resettingFlags);
+    
+    // Reset all rotations, zooms, and pans when view mode changes
+    const resetValues = {};
+    comparisonItems.forEach(item => {
+      resetValues[item.id] = { x: 0, y: 0, z: 0 };
+    });
+    setComparisonRotations(resetValues);
+    
+    const resetZooms = {};
+    comparisonItems.forEach(item => {
+      resetZooms[item.id] = 1;
+    });
+    setComparisonZooms(resetZooms);
+    
+    const resetPans = {};
+    comparisonItems.forEach(item => {
+      resetPans[item.id] = { x: 0, y: 0 };
+    });
+    setComparisonPans(resetPans);
+    
+    // Reset the flags after animation completes
+    setTimeout(() => {
+      const clearedFlags = {};
+      comparisonItems.forEach(item => {
+        clearedFlags[item.id] = false;
+      });
+      setComparisonIsResetting(clearedFlags);
+    }, 600);
+  }, [comparisonViewMode, showComparisonModal, comparisonItems]);
+
+  // Memoize reference item to avoid repeated finds
+  const referenceItem = useMemo(() => {
+    if (!referenceItemId) return null;
+    return comparisonItems.find(i => i.id === referenceItemId) || null;
+  }, [referenceItemId, comparisonItems]);
+
+  // Memoize difference calculations for all items
+  const itemDifferences = useMemo(() => {
+    if (!referenceItem) return {};
+    
+    const differences = {};
+    comparisonItems.forEach(item => {
+      if (item.id === referenceItemId) return;
+      
+      const itemDiffs = [];
+      if (item.price !== referenceItem.price) itemDiffs.push('price');
+      if (item.rarity !== referenceItem.rarity) itemDiffs.push('rarity');
+      if (item.type !== referenceItem.type) itemDiffs.push('type');
+      
+      differences[item.id] = itemDiffs.length > 0 ? 'rgba(255, 193, 7, 0.4)' : null;
+    });
+    
+    return differences;
+  }, [referenceItem, referenceItemId, comparisonItems]);
+
+  // Get difference color for an item (now just a lookup)
+  const getDifferenceColor = useCallback((item) => {
+    return itemDifferences[item.id] || null;
+  }, [itemDifferences]);
+
+  const hasDifferent3DView = useCallback((item) => {
+    if (!referenceItem || item.id === referenceItemId) return false;
+    
+    // Compare 3D view (imageUrl or image/icon)
+    const itemImage = item.imageUrl || item.image;
+    const referenceImage = referenceItem.imageUrl || referenceItem.image;
+    
+    return itemImage !== referenceImage;
+  }, [referenceItem, referenceItemId]);
+
+  // Normalize rotation to -180 to 180 range for shortest path in CSS transitions
+  const normalizeRotation = (rotation) => {
+    if (rotation === undefined || rotation === null) return 0;
+    rotation = rotation % 360;
+    if (rotation > 180) {
+      rotation = rotation - 360;
+    } else if (rotation < -180) {
+      rotation = rotation + 360;
+    }
+    return rotation;
+  };
+
+  // Update comparison rotation for an item
+  const updateComparisonRotation = (itemId, axis, delta) => {
+    setComparisonRotations(prev => {
+      const current = prev[itemId] || { x: 0, y: 0, z: 0 };
+      const newValue = current[axis] + delta;
+      const wrapped = ((newValue % 360) + 360) % 360;
+      return {
+        ...prev,
+        [itemId]: {
+          ...current,
+          [axis]: wrapped
+        }
+      };
+    });
+  };
+
+  // Update comparison zoom for an item - using same logic as item detail modal
+  const updateComparisonZoom = (itemId, delta) => {
+    setComparisonZooms(prev => {
+      const current = prev[itemId] || 1;
+      return {
+        ...prev,
+        [itemId]: Math.max(0.5, Math.min(2, current + delta))
+      };
+    });
+  };
+
+  // Mouse rotation and panning handlers for comparison items - exact copy from item detail modal
+  useEffect(() => {
+    if (!showComparisonModal) return;
+    // Only set up listeners if 3D view is visible
+    if (comparisonViewMode !== '3d' && comparisonViewMode !== 'both') return;
+
+    const cleanupFunctions = [];
+    
+    comparisonItems.forEach(item => {
+      const container = comparison3dRefs.current[item.id];
+      if (!container) return;
+
+      let rotating = false;
+      let panning = false;
+      let lastX = 0;
+      let lastY = 0;
+
+      // Don't wrap rotation during interaction - let it accumulate continuously
+      // Normalize only for display to prevent unnecessary 360° flips
+      const normalizeRotation = (rotation) => {
+        rotation = rotation % 360;
+        if (rotation > 180) {
+          rotation = rotation - 360;
+        } else if (rotation < -180) {
+          rotation = rotation + 360;
+        }
+        return rotation;
+      };
+
+      const maxPanX = 400;
+      const maxPanYUp = 120;
+      const maxPanYDown = 100;
+
+      const isOverControls = (target) => {
+        return target.closest('.item-3d-controls') || 
+               target.closest('.item-3d-btn') ||
+               target.closest('.comparison-reference-checkbox');
+      };
+
+      const handleDoubleClick = (e) => {
+        if (isOverControls(e.target)) return;
+        if (!(e.target.closest('.item-3d-model-wrapper') || e.target === container || e.target.closest('.item-3d-image') || e.target.closest('.item-3d-placeholder'))) return;
+
+        // Set resetting flag for smooth transition
+        setComparisonIsResetting(prev => ({ ...prev, [item.id]: true }));
+        
+        setComparisonRotations(prev => ({ ...prev, [item.id]: { x: 0, y: 0, z: 0 } }));
+        setComparisonZooms(prev => ({ ...prev, [item.id]: 1 }));
+        setComparisonPans(prev => ({ ...prev, [item.id]: { x: 0, y: 0 } }));
+        
+        // Reset the flag after animation completes
+        setTimeout(() => {
+          setComparisonIsResetting(prev => ({ ...prev, [item.id]: false }));
+        }, 600);
+      };
+
+      const handleMouseDown = (e) => {
+        if (isOverControls(e.target)) return;
+        if (!(e.target.closest('.item-3d-model-wrapper') || e.target === container || e.target.closest('.item-3d-image') || e.target.closest('.item-3d-placeholder'))) return;
+
+        if (e.button === 0) {
+          lastX = e.clientX;
+          lastY = e.clientY;
+          
+          if (e.shiftKey) {
+            panning = true;
+            setComparisonIsPanning(prev => ({ ...prev, [item.id]: true }));
+          } else {
+            rotating = true;
+            setComparisonIsRotating(prev => ({ ...prev, [item.id]: true }));
+          }
+        }
+      };
+
+      const handleMouseMove = (e) => {
+        if (rotating) {
+          const deltaX = e.clientX - lastX;
+          const deltaY = e.clientY - lastY;
+          
+          setComparisonRotations(prev => {
+            const current = prev[item.id] || { x: 0, y: 0, z: 0 };
+            return {
+              ...prev,
+              [item.id]: {
+                x: current.x - deltaY * 0.5,
+                y: current.y + deltaX * 0.5,
+                z: current.z
+              }
+            };
+          });
+          
+          lastX = e.clientX;
+          lastY = e.clientY;
+        } else if (panning) {
+          const deltaX = e.clientX - lastX;
+          const deltaY = e.clientY - lastY;
+          
+          setComparisonPans(prev => {
+            const current = prev[item.id] || { x: 0, y: 0 };
+            return {
+              ...prev,
+              [item.id]: {
+                x: Math.max(-maxPanX, Math.min(maxPanX, current.x + deltaX)),
+                y: Math.max(-maxPanYUp, Math.min(maxPanYDown, current.y + deltaY))
+              }
+            };
+          });
+          
+          lastX = e.clientX;
+          lastY = e.clientY;
+        }
+      };
+
+      const handleMouseUp = () => {
+        rotating = false;
+        panning = false;
+        setComparisonIsRotating(prev => ({ ...prev, [item.id]: false }));
+        setComparisonIsPanning(prev => ({ ...prev, [item.id]: false }));
+      };
+
+      const handleWheel = (e) => {
+        if (isOverControls(e.target)) return;
+        if (!(e.target.closest('.item-3d-model-wrapper') || e.target === container || e.target.closest('.item-3d-image') || e.target.closest('.item-3d-placeholder'))) return;
+
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        setComparisonZooms(prev => {
+          const current = prev[item.id] || 1;
+          return {
+            ...prev,
+            [item.id]: Math.max(0.5, Math.min(2, current + delta))
+          };
+        });
+      };
+
+      // Check if mouse is over controls for cursor styling
+      const handleMouseMoveCheck = (e) => {
+        if (isOverControls(e.target)) {
+          container.style.cursor = 'default';
+        } else if (e.target.closest('.item-3d-model-wrapper') || e.target === container || e.target.closest('.item-3d-image') || e.target.closest('.item-3d-placeholder')) {
+          if (e.shiftKey) {
+            container.style.cursor = 'move';
+          } else {
+            container.style.cursor = 'grab';
+          }
+        } else {
+          container.style.cursor = 'default';
+        }
+      };
+
+      container.addEventListener('dblclick', handleDoubleClick);
+      container.addEventListener('mousedown', handleMouseDown);
+      container.addEventListener('mousemove', handleMouseMoveCheck);
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      container.addEventListener('wheel', handleWheel, { passive: false });
+
+      cleanupFunctions.push(() => {
+        container.removeEventListener('dblclick', handleDoubleClick);
+        container.removeEventListener('mousedown', handleMouseDown);
+        container.removeEventListener('mousemove', handleMouseMoveCheck);
+        container.removeEventListener('wheel', handleWheel);
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+        container.style.cursor = '';
+      });
+    });
+
+    return () => {
+      cleanupFunctions.forEach(cleanup => cleanup());
+    };
+  }, [showComparisonModal, comparisonItems, comparisonViewMode]);
+
+  // Format listedAt timestamp to "time ago" format
+  const formatListedAt = (timestamp) => {
+    if (!timestamp) return 'Listed recently';
+    try {
+      const listedDate = new Date(timestamp);
+      if (isNaN(listedDate.getTime())) return 'Listed recently';
+      
+      const now = Date.now();
+      const diffMs = now - timestamp;
+      const diffSec = Math.floor(diffMs / 1000);
+      const diffMin = Math.floor(diffSec / 60);
+      const diffHours = Math.floor(diffMin / 60);
+      const diffDays = Math.floor(diffHours / 24);
+      
+      if (diffSec < 60) return 'just now';
+      if (diffMin < 60) return `${diffMin}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+      
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const day = listedDate.getDate();
+      const month = monthNames[listedDate.getMonth()];
+      const year = listedDate.getFullYear();
+      const currentYear = new Date().getFullYear();
+      
+      if (year === currentYear) return `${day} ${month}`;
+      return `${day} ${month} ${year}`;
+    } catch (_) {
+      return 'Listed recently';
     }
   };
 
@@ -765,10 +1504,52 @@ const Market = () => {
     }));
   }, [customGames, petitionSearchQuery, petitions]);
 
+  // Filter and sort items - must be called before any early returns
+  const filteredItems = useMemo(() => {
+    return marketItems.filter(item => {
+      // Rarity filter
+      const rarityMatch = rarityFilter === 'all' || item.rarity.toLowerCase() === rarityFilter.toLowerCase();
+      
+      // Search filter
+      const searchMatch = !itemSearch || item.name.toLowerCase().includes(itemSearch.toLowerCase()) || 
+                          (item.seller && item.seller.toLowerCase().includes(itemSearch.toLowerCase()));
+      
+      // Price filter
+      let priceMatch = true;
+      if (priceFilter !== 'all') {
+        const price = item.price || 0;
+        switch (priceFilter) {
+          case 'under-10': priceMatch = price < 10; break;
+          case '10-50': priceMatch = price >= 10 && price <= 50; break;
+          case '50-100': priceMatch = price > 50 && price <= 100; break;
+          case 'over-100': priceMatch = price > 100; break;
+          default: priceMatch = true;
+        }
+      }
+      
+      return rarityMatch && searchMatch && priceMatch;
+    });
+  }, [marketItems, rarityFilter, itemSearch, priceFilter]);
+
+  const sortedItems = useMemo(() => {
+    return [...filteredItems].sort((a, b) => {
+      switch (sortBy) {
+        case 'price-low': return a.price - b.price;
+        case 'price-high': return b.price - a.price;
+        case 'name-asc': return (a.name || '').localeCompare(b.name || '');
+        case 'name-desc': return (b.name || '').localeCompare(a.name || '');
+        case 'newest': return new Date(b.listedAt || 0) - new Date(a.listedAt || 0);
+        case 'oldest': return new Date(a.listedAt || 0) - new Date(b.listedAt || 0);
+        default: return 0;
+      }
+    });
+  }, [filteredItems, sortBy]);
+
   // If no game is selected, show game selection
   if (!selectedGame) {
     return (
       <div className="market">
+        <div className="market-main-container">
         {/* Main Content Area */}
         <div className="marketplace-content">
           {/* Live Activity Ticker - Always at top (except browse) */}
@@ -1616,6 +2397,8 @@ const Market = () => {
                     <div className="game-select-market-stat-value">
                       #{game.marketRank || 1}
                       {game.marketRank === 1 && <Crown size={16} style={{ marginLeft: '4px', color: '#FFD700' }} />}
+                      {game.marketRank === 2 && <Crown size={16} style={{ marginLeft: '4px', color: '#C0C0C0' }} />}
+                      {game.marketRank === 3 && <Crown size={16} style={{ marginLeft: '4px', color: '#CD7F32' }} />}
                     </div>
                     <div className="game-select-market-stat-label">RANK</div>
                   </div>
@@ -1638,24 +2421,23 @@ const Market = () => {
           )}
         </div>
 
-        {/* Right Sidebar Navigation - Inside Content */}
+        {/* Right Sidebar - Works throughout market menu */}
         <div 
-          className="marketplace-content-right"
+          className="market-sidebar-right"
           style={{ 
             '--window-width': windowWidth,
             '--sidebar-scale': Math.max(0.8, Math.min(1.2, windowWidth / 1120))
           }}
         >
-          {/* Right Sidebar Navigation */}
           <aside 
-            className={`marketplace-sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}
+            className={`market-sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}
             style={{ 
               width: isSidebarCollapsed ? COLLAPSED_WIDTH : marketRightSidebarWidth
             }}
           >
             {!isSidebarCollapsed && (
               <div 
-                className="sidebar-title"
+                className="market-sidebar-title"
                 style={{
                   fontSize: `${sidebarStyles.titleFontSize}px`,
                   padding: `${sidebarStyles.titlePadding.vertical}px ${sidebarStyles.titlePadding.horizontal}px ${sidebarStyles.titlePadding.bottom}px ${sidebarStyles.titlePadding.horizontal}px`,
@@ -1667,7 +2449,7 @@ const Market = () => {
               >
                 <span>Market</span>
                 <button
-                  className="sidebar-close-btn"
+                  className="market-sidebar-close-btn"
                   onClick={(e) => {
                     e.stopPropagation();
                     setIsSidebarCollapsed(true);
@@ -1702,7 +2484,7 @@ const Market = () => {
             )}
             {isSidebarCollapsed && (
               <div 
-                className="sidebar-collapsed-header"
+                className="market-sidebar-collapsed-header"
                 style={{
                   padding: '20px 8px',
                   display: 'flex',
@@ -1722,7 +2504,7 @@ const Market = () => {
             )}
             {!isSidebarCollapsed && (
               <nav 
-                className="sidebar-nav"
+                className="market-sidebar-nav"
                 style={{
                   padding: `${sidebarStyles.navPadding}px 0`,
                   gap: `${sidebarStyles.navGap}px`
@@ -1730,13 +2512,13 @@ const Market = () => {
               >
                 {/* Main Section - Browse */}
                 <div 
-                  className="sidebar-nav-section sidebar-nav-main"
+                  className="market-sidebar-nav-section market-sidebar-nav-main"
                   style={{
                     paddingBottom: `${sidebarStyles.sectionPaddingBottom}px`
                   }}
                 >
                   <button 
-                    className={`sidebar-nav-item sidebar-nav-main-item ${marketView === 'browse' ? 'active' : ''}`}
+                    className={`market-sidebar-nav-item market-sidebar-nav-main-item ${marketView === 'browse' ? 'active' : ''}`}
                     onClick={() => setMarketView('browse')}
                     style={{
                       fontSize: `${sidebarStyles.mainItemFontSize}px`,
@@ -1747,10 +2529,10 @@ const Market = () => {
                     <span>Browse</span>
                   </button>
                 </div>
-                
-                <div className="sidebar-nav-section">
+
+                <div className="market-sidebar-nav-section">
                   <h3 
-                    className="sidebar-section-title"
+                    className="market-sidebar-section-title"
                     style={{
                       fontSize: `${sidebarStyles.sectionTitleFontSize}px`,
                       padding: `0 ${sidebarStyles.sectionTitlePadding.horizontal}px ${sidebarStyles.sectionTitlePadding.bottom}px ${sidebarStyles.sectionTitlePadding.horizontal}px`
@@ -1759,7 +2541,7 @@ const Market = () => {
                     Marketplace
                   </h3>
                   <button 
-                    className={`sidebar-nav-item ${marketView === 'featured' ? 'active' : ''}`}
+                    className={`market-sidebar-nav-item ${marketView === 'featured' ? 'active' : ''}`}
                     onClick={() => setMarketView('featured')}
                     style={{
                       fontSize: `${sidebarStyles.navItemFontSize}px`,
@@ -1771,7 +2553,7 @@ const Market = () => {
                     <span>Top Markets</span>
                   </button>
                   <button 
-                    className={`sidebar-nav-item ${marketView === 'trending' ? 'active' : ''}`}
+                    className={`market-sidebar-nav-item ${marketView === 'trending' ? 'active' : ''}`}
                     onClick={() => setMarketView('trending')}
                     style={{
                       fontSize: `${sidebarStyles.navItemFontSize}px`,
@@ -1784,9 +2566,9 @@ const Market = () => {
                   </button>
                 </div>
                 
-                <div className="sidebar-nav-section">
+                <div className="market-sidebar-nav-section">
                   <h3 
-                    className="sidebar-section-title"
+                    className="market-sidebar-section-title"
                     style={{
                       fontSize: `${sidebarStyles.sectionTitleFontSize}px`,
                       padding: `0 ${sidebarStyles.sectionTitlePadding.horizontal}px ${sidebarStyles.sectionTitlePadding.bottom}px ${sidebarStyles.sectionTitlePadding.horizontal}px`
@@ -1795,7 +2577,7 @@ const Market = () => {
                     My Activity
                   </h3>
                   <button 
-                    className={`sidebar-nav-item ${marketView === 'favorites' ? 'active' : ''}`}
+                    className={`market-sidebar-nav-item ${marketView === 'favorites' ? 'active' : ''}`}
                     onClick={() => setMarketView('favorites')}
                     style={{
                       fontSize: `${sidebarStyles.navItemFontSize}px`,
@@ -1807,7 +2589,7 @@ const Market = () => {
                     <span>Watchlist</span>
                   </button>
                   <button 
-                    className={`sidebar-nav-item ${marketView === 'stats' ? 'active' : ''}`}
+                    className={`market-sidebar-nav-item ${marketView === 'stats' ? 'active' : ''}`}
                     onClick={() => setMarketView('stats')}
                     style={{
                       fontSize: `${sidebarStyles.navItemFontSize}px`,
@@ -1820,9 +2602,9 @@ const Market = () => {
                   </button>
                 </div>
                 
-                <div className="sidebar-nav-section">
+                <div className="market-sidebar-nav-section">
                   <h3 
-                    className="sidebar-section-title"
+                    className="market-sidebar-section-title"
                     style={{
                       fontSize: `${sidebarStyles.sectionTitleFontSize}px`,
                       padding: `0 ${sidebarStyles.sectionTitlePadding.horizontal}px ${sidebarStyles.sectionTitlePadding.bottom}px ${sidebarStyles.sectionTitlePadding.horizontal}px`
@@ -1831,7 +2613,7 @@ const Market = () => {
                     Community
                   </h3>
                   <button 
-                    className={`sidebar-nav-item ${marketView === 'petitions' ? 'active' : ''}`}
+                    className={`market-sidebar-nav-item ${marketView === 'petitions' ? 'active' : ''}`}
                     onClick={() => setMarketView('petitions')}
                     style={{
                       fontSize: `${sidebarStyles.navItemFontSize}px`,
@@ -1847,7 +2629,7 @@ const Market = () => {
             )}
           </aside>
         </div>
-
+        </div>
       </div>
     );
   }
@@ -1863,20 +2645,464 @@ const Market = () => {
     }
   };
 
-  const filteredItems = marketItems.filter(item => 
-    rarityFilter === 'all' || item.rarity.toLowerCase() === rarityFilter.toLowerCase()
-  );
+  // Show comparison view as full-screen submenu
+  if (showComparisonModal) {
+    return (
+      <div className="market">
+        <div className="market-main-container">
+          <div className="market-content-area">
+            <div className="comparison-fullscreen-view">
+              <div className="comparison-fullscreen-header">
+                <button 
+                  className="comparison-back-btn"
+                  onClick={() => {
+                    setShowComparisonModal(false);
+                    setComparisonModalAutoOpened(false);
+                    setComparisonModalManuallyClosed(true);
+                    // Allow user to manually close even with items selected
+                  }}
+                >
+                  <ArrowLeft size={18} />
+                  <span>Back to Marketplace</span>
+                </button>
+                <h2 className="comparison-fullscreen-title">Compare Items ({comparisonItems.length}/8)</h2>
+                <div className="comparison-fullscreen-actions">
+                  <div className="comparison-view-mode-toggle">
+                    <button 
+                      className={`comparison-view-mode-btn ${comparisonViewMode === 'both' ? 'active' : ''}`}
+                      onClick={() => setComparisonViewMode('both')}
+                      title="Show both 3D view and stats"
+                    >
+                      <Grid size={16} />
+                      <span>Both</span>
+                    </button>
+                    <button 
+                      className={`comparison-view-mode-btn ${comparisonViewMode === '3d' ? 'active' : ''}`}
+                      onClick={() => setComparisonViewMode('3d')}
+                      title="Show only 3D view"
+                    >
+                      <Maximize2 size={16} />
+                      <span>3D View</span>
+                    </button>
+                    <button 
+                      className={`comparison-view-mode-btn ${comparisonViewMode === 'stats' ? 'active' : ''}`}
+                      onClick={() => setComparisonViewMode('stats')}
+                      title="Show only stats"
+                    >
+                      <BarChart3 size={16} />
+                      <span>Stats</span>
+                    </button>
+                  </div>
+                  {comparisonItems.length > 0 && (
+                    <button className="comparison-clear-btn" onClick={handleClearComparison}>
+                      Clear All
+                    </button>
+                  )}
+                </div>
+              </div>
 
-  const sortedItems = [...filteredItems].sort((a, b) => {
-    switch (sortBy) {
-      case 'price-low': return a.price - b.price;
-      case 'price-high': return b.price - a.price;
-      default: return 0;
-    }
-  });
+
+              <div className="comparison-fullscreen-content">
+                {comparisonItems.length === 0 ? (
+                  <div className="comparison-empty">
+                    <GitCompare size={48} />
+                    <p>No items selected for comparison</p>
+                    <span>Click the compare icon on items below to add them</span>
+                  </div>
+                ) : (
+                  <div 
+                    className={`comparison-3d-grid comparison-view-mode-${comparisonViewMode}`}
+                    style={{
+                      '--item-count': comparisonItems.length,
+                      '--grid-columns': comparisonViewMode === '3d' 
+                        ? (comparisonItems.length === 2 ? '2' : 
+                           comparisonItems.length === 3 ? '2' : 
+                           comparisonItems.length === 4 ? '2' : 
+                           comparisonItems.length <= 6 ? '3' : 
+                           comparisonItems.length <= 8 ? '4' : '4')
+                        : (comparisonItems.length <= 4 ? comparisonItems.length.toString() : '4'),
+                      '--grid-rows': comparisonViewMode === '3d'
+                        ? (comparisonItems.length === 2 ? '1' : 
+                           comparisonItems.length === 3 ? '2' : 
+                           comparisonItems.length === 4 ? '2' : 
+                           comparisonItems.length <= 6 ? '2' : 
+                           comparisonItems.length <= 8 ? '2' : '2')
+                        : (comparisonItems.length <= 4 ? '1' : '2')
+                    }}
+                  >
+                    {comparisonItems.map((item, index) => {
+                      // For 3D view with 3 items: first item spans 2 columns
+                      const spanColumns = comparisonViewMode === '3d' && comparisonItems.length === 3 && index === 0 ? 2 : 1;
+                      const spanRows = comparisonViewMode === '3d' && comparisonItems.length === 3 && index === 0 ? 1 : 1;
+                      const diffColor = getDifferenceColor(item);
+                      const isReference = referenceItemId === item.id;
+                      const hasDifferences = !isReference && diffColor !== null && diffColor !== undefined;
+                      
+                      return (
+                        <div 
+                          key={item.id} 
+                          className={`comparison-3d-item ${isReference ? 'is-reference' : ''} ${hasDifferences ? 'has-differences' : ''}`}
+                          style={{
+                            ...(hasDifferences && diffColor ? { '--diff-color': diffColor } : {}),
+                            gridColumn: `span ${spanColumns}`,
+                            gridRow: `span ${spanRows}`
+                          }}
+                        >
+                          <div className="comparison-3d-header">
+                            <div className="comparison-3d-header-left">
+                              <button
+                                className="comparison-reference-checkbox"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setReferenceItemId(item.id);
+                                }}
+                                title={isReference ? "Reference item" : "Set as reference"}
+                              >
+                                {isReference ? <CheckSquare size={18} /> : <Square size={18} />}
+                              </button>
+                              <h3 className="comparison-3d-item-name">{item.name}</h3>
+                            </div>
+                            <button 
+                              className="comparison-remove-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveFromComparison(item.id);
+                              }}
+                              title="Remove from comparison"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                          
+                          {/* Use existing 3D view system - exact copy */}
+                          {(comparisonViewMode === 'both' || comparisonViewMode === '3d') && (
+                          <div className="item-3d-view">
+                            <div 
+                              className="item-3d-container" 
+                              ref={(el) => {
+                                if (el) {
+                                  comparison3dRefs.current[item.id] = el;
+                                } else {
+                                  delete comparison3dRefs.current[item.id];
+                                }
+                              }}
+                            >
+                              <div className="item-3d-model-wrapper" style={{
+                                transform: `translate(${comparisonPans[item.id]?.x || 0}px, ${comparisonPans[item.id]?.y || 0}px) rotateX(${normalizeRotation(comparisonRotations[item.id]?.x)}deg) rotateY(${normalizeRotation(comparisonRotations[item.id]?.y)}deg) rotateZ(${normalizeRotation(comparisonRotations[item.id]?.z)}deg) scale(${comparisonZooms[item.id] || 1})`,
+                                transformStyle: 'preserve-3d',
+                                transition: (comparisonIsRotating[item.id] || comparisonIsPanning[item.id]) ? 'none' : (comparisonIsResetting[item.id] ? 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)' : 'transform 0.1s ease')
+                              }}>
+                                {item.imageUrl ? (
+                                  <img 
+                                    src={item.imageUrl} 
+                                    alt={item.name}
+                                    className="item-3d-image"
+                                  />
+                                ) : (
+                                  <div className="item-3d-placeholder">
+                                    <div className="item-3d-icon">{item.image || '📦'}</div>
+                                    <p>3D Model View</p>
+                                    <span className="item-3d-note">3D model preview will be available here</span>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="item-3d-controls item-3d-controls-zoom" onClick={(e) => e.stopPropagation()}>
+                                <button 
+                                  className="item-3d-btn" 
+                                  title="Zoom In"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setComparisonZooms(prev => {
+                                      const current = prev[item.id] || 1;
+                                      return {
+                                        ...prev,
+                                        [item.id]: Math.max(0.5, Math.min(2, current + 0.1))
+                                      };
+                                    });
+                                  }}
+                                >
+                                  <Plus size={14} />
+                                </button>
+                                <button 
+                                  className="item-3d-btn" 
+                                  title="Zoom Out"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setComparisonZooms(prev => {
+                                      const current = prev[item.id] || 1;
+                                      return {
+                                        ...prev,
+                                        [item.id]: Math.max(0.5, Math.min(2, current - 0.1))
+                                      };
+                                    });
+                                  }}
+                                >
+                                  <Minus size={14} />
+                                </button>
+                              </div>
+                            </div>
+                            {isReference && (
+                              <div className="comparison-reference-badge">
+                                <Flag size={14} />
+                                <span>Reference</span>
+                              </div>
+                            )}
+                          </div>
+                          )}
+                          
+                          {(comparisonViewMode === 'both' || comparisonViewMode === 'stats') && (
+                          <div className="comparison-3d-info">
+                            <div className="comparison-info-grid">
+                              <div className="comparison-info-item">
+                                <span className="comparison-info-label">Price</span>
+                                <span className={`comparison-info-value ${referenceItem && referenceItem.price !== item.price ? 'different' : ''}`}>
+                                  ${item.price.toFixed(2)}
+                                </span>
+                              </div>
+                              <div className="comparison-info-item">
+                                <span className="comparison-info-label">Rarity</span>
+                                <span className={`comparison-info-value rarity-${item.rarity.toLowerCase()} ${referenceItem && referenceItem.rarity !== item.rarity ? 'different' : ''}`}>
+                                  {item.rarity}
+                                </span>
+                              </div>
+                              {item.type && (
+                                <div className="comparison-info-item">
+                                  <span className="comparison-info-label">Type</span>
+                                  <span className={`comparison-info-value ${referenceItem && referenceItem.type !== item.type ? 'different' : ''}`}>
+                                    {item.type}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="comparison-info-item">
+                                <span className="comparison-info-label">Seller</span>
+                                <span className="comparison-info-value">{item.seller || 'Unknown'}</span>
+                              </div>
+                            </div>
+                          </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Resizable Bottom Drawer for Items */}
+              {selectedGame && marketItems.length > 0 && (
+                <div className="comparison-drawer-container">
+                  <div 
+                    className={`comparison-drawer ${(drawerHeight <= 60 && !isAnimating) ? 'minimized' : ''} ${isDraggingDrawer ? 'dragging' : ''}`}
+                    style={{ height: `${drawerHeight}px` }}
+                  >
+                    <div className="comparison-drawer-handle-wrapper">
+                      <div className="comparison-drawer-handle-hint">
+                        {drawerHeight <= 60 ? 'Click to open' : 'Click to close'}
+                      </div>
+                      <div 
+                        className="comparison-drawer-handle"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setHasDragged(false);
+                          setIsDraggingDrawer(true);
+                        }}
+                      >
+                        <div className="comparison-drawer-handle-bar"></div>
+                      </div>
+                    </div>
+                    
+                    {showDrawerContent && (
+                      <>
+                        <div className="comparison-drawer-header">
+                          <h3>Add More Items to Compare</h3>
+                        </div>
+
+                        <div className="comparison-drawer-content">
+                      <div className="marketplace-filters-bar" style={{ '--content-width': `${contentWidth}px` }}>
+                        <div className="filters-bar-left">
+                          <div className="marketplace-search-wrapper">
+                            <Search size={16} className="search-icon" />
+                            <input
+                              type="text"
+                              className="marketplace-search-input"
+                              placeholder="Search items..."
+                              value={itemSearch}
+                              onChange={(e) => setItemSearch(e.target.value)}
+                            />
+                            {itemSearch && (
+                              <button 
+                                className="search-clear-btn"
+                                onClick={() => setItemSearch('')}
+                                title="Clear search"
+                              >
+                                <X size={12} />
+                              </button>
+                            )}
+                          </div>
+                          
+                          <div className="marketplace-filters-group">
+                            <select
+                              className="marketplace-filter-select"
+                              value={rarityFilter}
+                              onChange={(e) => setRarityFilter(e.target.value)}
+                            >
+                              <option value="all">All Rarities</option>
+                              <option value="common">Common</option>
+                              <option value="rare">Rare</option>
+                              <option value="epic">Epic</option>
+                              <option value="legendary">Legendary</option>
+                            </select>
+                            
+                            <select
+                              className="marketplace-filter-select"
+                              value={priceFilter}
+                              onChange={(e) => setPriceFilter(e.target.value)}
+                            >
+                              <option value="all">All Prices</option>
+                              <option value="under-10">Under $10</option>
+                              <option value="10-50">$10 - $50</option>
+                              <option value="50-100">$50 - $100</option>
+                              <option value="over-100">Over $100</option>
+                            </select>
+                            
+                            <select
+                              className="marketplace-filter-select"
+                              value={sortBy}
+                              onChange={(e) => setSortBy(e.target.value)}
+                            >
+                              <option value="price-low">Price: Low to High</option>
+                              <option value="price-high">Price: High to Low</option>
+                              <option value="name-asc">Name: A to Z</option>
+                              <option value="name-desc">Name: Z to A</option>
+                              <option value="newest">Newest First</option>
+                              <option value="oldest">Oldest First</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="filters-bar-right">
+                          <div className="items-count">
+                            {sortedItems.length} {sortedItems.length === 1 ? 'item' : 'items'}
+                            {itemSearch || rarityFilter !== 'all' || priceFilter !== 'all' ? (
+                              <span className="items-count-filtered"> (filtered)</span>
+                            ) : null}
+                          </div>
+                          <div className="view-mode-controls">
+                            <button 
+                              className={`view-mode-btn ${viewMode === 'grid' ? 'active' : ''}`}
+                              onClick={() => setViewMode('grid')}
+                              title="Grid view"
+                            >
+                              <Grid size={16} />
+                            </button>
+                            <button 
+                              className={`view-mode-btn ${viewMode === 'row' ? 'active' : ''}`}
+                              onClick={() => setViewMode('row')}
+                              title="List view"
+                            >
+                              <List size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div 
+                        ref={itemsGridRef}
+                        className={`items-grid ${viewMode === 'grid' ? 'grid-view' : 'row-view'}`}
+                      >
+                        {sortedItems.length === 0 ? (
+                          <div className="marketplace-empty-state">
+                            <div className="empty-state-icon">📦</div>
+                            <h3 className="empty-state-title">No items listed</h3>
+                            <p className="empty-state-description">Be the first to list an item for {selectedGame.name}</p>
+                            <button className="empty-state-action-btn" onClick={handleSellItem}>
+                              <Plus size={16} />
+                              <span>List Item</span>
+                            </button>
+                          </div>
+                        ) : (
+                          sortedItems.map(item => (
+                          <div 
+                            key={item.id} 
+                            className="market-item-card"
+                            onClick={() => {
+                              setSelectedItemDetail(item);
+                              setShowItemDetailModal(true);
+                            }}
+                          >
+                            <div className="item-image-container">
+                              <img 
+                                src={item.imageUrl} 
+                                alt={item.name}
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  if (e.target.nextSibling) {
+                                    e.target.nextSibling.style.display = 'flex';
+                                  }
+                                }}
+                              />
+                              <div className="item-icon-large" style={{display: item.imageUrl ? 'none' : 'flex'}}>
+                                {item.image || '📦'}
+                              </div>
+                            </div>
+                            
+                            {viewMode === 'row' && <div className={`rarity-line-vertical rarity-${item.rarity.toLowerCase()}`}></div>}
+                            
+                            <div className={`rarity-line rarity-${item.rarity.toLowerCase()}`}></div>
+                            
+                            <div className="item-details">
+                              <div className="item-name-row">
+                                <h3 className="item-name-large">{item.name}</h3>
+                              </div>
+                              
+                              <div className="item-meta-row">
+                                <span className="seller-name">{item.seller || 'Unknown'}</span>
+                                <span className="listed-at-text">{formatListedAt(item.listedAt)}</span>
+                              </div>
+                              
+                              <div className="item-bottom-row">
+                                <div className="item-price-row">
+                                  <span className="price-value">${item.price.toFixed(2)}</span>
+                                </div>
+                                
+                                <div className="item-action-buttons" onClick={(e) => e.stopPropagation()}>
+                                  <button className="buy-now-btn" onClick={() => handleBuyItem(item.id)}>Buy</button>
+                                  <button 
+                                    className={`compare-btn-item ${comparisonItems.some(i => i.id === item.id) ? 'active' : ''}`}
+                                    onClick={(e) => handleAddToComparison(item, e)}
+                                    title={comparisonItems.some(i => i.id === item.id) ? 'Remove from comparison' : 'Add to comparison'}
+                                  >
+                                    <GitCompare size={14} />
+                                  </button>
+                                  <button 
+                                    className={`watch-btn ${watchedItems.has(item.id) ? 'watched' : ''}`}
+                                    onClick={() => handleWatchItem(item.id)}
+                                  >
+                                    {watchedItems.has(item.id) ? <Eye size={16} /> : <EyeOff size={16} />}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="market">
+      <div className="market-main-container">
+        <div className="market-content-area">
       {/* Market Statistics Bar - Only show when NOT viewing a marketplace */}
       {!selectedGame && (
         <div className="watch-stats-overview">
@@ -1949,34 +3175,73 @@ const Market = () => {
         </div>
       )}
 
-      {/* Marketplace Section */}
-      <div className="marketplace-section">
-        {/* Game Banner */}
-        <div className="market-banner" style={{backgroundImage: `url(${selectedGame.image})`}}>
-          <div className="banner-overlay"></div>
-          <div className="banner-content">
-            <button className="back-btn" onClick={handleBackToGames} title="Back to Games">
-              <ArrowLeft size={18} />
-            </button>
-            <div className="banner-center">
-              <div className="banner-logo-container">
-                <img 
-                  src={selectedGame.logo} 
-                  alt={selectedGame.name}
-                  className="game-logo-banner"
-                  onError={(e) => { e.target.style.display = 'none' }}
-                />
+      {/* Marketplace Section - Only show when game is selected */}
+      {selectedGame && (
+      <div className="marketplace-section-container">
+        <div className="marketplace-section">
+          {/* Market Content Container */}
+          <div 
+            className="marketplace-content-wrapper"
+            style={{
+              '--banner-bg-image': `url(${selectedGame.image})`
+            }}
+          >
+            {/* Collapsed Header Bar - Only shown when scrolled */}
+            {collapsedBannerHeight <= 60 && (
+              <div className="market-collapsed-header">
+                <button 
+                  className="back-btn" 
+                  onClick={() => {
+                    setSelectedGame(null);
+                    navigate('/market');
+                  }} 
+                  title="Back to Market"
+                >
+                  <ArrowLeft size={18} />
+                </button>
               </div>
-              <div className="banner-text">
-                <h1 className="banner-title">{selectedGame.name}</h1>
-                <span className="banner-subtitle">Marketplace</span>
+            )}
+            
+            {/* Game Banner */}
+            {collapsedBannerHeight > 60 && (
+            <div className="market-banner" style={{
+              backgroundImage: `url(${selectedGame.image})`,
+              height: `${collapsedBannerHeight}px`,
+              minHeight: `${collapsedBannerHeight}px`,
+              maxHeight: `${collapsedBannerHeight}px`,
+              overflow: 'hidden'
+            }}>
+              <div className="banner-overlay"></div>
+              <div className="banner-content">
+                <button 
+                  className="back-btn" 
+                  onClick={() => {
+                    setSelectedGame(null);
+                    navigate('/market');
+                  }} 
+                  title="Back to Market"
+                >
+                  <ArrowLeft size={18} />
+                </button>
+                {collapsedBannerHeight > 60 && (
+                  <div className="banner-center">
+                    <div className="banner-logo-container">
+                      <img 
+                        src={selectedGame.logo} 
+                        alt={selectedGame.name}
+                        className="game-logo-banner"
+                        onError={(e) => { e.target.style.display = 'none' }}
+                      />
+                    </div>
+                    <div className="banner-text">
+                      <h1 className="banner-title">{selectedGame.name}</h1>
+                      <span className="banner-subtitle">Marketplace</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Market Content Container */}
-        <div className="marketplace-content-wrapper">
+            )}
         {/* Market Stats Bar */}
         <div className="market-stats-bar">
           <div className="stats-wrapper">
@@ -1985,11 +3250,16 @@ const Market = () => {
               <div className="stat-label">24H VOLUME</div>
             </div>
             <div className="stat-box">
-              <div className="stat-value">1,234</div>
+              <div className="stat-value">{sortedItems.length}</div>
               <div className="stat-label">ACTIVE LISTINGS</div>
             </div>
             <div className="stat-box">
-              <div className="stat-value">$3.25 - $89.99</div>
+              <div className="stat-value">
+                {sortedItems.length > 0 
+                  ? `$${Math.min(...sortedItems.map(i => i.price)).toFixed(2)} - $${Math.max(...sortedItems.map(i => i.price)).toFixed(2)}`
+                  : '$0.00 - $0.00'
+                }
+              </div>
               <div className="stat-label">PRICE RANGE</div>
             </div>
             <div className="stat-box">
@@ -1999,12 +3269,87 @@ const Market = () => {
           </div>
         </div>
 
-        {/* Items Grid Controls */}
-        <div className="items-grid-controls" style={{ '--content-width': `${contentWidth}px` }}>
-          <div className="items-grid-controls-left">
-            <div className="items-count">{sortedItems.length} {sortedItems.length === 1 ? 'item' : 'items'}</div>
+        {/* Combined Search, Filter and Controls Bar */}
+        <div className="marketplace-filters-bar" style={{ '--content-width': `${contentWidth}px` }}>
+          <div className="filters-bar-left">
+          <div className="marketplace-search-wrapper">
+              <Search size={16} className="search-icon" />
+            <input
+              type="text"
+              className="marketplace-search-input"
+              placeholder="Search items..."
+              value={itemSearch}
+              onChange={(e) => setItemSearch(e.target.value)}
+            />
+            {itemSearch && (
+              <button 
+                className="search-clear-btn"
+                onClick={() => setItemSearch('')}
+                title="Clear search"
+              >
+                  <X size={12} />
+              </button>
+            )}
           </div>
-          <div className="items-grid-controls-right">
+          
+          <div className="marketplace-filters-group">
+            <select
+              className="marketplace-filter-select"
+              value={rarityFilter}
+              onChange={(e) => setRarityFilter(e.target.value)}
+            >
+              <option value="all">All Rarities</option>
+              <option value="common">Common</option>
+              <option value="rare">Rare</option>
+              <option value="epic">Epic</option>
+              <option value="legendary">Legendary</option>
+            </select>
+            
+            <select
+              className="marketplace-filter-select"
+              value={priceFilter}
+              onChange={(e) => setPriceFilter(e.target.value)}
+            >
+              <option value="all">All Prices</option>
+              <option value="under-10">Under $10</option>
+              <option value="10-50">$10 - $50</option>
+              <option value="50-100">$50 - $100</option>
+              <option value="over-100">Over $100</option>
+            </select>
+            
+            <select
+              className="marketplace-filter-select"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+            >
+              <option value="price-low">Price: Low to High</option>
+              <option value="price-high">Price: High to Low</option>
+              <option value="name-asc">Name: A to Z</option>
+              <option value="name-desc">Name: Z to A</option>
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+            </select>
+            </div>
+          </div>
+
+          <div className="filters-bar-right">
+            <button
+              className="comparison-open-btn"
+              onClick={() => {
+                setShowComparisonModal(true);
+                setComparisonModalManuallyClosed(false);
+              }}
+              title={comparisonItems.length > 0 ? `Open comparison (${comparisonItems.length} items)` : 'Open comparison to add items'}
+            >
+              <GitCompare size={16} />
+              <span>Compare {comparisonItems.length > 0 ? `(${comparisonItems.length})` : ''}</span>
+            </button>
+            <div className="items-count">
+              {sortedItems.length} {sortedItems.length === 1 ? 'item' : 'items'}
+              {itemSearch || rarityFilter !== 'all' || priceFilter !== 'all' ? (
+                <span className="items-count-filtered"> (filtered)</span>
+              ) : null}
+            </div>
             <div className="view-mode-controls">
               <button 
                 className={`view-mode-btn ${viewMode === 'grid' ? 'active' : ''}`}
@@ -2025,7 +3370,10 @@ const Market = () => {
         </div>
         
         {/* Items Grid */}
-        <div className={`items-grid ${viewMode === 'grid' ? 'grid-view' : 'row-view'}`}>
+        <div 
+          ref={itemsGridRef}
+          className={`items-grid ${viewMode === 'grid' ? 'grid-view' : 'row-view'}`}
+        >
         {sortedItems.length === 0 ? (
           <div className="marketplace-empty-state">
             <div className="empty-state-icon">📦</div>
@@ -2038,17 +3386,28 @@ const Market = () => {
           </div>
         ) : (
           sortedItems.map(item => (
-          <div key={item.id} className="market-item-card">
+          <div 
+            key={item.id} 
+            className="market-item-card"
+            onClick={() => {
+              setSelectedItemDetail(item);
+              setShowItemDetailModal(true);
+            }}
+          >
             <div className="item-image-container">
               <img 
                 src={item.imageUrl} 
                 alt={item.name}
                 onError={(e) => {
                   e.target.style.display = 'none';
-                  e.target.nextSibling.style.display = 'flex';
+                  if (e.target.nextSibling) {
+                    e.target.nextSibling.style.display = 'flex';
+                  }
                 }}
               />
-              <div className="item-icon-large" style={{display: 'none'}}>{item.image}</div>
+              <div className="item-icon-large" style={{display: item.imageUrl ? 'none' : 'flex'}}>
+                {item.image || '📦'}
+              </div>
             </div>
             
             {viewMode === 'row' && <div className={`rarity-line-vertical rarity-${item.rarity.toLowerCase()}`}></div>}
@@ -2058,11 +3417,11 @@ const Market = () => {
             <div className="item-details">
               <div className="item-name-row">
                 <h3 className="item-name-large">{item.name}</h3>
-                <span className="seller-name">{item.seller}</span>
               </div>
               
               <div className="item-meta-row">
-                <span className="listed-at-text">{item.listedAt ? `Listed ${item.listedAt}` : 'Listed recently'}</span>
+                <span className="seller-name">{item.seller || 'Unknown'}</span>
+                <span className="listed-at-text">{formatListedAt(item.listedAt)}</span>
               </div>
               
               <div className="item-bottom-row">
@@ -2070,8 +3429,15 @@ const Market = () => {
                   <span className="price-value">${item.price.toFixed(2)}</span>
                 </div>
                 
-                <div className="item-action-buttons">
+                <div className="item-action-buttons" onClick={(e) => e.stopPropagation()}>
                   <button className="buy-now-btn" onClick={() => handleBuyItem(item.id)}>Buy</button>
+                  <button 
+                    className={`compare-btn-item ${comparisonItems.some(i => i.id === item.id) ? 'active' : ''}`}
+                    onClick={(e) => handleAddToComparison(item, e)}
+                    title={comparisonItems.some(i => i.id === item.id) ? 'Remove from comparison' : 'Add to comparison'}
+                  >
+                    <GitCompare size={14} />
+                  </button>
                   <button 
                     className={`watch-btn ${watchedItems.has(item.id) ? 'watched' : ''}`}
                     onClick={() => handleWatchItem(item.id)}
@@ -2093,26 +3459,30 @@ const Market = () => {
             <span>Sell Item</span>
           </button>
         </div>
+          </div>
+        </div>
+        </div>
+      )}
         </div>
 
-        {/* Right Sidebar Navigation - Inside Content */}
+      {/* Right Sidebar - Only show in browse view */}
+      {!selectedGame && (
         <div 
-          className="marketplace-content-right"
+          className="market-sidebar-right"
           style={{ 
             '--window-width': windowWidth,
             '--sidebar-scale': Math.max(0.8, Math.min(1.2, windowWidth / 1120))
           }}
         >
-          {/* Right Sidebar Navigation */}
           <aside 
-            className={`marketplace-sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}
+            className={`market-sidebar ${isSidebarCollapsed ? 'collapsed' : ''}`}
             style={{ 
               width: isSidebarCollapsed ? COLLAPSED_WIDTH : marketRightSidebarWidth
             }}
           >
             {!isSidebarCollapsed && (
               <div 
-                className="sidebar-title"
+                className="market-sidebar-title"
                 style={{
                   fontSize: `${sidebarStyles.titleFontSize}px`,
                   padding: `${sidebarStyles.titlePadding.vertical}px ${sidebarStyles.titlePadding.horizontal}px ${sidebarStyles.titlePadding.bottom}px ${sidebarStyles.titlePadding.horizontal}px`,
@@ -2124,7 +3494,7 @@ const Market = () => {
               >
                 <span>Market</span>
                 <button
-                  className="sidebar-close-btn"
+                  className="market-sidebar-close-btn"
                   onClick={(e) => {
                     e.stopPropagation();
                     setIsSidebarCollapsed(true);
@@ -2159,7 +3529,7 @@ const Market = () => {
             )}
             {isSidebarCollapsed && (
               <div 
-                className="sidebar-collapsed-header"
+                className="market-sidebar-collapsed-header"
                 style={{
                   padding: '20px 8px',
                   display: 'flex',
@@ -2179,7 +3549,7 @@ const Market = () => {
             )}
             {!isSidebarCollapsed && (
               <nav 
-                className="sidebar-nav"
+                className="market-sidebar-nav"
                 style={{
                   padding: `${sidebarStyles.navPadding}px 0`,
                   gap: `${sidebarStyles.navGap}px`
@@ -2187,13 +3557,13 @@ const Market = () => {
               >
                 {/* Main Section - Browse */}
                 <div 
-                  className="sidebar-nav-section sidebar-nav-main"
+                  className="market-sidebar-nav-section market-sidebar-nav-main"
                   style={{
                     paddingBottom: `${sidebarStyles.sectionPaddingBottom}px`
                   }}
                 >
                   <button 
-                    className={`sidebar-nav-item sidebar-nav-main-item ${marketView === 'browse' ? 'active' : ''}`}
+                    className={`market-sidebar-nav-item market-sidebar-nav-main-item ${marketView === 'browse' ? 'active' : ''}`}
                     onClick={() => setMarketView('browse')}
                     style={{
                       fontSize: `${sidebarStyles.mainItemFontSize}px`,
@@ -2204,10 +3574,10 @@ const Market = () => {
                     <span>Browse</span>
                   </button>
                 </div>
-                
-                <div className="sidebar-nav-section">
+
+                <div className="market-sidebar-nav-section">
                   <h3 
-                    className="sidebar-section-title"
+                    className="market-sidebar-section-title"
                     style={{
                       fontSize: `${sidebarStyles.sectionTitleFontSize}px`,
                       padding: `0 ${sidebarStyles.sectionTitlePadding.horizontal}px ${sidebarStyles.sectionTitlePadding.bottom}px ${sidebarStyles.sectionTitlePadding.horizontal}px`
@@ -2216,7 +3586,7 @@ const Market = () => {
                     Marketplace
                   </h3>
                   <button 
-                    className={`sidebar-nav-item ${marketView === 'featured' ? 'active' : ''}`}
+                    className={`market-sidebar-nav-item ${marketView === 'featured' ? 'active' : ''}`}
                     onClick={() => setMarketView('featured')}
                     style={{
                       fontSize: `${sidebarStyles.navItemFontSize}px`,
@@ -2228,7 +3598,7 @@ const Market = () => {
                     <span>Top Markets</span>
                   </button>
                   <button 
-                    className={`sidebar-nav-item ${marketView === 'trending' ? 'active' : ''}`}
+                    className={`market-sidebar-nav-item ${marketView === 'trending' ? 'active' : ''}`}
                     onClick={() => setMarketView('trending')}
                     style={{
                       fontSize: `${sidebarStyles.navItemFontSize}px`,
@@ -2241,9 +3611,9 @@ const Market = () => {
                   </button>
                 </div>
                 
-                <div className="sidebar-nav-section">
+                <div className="market-sidebar-nav-section">
                   <h3 
-                    className="sidebar-section-title"
+                    className="market-sidebar-section-title"
                     style={{
                       fontSize: `${sidebarStyles.sectionTitleFontSize}px`,
                       padding: `0 ${sidebarStyles.sectionTitlePadding.horizontal}px ${sidebarStyles.sectionTitlePadding.bottom}px ${sidebarStyles.sectionTitlePadding.horizontal}px`
@@ -2252,7 +3622,7 @@ const Market = () => {
                     My Activity
                   </h3>
                   <button 
-                    className={`sidebar-nav-item ${marketView === 'favorites' ? 'active' : ''}`}
+                    className={`market-sidebar-nav-item ${marketView === 'favorites' ? 'active' : ''}`}
                     onClick={() => setMarketView('favorites')}
                     style={{
                       fontSize: `${sidebarStyles.navItemFontSize}px`,
@@ -2264,7 +3634,7 @@ const Market = () => {
                     <span>Watchlist</span>
                   </button>
                   <button 
-                    className={`sidebar-nav-item ${marketView === 'stats' ? 'active' : ''}`}
+                    className={`market-sidebar-nav-item ${marketView === 'stats' ? 'active' : ''}`}
                     onClick={() => setMarketView('stats')}
                     style={{
                       fontSize: `${sidebarStyles.navItemFontSize}px`,
@@ -2277,9 +3647,9 @@ const Market = () => {
                   </button>
                 </div>
                 
-                <div className="sidebar-nav-section">
+                <div className="market-sidebar-nav-section">
                   <h3 
-                    className="sidebar-section-title"
+                    className="market-sidebar-section-title"
                     style={{
                       fontSize: `${sidebarStyles.sectionTitleFontSize}px`,
                       padding: `0 ${sidebarStyles.sectionTitlePadding.horizontal}px ${sidebarStyles.sectionTitlePadding.bottom}px ${sidebarStyles.sectionTitlePadding.horizontal}px`
@@ -2288,7 +3658,7 @@ const Market = () => {
                     Community
                   </h3>
                   <button 
-                    className={`sidebar-nav-item ${marketView === 'petitions' ? 'active' : ''}`}
+                    className={`market-sidebar-nav-item ${marketView === 'petitions' ? 'active' : ''}`}
                     onClick={() => setMarketView('petitions')}
                     style={{
                       fontSize: `${sidebarStyles.navItemFontSize}px`,
@@ -2304,6 +3674,7 @@ const Market = () => {
             )}
           </aside>
         </div>
+      )}
       </div>
 
       {/* Sell Modal */}
@@ -2329,47 +3700,84 @@ const Market = () => {
               />
               <select 
                 className="inventory-filter"
-                value={inventoryFilter}
-                onChange={(e) => setInventoryFilter(e.target.value)}
+                value={inventoryGameFilter}
+                onChange={(e) => setInventoryGameFilter(e.target.value)}
               >
-                <option value="all">All Categories</option>
-                <option value="Weapon">Weapon</option>
-                <option value="Armor">Armor</option>
-                <option value="Consumable">Consumable</option>
-                <option value="Accessory">Accessory</option>
+                <option value="all">All Games</option>
+                {inventoryGames.map(game => (
+                  <option key={game.id} value={game.id}>{game.name}</option>
+                ))}
+              </select>
+              <select 
+                className="inventory-filter"
+                value={inventoryRarityFilter}
+                onChange={(e) => setInventoryRarityFilter(e.target.value)}
+              >
+                <option value="all">All Rarities</option>
+                <option value="common">Common</option>
+                <option value="rare">Rare</option>
+                <option value="epic">Epic</option>
+                <option value="legendary">Legendary</option>
               </select>
             </div>
 
             <div className="inventory-grid">
-              {(() => {
-                const userInventory = getUserInventory(gameId);
-                const filteredItems = userInventory.filter(item =>
-                  item.name.toLowerCase().includes(inventorySearch.toLowerCase()) &&
-                  (inventoryFilter === 'all' || item.category === inventoryFilter)
-                );
-                
-                if (filteredItems.length === 0) {
+              {filteredInventoryItems.length === 0 ? (
+                <div className="inventory-empty">
+                  {allInventoryItems.length === 0 
+                    ? 'No items in inventory' 
+                    : `Nothing found for "${inventorySearch}"`}
+                </div>
+              ) : (
+                filteredInventoryItems.map((item, index) => {
+                  const isSelected = selectedItems.some(i => 
+                    i.gameId === item.gameId && i.id === item.id
+                  );
                   return (
-                    <div className="inventory-empty">
-                      Nothing found for "{inventorySearch}"
+                    <div 
+                      key={`${item.gameId}-${item.id || index}`} 
+                      className={`inventory-item-card ${isSelected ? 'selected' : ''}`}
+                      onClick={() => handleItemSelect(item)}
+                    >
+                      <div className="inventory-item-image">
+                        {item.imageUrl ? (
+                          <img
+                            src={item.imageUrl}
+                            alt={item.name}
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              if (e.target.nextSibling) {
+                                e.target.nextSibling.style.display = 'flex';
+                              }
+                            }}
+                          />
+                        ) : null}
+                        <div className="inventory-item-icon" style={{ display: item.imageUrl ? 'none' : 'flex' }}>
+                          {item.image || '📦'}
+                        </div>
+                        <div className={`inventory-rarity-badge rarity-${(item.rarity || 'common').toLowerCase()}`}>
+                          {(item.rarity || 'common').toUpperCase()}
+                        </div>
+                      </div>
+                      <div className={`inventory-rarity-line rarity-${(item.rarity || 'common').toLowerCase()}`}></div>
+                      <div className="inventory-item-info">
+                        <div className="inventory-item-header">
+                          <h3 className="inventory-item-name">{item.name || 'Unnamed Item'}</h3>
+                          {item.gameName && (
+                            <span className="inventory-game-badge">{item.gameName}</span>
+                          )}
+                        </div>
+                        {item.description && (
+                          <p className="inventory-item-description">{item.description}</p>
+                        )}
+                        <div className="inventory-item-footer">
+                          <span className="inventory-item-type">{item.type || 'Item'}</span>
+                        </div>
+                      </div>
                     </div>
                   );
-                }
-                
-                return filteredItems.map(item => (
-                  <div 
-                    key={item.id} 
-                    className={`inventory-item ${selectedItems.some(i => i.id === item.id) ? 'selected' : ''}`}
-                    onClick={() => handleItemSelect(item)}
-                  >
-                    <div className="inventory-item-content">
-                      <div className="inventory-item-icon">{item.image}</div>
-                      <div className="inventory-item-title">{item.name}</div>
-                    </div>
-                    <div className={`rarity-line rarity-${item.rarity.toLowerCase()}`}></div>
-                  </div>
-                ));
-              })()}
+                })
+              )}
             </div>
 
             <div className="sell-modal-footer">
@@ -2490,19 +3898,81 @@ const Market = () => {
             <div className="sell-modal-footer">
               <button onClick={() => setSellStep(1)}>Back</button>
               <button className="confirm-btn" onClick={() => {
-                // Add items to marketItems with current timestamp
+                if (!selectedGame) return;
+                
+                const gameId = selectedGame.id || selectedGame.gameId;
+                if (!gameId) return;
+                
+                // Get current market items
+                const currentMarketItems = getUserData(`marketItems_${gameId}`, []);
+                
+                // Check for duplicate listings (items already listed)
+                const listedItemIds = new Set(
+                  currentMarketItems
+                    .filter(mi => mi.status === 'active')
+                    .map(mi => `${mi.gameId || gameId}_${mi.originalItemId || mi.id}`)
+                );
+                
+                // Filter out items that are already listed
+                const itemsToList = selectedItems.filter(item => {
+                  const itemKey = `${item.gameId || gameId}_${item.id}`;
+                  return !listedItemIds.has(itemKey);
+                });
+                
+                if (itemsToList.length === 0) {
+                  alert('All selected items are already listed in the marketplace!');
+                  return;
+                }
+                
+                if (itemsToList.length < selectedItems.length) {
+                  const skipped = selectedItems.length - itemsToList.length;
+                  alert(`${skipped} item(s) were skipped because they are already listed.`);
+                }
+                
+                // Create new market listings
                 const timestamp = Date.now();
-                const getTimeAgo = () => {
-                  const seconds = Math.floor((Date.now() - timestamp) / 1000);
-                  if (seconds < 60) return 'just now';
-                  const minutes = Math.floor(seconds / 60);
-                  if (minutes < 60) return `${minutes}m ago`;
-                  const hours = Math.floor(minutes / 60);
-                  if (hours < 24) return `${hours}h ago`;
-                  const days = Math.floor(hours / 24);
-                  return `${days}d ago`;
-                };
-                alert('Items listed on market!');
+                const newListings = itemsToList.map(item => {
+                  const price = itemPrices[item.id] !== undefined 
+                    ? parseFloat(itemPrices[item.id]) || 0 
+                    : (item.marketPrice || 0);
+                  
+                  return {
+                    id: `${item.gameId || gameId}_${item.id}_${timestamp}_${Math.random().toString(36).substr(2, 9)}`,
+                    originalItemId: item.id,
+                    gameId: item.gameId || gameId,
+                    name: item.name || 'Unnamed Item',
+                    description: item.description || '',
+                    imageUrl: item.imageUrl || null,
+                    image: item.image || '📦',
+                    rarity: item.rarity || 'common',
+                    type: item.type || 'Item',
+                    category: item.category || 'Item',
+                    price: price,
+                    seller: getUserData('username', 'Unknown'),
+                    listedAt: timestamp,
+                    status: 'active'
+                  };
+                });
+                
+                // Add new listings to market
+                const updatedMarketItems = [...currentMarketItems, ...newListings];
+                saveUserData(`marketItems_${gameId}`, updatedMarketItems);
+                
+                // Remove items from inventory (only items that were actually listed)
+                itemsToList.forEach(item => {
+                  const itemGameId = item.gameId || gameId;
+                  const inventory = getUserData(`inventory_${itemGameId}`, []);
+                  const updatedInventory = inventory.filter(invItem => 
+                    !(invItem.id === item.id && invItem.gameId === itemGameId)
+                  );
+                  saveUserData(`inventory_${itemGameId}`, updatedInventory);
+                });
+                
+                // Refresh inventory and market items
+                setInventoryRefresh(prev => prev + 1);
+                setMarketItemsRefresh(prev => prev + 1);
+                
+                // Close modal and reset
                 setShowSellModal(false);
                 setSellStep(1);
                 setSelectedItems([]);
@@ -2514,6 +3984,136 @@ const Market = () => {
           </div>
         </div>
       )}
+
+      {/* Item Detail Modal */}
+      {showItemDetailModal && selectedItemDetail && (
+        <>
+          {!isViewMaximized && (
+            <div className="modal-overlay" onMouseDown={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowItemDetailModal(false);
+                setSelectedItemDetail(null);
+                setIsViewMaximized(false);
+              }
+            }}>
+              <div className="item-detail-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="item-detail-header">
+                  <h3>{selectedItemDetail.name}</h3>
+                  <button className="modal-close-btn" onClick={() => {
+                    setShowItemDetailModal(false);
+                    setSelectedItemDetail(null);
+                    setIsViewMaximized(false);
+                  }}>✕</button>
+                </div>
+                
+                <div className="item-detail-content">
+                  {/* 3D Model View */}
+                  <Item3DView
+                    imageUrl={selectedItemDetail.imageUrl}
+                    image={selectedItemDetail.image}
+                    name={selectedItemDetail.name}
+                    isMaximized={isViewMaximized}
+                    onMaximizeToggle={() => setIsViewMaximized(prev => !prev)}
+                    maxZoom={isViewMaximized ? 4 : 2}
+                  />
+              
+              {/* Item Info */}
+              <div className="item-detail-info">
+                <div className="item-detail-section">
+                  <h4 className="item-detail-section-title">Item Information</h4>
+                  <div className="item-detail-grid">
+                    <div className="item-detail-item">
+                      <span className="item-detail-label">Name</span>
+                      <span className="item-detail-value">{selectedItemDetail.name}</span>
+                    </div>
+                    <div className="item-detail-item">
+                      <span className="item-detail-label">Rarity</span>
+                      <span className={`item-detail-value rarity-${(selectedItemDetail.rarity || 'common').toLowerCase()}`}>
+                        {(selectedItemDetail.rarity || 'common').toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="item-detail-item">
+                      <span className="item-detail-label">Type</span>
+                      <span className="item-detail-value">{selectedItemDetail.type || 'Item'}</span>
+                    </div>
+                    <div className="item-detail-item">
+                      <span className="item-detail-label">Category</span>
+                      <span className="item-detail-value">{selectedItemDetail.category || 'Item'}</span>
+                    </div>
+                    <div className="item-detail-item full-width">
+                      <span className="item-detail-label">Description</span>
+                      <span className="item-detail-value">{selectedItemDetail.description || 'No description available.'}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="item-detail-section">
+                  <h4 className="item-detail-section-title">Market Information</h4>
+                  <div className="item-detail-grid">
+                    <div className="item-detail-item">
+                      <span className="item-detail-label">Price</span>
+                      <span className="item-detail-value price">${selectedItemDetail.price.toFixed(2)}</span>
+                    </div>
+                    <div className="item-detail-item">
+                      <span className="item-detail-label">Seller</span>
+                      <span className="item-detail-value">{selectedItemDetail.seller || 'Unknown'}</span>
+                    </div>
+                    <div className="item-detail-item">
+                      <span className="item-detail-label">Listed</span>
+                      <span className="item-detail-value">{formatListedAt(selectedItemDetail.listedAt)}</span>
+                    </div>
+                    <div className="item-detail-item">
+                      <span className="item-detail-label">Status</span>
+                      <span className="item-detail-value">{selectedItemDetail.status || 'Active'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+             
+              <div className="item-detail-footer">
+                <button 
+                  className="item-detail-btn secondary"
+                  onClick={() => {
+                    setShowItemDetailModal(false);
+                    setSelectedItemDetail(null);
+                    setIsViewMaximized(false);
+                  }}
+                >
+                  Close
+                </button>
+                <button 
+                  className="item-detail-btn primary"
+                  onClick={() => {
+                    handleBuyItem(selectedItemDetail.id);
+                    setShowItemDetailModal(false);
+                    setSelectedItemDetail(null);
+                    setIsViewMaximized(false);
+                  }}
+                >
+                  Buy Now
+                </button>
+              </div>
+            </div>
+          </div>
+          )}
+          
+          {/* Maximized 3D View */}
+          {isViewMaximized && (
+            <div className="item-3d-view-maximized">
+              <Item3DView
+                imageUrl={selectedItemDetail.imageUrl}
+                image={selectedItemDetail.image}
+                name={selectedItemDetail.name}
+                isMaximized={true}
+                onMaximizeToggle={() => setIsViewMaximized(false)}
+                maxZoom={4}
+              />
+            </div>
+          )}
+        </>
+      )}
+
 
     </div>
   );

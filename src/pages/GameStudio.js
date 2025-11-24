@@ -19,7 +19,7 @@ import ImageUpload from '../components/ImageUpload';
 import CustomVideoPlayer from '../components/CustomVideoPlayer';
 
 const GameStudio = ({ navigate }) => {
-  // Check if user has developer/game studio access
+  // Check if user has game studio access (via settings toggle)
   useEffect(() => {
     const checkAccess = () => {
       const userId = getCurrentUserId();
@@ -29,17 +29,16 @@ const GameStudio = ({ navigate }) => {
         return;
       }
       
-      // Check user-specific developer access
-      const hasDeveloperAccess = getUserData('developerAccess', false, userId);
+      // Check if Game Studio is enabled via settings toggle
       const hasGameStudioAccess = getUserData('gameStudioAccess', false, userId);
-      const accessStatus = getUserData('developerAccessStatus', null, userId);
+      const hasDeveloperAccess = getUserData('developerAccess', false, userId);
       
-      // User needs explicitly granted access (not pending)
-      const hasAccess = (hasDeveloperAccess || hasGameStudioAccess) && accessStatus !== 'pending';
+      // User has access if either is enabled (no requirements, just toggle)
+      const hasAccess = hasGameStudioAccess || hasDeveloperAccess;
       
       if (!hasAccess) {
-        // User doesn't have access, redirect to developer onboarding
-        navigate('/developer-onboarding');
+        // User doesn't have access enabled, redirect to settings
+        navigate('/settings');
       }
     };
     
@@ -399,6 +398,8 @@ const GameStudio = ({ navigate }) => {
     ageRating: '',
     description: '',
     price: '',
+    discountPercent: '',
+    promoReason: '',
     releaseDate: '',
     tags: '',
     requirements: '',
@@ -588,6 +589,8 @@ const GameStudio = ({ navigate }) => {
         ageRating: '',
         description: '',
         price: '',
+        discountPercent: '',
+        promoReason: '',
         releaseDate: '',
         tags: '',
         requirements: '',
@@ -831,6 +834,7 @@ const GameStudio = ({ navigate }) => {
       ageRating: '',
       description: '',
       price: '',
+      discountPercent: '',
       releaseDate: '',
       tags: '',
       requirements: '',
@@ -990,6 +994,8 @@ const GameStudio = ({ navigate }) => {
           ageRating: metadata.ageRating,
           description: metadata.description,
           price: metadata.price,
+          discountPercent: metadata.discountPercent || '',
+          promoReason: metadata.promoReason || '',
           releaseDate: metadata.releaseDate,
           tags: metadata.tags,
           requirements: metadata.requirements,
@@ -1034,6 +1040,8 @@ const GameStudio = ({ navigate }) => {
         ageRating: fd?.ageRating || metadata?.ageRating || '12+',
         description: fd?.description || metadata?.description || '',
         price: fd?.price || metadata?.price || '0.00',
+        discountPercent: fd?.discountPercent || metadata?.discountPercent || '',
+        promoReason: fd?.promoReason || metadata?.promoReason || '',
         releaseDate: fd?.releaseDate || metadata?.releaseDate || new Date().toISOString().split('T')[0],
         tags: fd?.tags || metadata?.tags || '',
         requirements: fd?.requirements || metadata?.requirements || 'Windows 10',
@@ -1816,11 +1824,69 @@ const GameStudio = ({ navigate }) => {
                           onChange={(e) => {
                             e.stopPropagation();
                             handleInputChange('price', e.target.value);
+                            // Clear discount if price becomes 0 or empty
+                            if (!e.target.value || parseFloat(e.target.value) === 0) {
+                              handleInputChange('discountPercent', '');
+                              handleInputChange('promoReason', '');
+                            }
                           }}
                           onMouseDown={(e) => e.stopPropagation()}
                           disabled={false}
                         />
                       </div>
+                      {formData.price && parseFloat(formData.price) > 0 && (
+                        <div className="upload-section">
+                          <label className="upload-label">
+                            Promo Discount (%)
+                            <span className="upload-optional-label"> (Optional)</span>
+                          </label>
+                          <input 
+                            type="number" 
+                            className="upload-input" 
+                            placeholder="0" 
+                            step="1" 
+                            min="0"
+                            max="100"
+                            value={formData.discountPercent || ''}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              const value = e.target.value;
+                              // Ensure value is between 0 and 100
+                              if (value === '' || (parseFloat(value) >= 0 && parseFloat(value) <= 100)) {
+                                handleInputChange('discountPercent', value);
+                                // Clear promo reason if discount is cleared
+                                if (!value || parseFloat(value) === 0) {
+                                  handleInputChange('promoReason', '');
+                                }
+                              }
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            disabled={false}
+                          />
+                        </div>
+                      )}
+                      {formData.price && parseFloat(formData.price) > 0 && formData.discountPercent && parseFloat(formData.discountPercent) > 0 && (
+                        <div className="upload-section">
+                          <label className="upload-label">
+                            Promo Reason
+                            <span className="upload-optional-label"> (Optional)</span>
+                          </label>
+                          <input 
+                            type="text" 
+                            className="upload-input" 
+                            placeholder="e.g., Summer Sale, Limited Time Offer"
+                            maxLength={15}
+                            value={formData.promoReason || ''}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              const value = e.target.value.slice(0, 15);
+                              handleInputChange('promoReason', value);
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            disabled={false}
+                          />
+                        </div>
+                      )}
                       <div className="upload-section">
                         <label className="upload-label">
                           Release Date
@@ -2498,6 +2564,8 @@ const GameStudio = ({ navigate }) => {
                                       ageRating: formData.ageRating || existingMetadata.ageRating || '',
                                       description: formData.description || existingMetadata.description || '',
                                       price: formData.price || existingMetadata.price || '0.00',
+                                      discountPercent: formData.discountPercent || existingMetadata.discountPercent || '',
+                                      promoReason: formData.promoReason || existingMetadata.promoReason || '',
                                       releaseDate: formData.releaseDate || existingMetadata.releaseDate || '',
                                       tags: formData.tags || existingMetadata.tags || '',
                                       requirements: formData.requirements || existingMetadata.requirements || '',
@@ -2558,6 +2626,7 @@ const GameStudio = ({ navigate }) => {
                                   status: 'public',
                                   downloads: 0,
                                   bannerHeight: formData.bannerHeight || 60,
+                                  isOwnGame: true, // Mark as own game when created in Game Studio
                                   // Save all form data for editing later (use file paths only, not data URLs)
                                   fullFormData: {
                                     gameName: formData.gameName || '',
@@ -2567,6 +2636,8 @@ const GameStudio = ({ navigate }) => {
                                     ageRating: formData.ageRating || '',
                                     description: formData.description || '',
                                     price: formData.price || '0.00',
+                                    discountPercent: formData.discountPercent || '',
+                                    promoReason: formData.promoReason || '',
                                     releaseDate: formData.releaseDate || '',
                                     tags: formData.tags || '',
                                     requirements: formData.requirements || '',
@@ -2598,7 +2669,7 @@ const GameStudio = ({ navigate }) => {
                                   // Update existing game (match by stable gameId, not studio list id)
                                   const updatedGames = customGames.map(game => 
                                     game.gameId === gameId 
-                                      ? { ...game, ...newGame }
+                                      ? { ...game, ...newGame, isOwnGame: true } // Preserve isOwnGame flag when editing
                                       : game
                                   );
                                   saveUserData('customGames', updatedGames);

@@ -14,16 +14,23 @@ const isAdmin = () => {
     const isAdminUser = getUserData('isAdmin', false, userId);
     if (isAdminUser) return true;
     
-    // Check if user email is admin (you can customize this)
-    const api = window.electronAPI;
-    if (api?.getUsers) {
-      // For now, check if user email contains 'admin' or specific admin emails
-      // You can modify this logic as needed
-      const authUser = JSON.parse(localStorage.getItem('authUser') || '{}');
-      const adminEmails = ['admin@kinma.app', 'admin@example.com']; // Add your admin emails here
-      if (authUser.email && adminEmails.includes(authUser.email.toLowerCase())) {
-        return true;
-      }
+    // Check if user matches admin credentials
+    const authUser = JSON.parse(localStorage.getItem('authUser') || '{}');
+    if (!authUser || !authUser.id) return false;
+    
+    // Admin credentials - must match exactly
+    const ADMIN_CREDENTIALS = {
+      email: 'admin@kinma.app',
+      username: 'admin'
+    };
+    
+    // Check email and username match (password will be verified by electronAPI when opening admin window)
+    const emailMatch = authUser.email && authUser.email.toLowerCase() === ADMIN_CREDENTIALS.email.toLowerCase();
+    const usernameMatch = (authUser.username && authUser.username.toLowerCase() === ADMIN_CREDENTIALS.username.toLowerCase()) ||
+                         (authUser.name && authUser.name.toLowerCase() === ADMIN_CREDENTIALS.username.toLowerCase());
+    
+    if (emailMatch && usernameMatch) {
+      return true; // Password will be verified by electronAPI when opening admin window
     }
     
     return false;

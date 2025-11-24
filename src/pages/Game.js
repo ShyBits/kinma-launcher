@@ -50,6 +50,7 @@ const Game = () => {
   const [propertiesSection, setPropertiesSection] = useState('general');
   const [newComment, setNewComment] = useState('');
   const [bannerHeight, setBannerHeight] = useState(130);
+  const [bannerAspectClass, setBannerAspectClass] = useState('portrait');
   const [selectedMedia, setSelectedMedia] = useState([]);
   const [lightboxImage, setLightboxImage] = useState(null);
   const [visibleMedia, setVisibleMedia] = useState(new Set());
@@ -113,6 +114,60 @@ const Game = () => {
   });
   const [newRatingComment, setNewRatingComment] = useState('');
   const [selectedStars, setSelectedStars] = useState(0);
+  
+  // Window width for responsive sizing
+  const [windowWidth, setWindowWidth] = useState(() => {
+    return typeof window !== 'undefined' ? window.innerWidth : 1120;
+  });
+
+  // Content width for smart resizing (window width - no sidebar on game page)
+  const [contentWidth, setContentWidth] = useState(() => {
+    return typeof window !== 'undefined' ? window.innerWidth : 1120;
+  });
+
+  // Calculate banner height based on content width (maintain aspect ratio)
+  // Max: 108% of content width, clamped to 7800px (absolute maximum)
+  // Min: 1/3 of the max (based on window size)
+  // Scales dynamically with window size
+  const calculatedBannerHeight = useMemo(() => {
+    // Max height is 108% of content width, but never exceeds 7800px
+    const maxHeight = Math.min(contentWidth * 1.08, 7800);
+    // Min height is 1/3 of the calculated max for this window size
+    const minHeight = maxHeight / 3;
+    // Calculate desired height (108% of content width)
+    const calculated = contentWidth * 1.08;
+    // Return height clamped between min and max
+    return Math.max(minHeight, Math.min(maxHeight, calculated));
+  }, [contentWidth]);
+
+  // Reset banner aspect class when game changes
+  useEffect(() => {
+    setBannerAspectClass('portrait');
+  }, [gameId]);
+
+  // Track window size changes
+  useEffect(() => {
+    const updateWindowSize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+    
+    const updateContentWidth = () => {
+      // Calculate available content width (window width - no sidebar)
+      const newContentWidth = window.innerWidth;
+      setContentWidth(newContentWidth);
+    };
+    
+    updateWindowSize();
+    updateContentWidth();
+    window.addEventListener('resize', () => {
+      updateWindowSize();
+      updateContentWidth();
+    });
+    return () => {
+      window.removeEventListener('resize', updateWindowSize);
+      window.removeEventListener('resize', updateContentWidth);
+    };
+  }, []);
   
   // Graph and player tracking state
   const [showLastPlayedHistory, setShowLastPlayedHistory] = useState(false);
@@ -356,6 +411,37 @@ const Game = () => {
       setTimeout(() => {
         commentsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
         sessionStorage.removeItem('scrollToComments');
+      }, 300);
+    }
+
+    // Check if download should be started from Store
+    const shouldStartDownload = sessionStorage.getItem(`startDownload_${gameId}`);
+    if (shouldStartDownload === 'true') {
+      sessionStorage.removeItem(`startDownload_${gameId}`);
+      // Start download after a short delay to ensure component is fully mounted
+      setTimeout(() => {
+        // Clear any existing interval
+        if (downloadIntervalRef.current) {
+          clearInterval(downloadIntervalRef.current);
+          downloadIntervalRef.current = null;
+        }
+        
+        // Reset all download states before starting
+        setDownloadProgress(0);
+        setIsPaused(false);
+        setGlobalPaused(gameId, false);
+        
+        // Clear any existing global speed state
+        clearGlobalDownloadSpeed(gameId);
+        
+        // Start download in global store (will run independently), reset progress for fresh download
+        startGlobalDownload(gameId, true);
+        
+        // Set downloading state
+        setIsDownloading(true);
+        setSpeedHistory([]);
+        setCurrentSpeed(0);
+        setGraphScale({ min: 0.5, max: 3.0 }); // Set fixed scale
       }, 300);
     }
   }, [gameId]);
@@ -673,35 +759,43 @@ const Game = () => {
       
       // If download/update is cleared externally (e.g., from footer cancel button)
       if (speed === 0 && progress === 0) {
-        if (isDownloading && downloadIntervalRef.current) {
+        // Always clear download state when speed and progress are both 0
+        if (downloadIntervalRef.current) {
           clearInterval(downloadIntervalRef.current);
           downloadIntervalRef.current = null;
-          setIsDownloading(false);
-          setIsPaused(false);
-          setDownloadProgress(0);
-          setCurrentSpeed(0);
-          setSpeedHistory([]);
         }
+        if (isDownloading) {
+          setIsDownloading(false);
+        }
+        setIsPaused(false);
+        setDownloadProgress(0);
+        setCurrentSpeed(0);
+        setSpeedHistory([]);
+        
         if (isUpdating) {
           setIsUpdating(false);
-          setDownloadProgress(0);
-          setCurrentSpeed(0);
-          setSpeedHistory([]);
         }
       }
       
       // Update progress from global store (for both downloads and updates)
-      if (speed > 0 || progress > 0) {
-        setDownloadProgress(progress);
-        setCurrentSpeed(speed);
-        // When paused, don't push new points so the graph freezes
-        if (!paused) {
-          setSpeedHistory(prev => {
-            const newHistory = [...prev, speed];
-            // Keep last 50 values for smooth scrolling graph
-            return newHistory.slice(-50);
-          });
+      // Always update progress and speed, even if they are 0 (to show initial state)
+      setDownloadProgress(progress);
+      setCurrentSpeed(speed);
+      
+      // Update isDownloading state based on progress
+      if (progress > 0 && progress < 100) {
+        if (!isDownloading) {
+          setIsDownloading(true);
         }
+      }
+      
+      // When paused, don't push new points so the graph freezes
+      if (!paused && speed > 0) {
+        setSpeedHistory(prev => {
+          const newHistory = [...prev, speed];
+          // Keep last 50 values for smooth scrolling graph
+          return newHistory.slice(-50);
+        });
       }
     });
     return unsubscribe;
@@ -1840,21 +1934,38 @@ const Game = () => {
   return (
     <div className="game-page">
       <div className="game-content" ref={contentRef}>
-        <div className="game-banner" style={{ height: `${game.bannerHeight || bannerHeight || 60}vh`, position: 'relative', overflow: 'hidden' }}>
-          {/* Use an img with transform like studio for precise match */}
+        <div 
+          className="game-banner" 
+          style={{ 
+            '--content-width': `${contentWidth || window.innerWidth || 1120}px`,
+            '--banner-height': `${calculatedBannerHeight || 560}px`,
+            height: `${calculatedBannerHeight || 560}px`,
+            minHeight: `${(calculatedBannerHeight || 560) / 3}px`,
+            position: 'relative', 
+            overflow: 'hidden' 
+          }}
+        >
+          {/* Use an img with aspect ratio detection */}
           <img
             src={getImageUrl(game.banner)}
             alt="Banner"
+            className={bannerAspectClass}
+            onLoad={(e) => {
+              const img = e.target;
+              const aspectRatio = img.naturalWidth / img.naturalHeight;
+              if (aspectRatio > 1) {
+                // Landscape: width > height
+                setBannerAspectClass('landscape');
+              } else if (aspectRatio < 1) {
+                // Portrait: height > width
+                setBannerAspectClass('portrait');
+              } else {
+                // Square: width = height
+                setBannerAspectClass('square');
+              }
+            }}
             style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
               transform: `translate(${game.bannerOffset?.x || 0}px, ${game.bannerOffset?.y || 0}px) scale(${game.bannerZoom || 1})`,
-              transformOrigin: 'top left',
-              width: 'auto',
-              height: '100%',
-              userSelect: 'none',
-              pointerEvents: 'none'
             }}
           />
           <div className="game-banner-overlay">

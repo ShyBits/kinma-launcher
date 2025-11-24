@@ -16,7 +16,7 @@
     "acceptTerms": true,
     "devIntent": false,
     "createdAt": "2025-01-01T00:00:00.000Z",
-    "lastLoginTime": "2025-11-09T03:19:44.665Z",
+    "lastLoginTime": "2025-11-10T23:56:26.819Z",
     "isLoggedIn": false,
     "stayLoggedIn": true,
     "hiddenInSwitcher": false
@@ -82,7 +82,7 @@
     "acceptTerms": true,
     "devIntent": false,
     "createdAt": "2025-11-02T21:04:17.524Z",
-    "lastLoginTime": "2025-11-09T03:26:01.731Z",
+    "lastLoginTime": "2025-11-10T23:59:44.497Z",
     "isLoggedIn": true,
     "stayLoggedIn": true,
     "hiddenInSwitcher": false
@@ -125,8 +125,8 @@
     "acceptTerms": true,
     "devIntent": false,
     "createdAt": "2025-11-02T20:10:26.851Z",
-    "lastLoginTime": "2025-11-09T01:53:33.676Z",
-    "isLoggedIn": false,
+    "lastLoginTime": "2025-11-23T17:48:20.508Z",
+    "isLoggedIn": true,
     "stayLoggedIn": true,
     "hiddenInSwitcher": false
   },

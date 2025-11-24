@@ -111,12 +111,23 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
       const api = window.electronAPI;
       const currentAuthUser = authUser || currentUser;
       
-      if (api && api.getUsers) {
-        const result = await api.getUsers();
+      // Try database methods first
+      if (api && api.dbGetUsers) {
+        const result = await api.dbGetUsers();
         if (result && result.success && Array.isArray(result.users)) {
           // Show all users (both logged in and not logged in) - they'll be handled differently when clicked
           // Filter out users that are hidden from the account switcher
-          const loggedInUsers = result.users.filter(u => u.hiddenInSwitcher !== true);
+          // Handle both boolean true and numeric 1 (MySQL stores BOOLEAN as TINYINT)
+          // Also filter out guest accounts (dummy accounts that only allow viewing)
+          const loggedInUsers = result.users.filter(u => {
+            const isHidden = u.hiddenInSwitcher === true || u.hiddenInSwitcher === 1 || u.hiddenInSwitcher === '1';
+            const isGuest = u.isGuest === true || 
+                           u.id?.toString().startsWith('guest_') || 
+                           u.username?.toString().startsWith('guest_') || 
+                           u.name === 'Guest';
+            return !isHidden && !isGuest;
+          });
+          console.log('📋 Loaded users from database:', result.users.length, 'total,', loggedInUsers.length, 'visible (after filtering hiddenInSwitcher and guest accounts)');
           const sorted = loggedInUsers.sort((a, b) => {
             if (currentAuthUser) {
               if (a.id === currentAuthUser.id) return -1;
@@ -137,12 +148,50 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
         } else {
           setUsers([]);
         }
+      } else if (api && api.getUsers) {
+        // Fallback to old file-based methods
+        const result = await api.getUsers();
+        if (result && result.success && Array.isArray(result.users)) {
+          // Filter out hidden users and guest accounts
+          const loggedInUsers = result.users.filter(u => {
+            const isHidden = u.hiddenInSwitcher === true;
+            const isGuest = u.isGuest === true || 
+                           u.id?.toString().startsWith('guest_') || 
+                           u.username?.toString().startsWith('guest_') || 
+                           u.name === 'Guest';
+            return !isHidden && !isGuest;
+          });
+          const sorted = loggedInUsers.sort((a, b) => {
+            if (currentAuthUser) {
+              if (a.id === currentAuthUser.id) return -1;
+              if (b.id === currentAuthUser.id) return 1;
+            }
+            if (a.lastLoginTime && b.lastLoginTime) {
+              const timeA = new Date(a.lastLoginTime).getTime();
+              const timeB = new Date(b.lastLoginTime).getTime();
+              if (timeA !== timeB) return timeB - timeA;
+            } else if (a.lastLoginTime) return -1;
+            else if (b.lastLoginTime) return 1;
+            const nameA = (a.name || a.email || a.username || '').toLowerCase();
+            const nameB = (b.name || b.email || b.username || '').toLowerCase();
+            return nameA.localeCompare(nameB);
+          });
+          setUsers(sorted.slice(0, 10));
+        } else {
+          setUsers([]);
+        }
       } else {
+        // Final fallback to localStorage
         const stored = JSON.parse(localStorage.getItem('users') || '[]');
-        // Show all users (both logged in and not logged in)
-        // Filter out users that are hidden from the account switcher
-        const visibleUsers = stored.filter(u => u.hiddenInSwitcher !== true);
-        // Limit to 10 accounts
+        // Filter out hidden users and guest accounts
+        const visibleUsers = stored.filter(u => {
+          const isHidden = u.hiddenInSwitcher === true;
+          const isGuest = u.isGuest === true || 
+                         u.id?.toString().startsWith('guest_') || 
+                         u.username?.toString().startsWith('guest_') || 
+                         u.name === 'Guest';
+          return !isHidden && !isGuest;
+        });
         setUsers(visibleUsers.slice(0, 10));
       }
     } catch (error) {
@@ -250,30 +299,78 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
 
   const confirmRemoveAccount = async (user) => {
     try {
+      console.log('🗑️ Confirming removal of account:', user.id, user.email || user.username);
       const api = window.electronAPI;
-      if (api && api.getUsers && api.saveUsers) {
+      
+      if (api && api.dbGetUsers && api.dbSaveUser) {
+        // Use database methods
+        const result = await api.dbGetUsers();
+        console.log('📊 Database getUsers result:', result);
+        
+        if (result && result.success && Array.isArray(result.users)) {
+          const users = result.users;
+          const userToRemove = users.find(u => u.id === user.id);
+          console.log('👤 User to remove found:', userToRemove ? 'Yes' : 'No');
+          
+          if (userToRemove) {
+            // IMPORTANT: Only when explicitly confirming removal should we:
+            // 1. Mark user as hidden in switcher (removes from account switcher)
+            // 2. Log them out (terminate session)
+            // This is the ONLY place where hiddenInSwitcher should be set to true
+            const updatedUser = {
+              ...userToRemove,
+              hiddenInSwitcher: true,
+              isLoggedIn: false // Also log them out when removing
+            };
+            
+            console.log('💾 Saving updated user to database:', updatedUser.id, 'hiddenInSwitcher:', updatedUser.hiddenInSwitcher);
+            const saveResult = await api.dbSaveUser(updatedUser);
+            console.log('💾 Save result:', saveResult);
+            
+            if (saveResult && saveResult.success) {
+              console.log('✅ Account removed from switcher and logged out');
+              
+              // Force a fresh reload from database to ensure we get the updated data
+              // Add a small delay to ensure database write is committed
+              await new Promise(resolve => setTimeout(resolve, 100));
+              
+              // Reload users to update the display
+              const reloadedAuthUser = await loadCurrentUser();
+              await loadUsers(reloadedAuthUser, false);
+              
+              console.log('🔄 Users reloaded after removal');
+            } else {
+              console.error('❌ Failed to save user to database:', saveResult?.error);
+            }
+          } else {
+            console.warn('⚠️ User not found in database users list');
+          }
+        } else {
+          console.error('❌ Invalid result from dbGetUsers:', result);
+        }
+      } else if (api && api.getUsers && api.saveUsers) {
+        // Fallback to old file-based methods if database methods not available
+        console.log('📁 Using file-based methods (fallback)');
         const result = await api.getUsers();
         if (result && result.success && Array.isArray(result.users)) {
           const users = result.users;
           const userIndex = users.findIndex(u => u.id === user.id);
           
           if (userIndex !== -1) {
-            // IMPORTANT: Only when explicitly confirming removal should we:
-            // 1. Mark user as hidden in switcher (removes from account switcher)
-            // 2. Log them out (terminate session)
-            // This is the ONLY place where hiddenInSwitcher should be set to true
             users[userIndex].hiddenInSwitcher = true;
-            users[userIndex].isLoggedIn = false; // Also log them out when removing
+            users[userIndex].isLoggedIn = false;
             await api.saveUsers(users);
-            console.log('✅ Account removed from switcher and logged out');
+            console.log('✅ Account removed from switcher and logged out (using file-based method)');
             
             // Reload users to update the display
             await loadUsers(currentUser, false);
           }
         }
+      } else {
+        console.error('❌ No API methods available for removing account');
       }
     } catch (error) {
-      console.error('Error removing account from switcher:', error);
+      console.error('❌ Error removing account from switcher:', error);
     } finally {
       setConfirmingRemove(null);
     }
@@ -327,7 +424,10 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
       
       // Calculate based on grid layout - 5 accounts per row max
       const cardsPerRow = 5; // Fixed: max 5 per row
-      const totalCards = Math.min(users.length, 10) + 1; // users (max 10) + add button
+      const maxUsers = 10;
+      const visibleUsers = Math.min(users.length, maxUsers);
+      const showAddButton = visibleUsers < maxUsers; // Only show add button if less than 10 users
+      const totalCards = visibleUsers + (showAddButton ? 1 : 0); // users + add button (if shown)
       const rows = Math.ceil(totalCards / cardsPerRow);
       
       // Get current window width to calculate responsive sizes
@@ -530,7 +630,7 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
               </div>
             ) : (
               <div className="account-switcher-grid">
-                {users.map((user) => {
+                {users.slice(0, 10).map((user) => {
                   const isActive = isActiveUser(user);
                   const isProcessingThis = processingAccount === user.id;
                   const isDisabled = isProcessing || isActive;
@@ -551,14 +651,23 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
                             <div className="account-switcher-confirm-buttons-inline">
                               <button
                                 className="account-switcher-confirm-btn-inline account-switcher-confirm-btn-yes"
-                                onClick={(e) => confirmRemoveAccount(user)}
+                                onClick={async (e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  console.log('✅ Yes button clicked for user:', user.id);
+                                  await confirmRemoveAccount(user);
+                                }}
                                 title="Confirm removal"
                               >
                                 <CheckIcon size={Math.round(sizes.cardSize * 0.14)} strokeWidth={2.5} />
                               </button>
                               <button
                                 className="account-switcher-confirm-btn-inline account-switcher-confirm-btn-no"
-                                onClick={(e) => cancelRemoveAccount(e)}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  cancelRemoveAccount(e);
+                                }}
                                 title="Cancel"
                               >
                                 <X size={Math.round(sizes.cardSize * 0.14)} strokeWidth={2.5} />
@@ -566,7 +675,9 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
                             </div>
                           </div>
                           <div className="account-switcher-confirm-text">
-                            Remove?
+                            <span className="account-switcher-confirm-text-base">Remove?</span>
+                            <span className="account-switcher-confirm-text-yes"> YES!</span>
+                            <span className="account-switcher-confirm-text-no"> NO!</span>
                           </div>
                         </>
                       ) : (
@@ -602,14 +713,16 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
                   );
                 })}
                 
-                <button
-                  className="account-switcher-add-card"
-                  onClick={onAddAccount}
-                  disabled={isProcessing}
-                  title="Add Account"
-                >
-                  <Plus size={Math.round(sizes.cardSize * 0.28)} strokeWidth={2} />
-                </button>
+                {users.length < 10 && (
+                  <button
+                    className="account-switcher-add-card"
+                    onClick={onAddAccount}
+                    disabled={isProcessing}
+                    title="Add Account"
+                  >
+                    <Plus size={Math.round(sizes.cardSize * 0.28)} strokeWidth={2} />
+                  </button>
+                )}
               </div>
             )}
           </div>
