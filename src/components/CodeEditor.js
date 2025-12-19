@@ -218,9 +218,15 @@ const CodeEditor = ({ value, onChange, language, placeholder, searchQuery = '', 
   const [isHoveringScrollbar, setIsHoveringScrollbar] = useState(false);
   const [isDraggingScrollbar, setIsDraggingScrollbar] = useState(false);
 
+  // Helper function to ensure value is always a string
+  const getValueString = () => {
+    return typeof value === 'string' ? value : String(value || '');
+  };
+
   // Update line numbers when value changes
   useEffect(() => {
-    const lines = value ? value.split('\n').length : 1;
+    const valueString = getValueString();
+    const lines = valueString ? valueString.split('\n').length : 1;
     setLineCount(lines);
   }, [value]);
 
@@ -300,18 +306,19 @@ const CodeEditor = ({ value, onChange, language, placeholder, searchQuery = '', 
   }, [value, lineCount]);
 
   const formatCode = () => {
-    if (readOnly || !value) return;
+    const valueString = getValueString();
+    if (readOnly || !valueString) return;
     
-    let formatted = value;
+    let formatted = valueString;
     switch (language) {
       case 'html':
-        formatted = formatHTML(value);
+        formatted = formatHTML(valueString);
         break;
       case 'css':
-        formatted = formatCSS(value);
+        formatted = formatCSS(valueString);
         break;
       case 'javascript':
-        formatted = formatJavaScript(value);
+        formatted = formatJavaScript(valueString);
         break;
       default:
         return;
@@ -336,22 +343,23 @@ const CodeEditor = ({ value, onChange, language, placeholder, searchQuery = '', 
     // Tab handling
     if (e.key === 'Tab') {
       e.preventDefault();
+      const valueString = getValueString();
       const start = textarea.selectionStart;
       const end = textarea.selectionEnd;
       
       if (e.shiftKey) {
         // Shift+Tab: Remove indentation
-        const lines = value.split('\n');
-        const startLine = value.substring(0, start).split('\n').length - 1;
-        const endLine = value.substring(0, end).split('\n').length - 1;
+        const lines = valueString.split('\n');
+        const startLine = valueString.substring(0, start).split('\n').length - 1;
+        const endLine = valueString.substring(0, end).split('\n').length - 1;
         
-        let newValue = value;
+        let newValue = valueString;
         let removedChars = 0;
         
         for (let i = startLine; i <= endLine; i++) {
           if (lines[i] && (lines[i].startsWith('  ') || lines[i].startsWith('\t'))) {
             const indent = lines[i].startsWith('  ') ? 2 : 1;
-            const lineStart = i === 0 ? 0 : value.split('\n').slice(0, i).join('\n').length + 1;
+            const lineStart = i === 0 ? 0 : valueString.split('\n').slice(0, i).join('\n').length + 1;
             newValue = newValue.substring(0, lineStart - removedChars) + 
                       newValue.substring(lineStart + indent - removedChars);
             removedChars += indent;
@@ -365,7 +373,7 @@ const CodeEditor = ({ value, onChange, language, placeholder, searchQuery = '', 
         }, 0);
       } else {
         // Tab: Add indentation
-        const newValue = value.substring(0, start) + '  ' + value.substring(end);
+        const newValue = valueString.substring(0, start) + '  ' + valueString.substring(end);
         onChange({ target: { value: newValue } });
         setTimeout(() => {
           textarea.selectionStart = textarea.selectionEnd = start + 2;
@@ -376,10 +384,11 @@ const CodeEditor = ({ value, onChange, language, placeholder, searchQuery = '', 
     // Auto-indent on Enter
     if (e.key === 'Enter') {
       e.preventDefault();
+      const valueString = getValueString();
       const start = textarea.selectionStart;
       const end = textarea.selectionEnd;
-      const textBefore = value.substring(0, start);
-      const textAfter = value.substring(end);
+      const textBefore = valueString.substring(0, start);
+      const textAfter = valueString.substring(end);
       const lines = textBefore.split('\n');
       const currentLine = lines[lines.length - 1];
       const indentMatch = currentLine.match(/^(\s*)/);
@@ -389,7 +398,7 @@ const CodeEditor = ({ value, onChange, language, placeholder, searchQuery = '', 
       const shouldIndent = /[{\[\(]$/.test(currentLine.trim());
       const newIndent = shouldIndent ? indent + '  ' : indent;
       
-      const newValue = value.substring(0, start) + '\n' + newIndent + textAfter;
+      const newValue = valueString.substring(0, start) + '\n' + newIndent + textAfter;
       onChange({ target: { value: newValue } });
       
       setTimeout(() => {
@@ -410,9 +419,10 @@ const CodeEditor = ({ value, onChange, language, placeholder, searchQuery = '', 
     const textarea = textareaRef.current;
     if (!textarea) return;
     
+    const valueString = getValueString();
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const newValue = value.substring(0, start) + pastedValue + value.substring(end);
+    const newValue = valueString.substring(0, start) + pastedValue + valueString.substring(end);
     
     // Update the value first
     onChange({ target: { value: newValue } });
@@ -541,7 +551,7 @@ const CodeEditor = ({ value, onChange, language, placeholder, searchQuery = '', 
         <textarea
           ref={textareaRef}
           className={`code-editor-textarea code-editor-${language}`}
-          value={value}
+          value={getValueString()}
           onChange={onChange}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}

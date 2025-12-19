@@ -354,6 +354,19 @@ class DatabaseManager {
         password VARCHAR(255) NOT NULL,
         changedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_userId (userId)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+
+      // Cart items table
+      `CREATE TABLE IF NOT EXISTS cart_items (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        userId VARCHAR(255) NOT NULL,
+        itemId VARCHAR(255) NOT NULL,
+        itemType VARCHAR(100) DEFAULT 'funds',
+        amount DECIMAL(10, 2) NOT NULL,
+        itemData LONGTEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_userId (userId),
+        INDEX idx_itemId (itemId)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
     ];
 
@@ -387,7 +400,8 @@ class DatabaseManager {
       `ALTER TABLE game_states MODIFY COLUMN state_data LONGTEXT`,
       `ALTER TABLE inventory MODIFY COLUMN itemData LONGTEXT`,
       `ALTER TABLE developer_access_requests MODIFY COLUMN reason LONGTEXT`,
-      `ALTER TABLE library_settings MODIFY COLUMN expandedFolders LONGTEXT`
+      `ALTER TABLE library_settings MODIFY COLUMN expandedFolders LONGTEXT`,
+      `ALTER TABLE cart_items MODIFY COLUMN itemData LONGTEXT`
     ];
 
     for (const query of alterQueries) {

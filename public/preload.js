@@ -137,6 +137,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dbGetLibrarySettings: (userId) => ipcRenderer.invoke('db-get-library-settings', userId),
   dbSaveLibrarySettings: (userId, expandedFolders) => ipcRenderer.invoke('db-save-library-settings', userId, expandedFolders),
   
+  // Database API - Cart
+  dbGetCartItems: (userId) => ipcRenderer.invoke('db-get-cart-items', userId),
+  dbSaveCartItems: (userId, items) => ipcRenderer.invoke('db-save-cart-items', userId, items),
+  dbClearCart: (userId) => ipcRenderer.invoke('db-clear-cart', userId),
+  
   dbResetMigration: () => ipcRenderer.invoke('db-reset-migration'),
   
   // Password reset API

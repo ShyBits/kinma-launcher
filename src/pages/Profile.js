@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { User, Edit2, X, Plus, Layout, BarChart3, Image, List, Code, Save, Terminal, Bug, FileText, AlertCircle, Package, Settings, History, Award, ShoppingBag, Heart, ChevronDown, ChevronUp, Minimize2, Sparkles, Target, Sword, Shield, Trophy, Mountain, Skull, Activity, Laugh, Rows, PanelLeftClose, PanelRightClose, FileCode, Paintbrush, Brackets, Search, Filter, Grid, Eye, EyeOff } from 'lucide-react';
+import { User, Edit2, X, Plus, Layout, BarChart3, Image, List, Code, Save, Terminal, Bug, FileText, AlertCircle, Package, Settings, History, Award, ShoppingBag, Heart, ChevronDown, ChevronUp, Minimize2, Sparkles, Target, Sword, Shield, Trophy, Mountain, Skull, Activity, Laugh, FileCode, Paintbrush, Brackets, Search, Filter, Grid, Eye, EyeOff } from 'lucide-react';
 import { getUserData, saveUserData, getAllUsersData } from '../utils/UserDataManager';
 import CodeEditor from '../components/CodeEditor';
 import './Profile.css';
@@ -104,6 +104,7 @@ const Profile = ({ navigate }) => {
   const previewRef = useRef(null);
   const editorRef = useRef(null);
   const isResizingRef = useRef(false);
+  const editContentRef = useRef(null);
 
   useEffect(() => {
     const handleUserChange = () => {
@@ -147,6 +148,29 @@ const Profile = ({ navigate }) => {
   useEffect(() => {
     saveUserData('profileCodeLayout', codeLayoutMode);
   }, [codeLayoutMode]);
+
+  // Set showCustomCode to true when entering edit mode and initialize preview height to half
+  useEffect(() => {
+    if (isEditMode) {
+      setShowCustomCode(true);
+      // Calculate half height of the container
+      const calculateHalfHeight = () => {
+        if (editContentRef.current) {
+          const containerHeight = editContentRef.current.offsetHeight;
+          const halfHeight = Math.floor(containerHeight / 2);
+          // Always set to half when entering edit mode (will be saved if user resizes)
+          setPreviewHeight(halfHeight);
+        }
+      };
+      // Calculate after a short delay to ensure container is rendered
+      const timeout = setTimeout(calculateHalfHeight, 100);
+      const timeout2 = setTimeout(calculateHalfHeight, 300);
+      return () => {
+        clearTimeout(timeout);
+        clearTimeout(timeout2);
+      };
+    }
+  }, [isEditMode]);
 
   // Check if tabs should be compact based on editor width
   useEffect(() => {
@@ -384,8 +408,11 @@ const Profile = ({ navigate }) => {
     const item = prebuiltItems[type];
     if (!item || !item.cssSelector) return false;
     
+    // Ensure profileHTML is a string
+    const htmlString = typeof profileHTML === 'string' ? profileHTML : String(profileHTML || '');
+    
     const selectorWithoutDot = item.cssSelector.replace('.', '');
-    return profileHTML.includes(`class="${selectorWithoutDot}"`) || profileHTML.includes(`class="${item.cssSelector.replace('.', '')}"`);
+    return htmlString.includes(`class="${selectorWithoutDot}"`) || htmlString.includes(`class="${item.cssSelector.replace('.', '')}"`);
   };
 
   // Process HTML to add X buttons to prebuilt items in edit mode
@@ -832,10 +859,15 @@ const Profile = ({ navigate }) => {
     const item = prebuiltItems[type];
     if (!item) return;
 
-    const newHTML = profileHTML ? profileHTML + '\n' + item.html : item.html;
-    const cssExists = profileCSS && item.cssSelector && profileCSS.includes(item.cssSelector);
-    const newCSS = cssExists ? profileCSS : (profileCSS ? profileCSS + '\n' + item.css : item.css);
-    const newJS = item.js ? (profileJS ? profileJS + '\n' + item.js : profileJS) : profileJS;
+    // Ensure all values are strings
+    const htmlString = typeof profileHTML === 'string' ? profileHTML : String(profileHTML || '');
+    const cssString = typeof profileCSS === 'string' ? profileCSS : String(profileCSS || '');
+    const jsString = typeof profileJS === 'string' ? profileJS : String(profileJS || '');
+
+    const newHTML = htmlString ? htmlString + '\n' + item.html : item.html;
+    const cssExists = cssString && item.cssSelector && cssString.includes(item.cssSelector);
+    const newCSS = cssExists ? cssString : (cssString ? cssString + '\n' + item.css : item.css);
+    const newJS = item.js ? (jsString ? jsString + '\n' + item.js : jsString) : jsString;
 
     setProfileHTML(newHTML);
     setProfileCSS(newCSS);
@@ -889,7 +921,7 @@ const Profile = ({ navigate }) => {
                               <!DOCTYPE html>
                               <html>
                               <head>
-                                <style>${profileCSS}</style>
+                                <style>${profileCSS || ''}</style>
                               </head>
                               <body>
                                 ${profileHTML}
@@ -1255,18 +1287,20 @@ const Profile = ({ navigate }) => {
     <div className="game-promo-page promo-edit-mode">
       <div className="promo-edit-container">
         {/* Main Content Area */}
-        <div className={`promo-edit-content ${isEditMode ? 'sidebar-open' : ''} code-layout-${codeLayoutMode}`}>
-          {/* Preview Area - Always visible when there's content, takes full available space */}
-          {(profileHTML || profileCSS || profileJS) && (
-            <div 
-              className={`promo-preview-wrapper ${isResizing ? 'resizing' : ''}`}
-                ref={previewRef}
-              style={{ 
-                height: showCustomCode && codeLayoutMode === 'bottom' ? `${previewHeight}px` : '100%', 
-                flex: showCustomCode && codeLayoutMode === 'bottom' ? 'none' : (showCustomCode && (codeLayoutMode === 'left' || codeLayoutMode === 'right') ? '0 0 auto' : '1'),
-                width: showCustomCode && (codeLayoutMode === 'left' || codeLayoutMode === 'right') ? `${previewWidth}px` : '100%'
-              }}
-            >
+        <div 
+          ref={editContentRef}
+          className={`promo-edit-content ${isEditMode ? 'sidebar-open' : ''} code-layout-${codeLayoutMode}`}
+        >
+          {/* Preview Area - Always visible in edit mode, takes full available space */}
+          <div 
+            className={`promo-preview-wrapper ${isResizing ? 'resizing' : ''}`}
+            ref={previewRef}
+            style={{ 
+              height: showCustomCode && codeLayoutMode === 'bottom' ? `${previewHeight}px` : '100%', 
+              flex: showCustomCode && codeLayoutMode === 'bottom' ? 'none' : (showCustomCode && (codeLayoutMode === 'left' || codeLayoutMode === 'right') ? '0 0 auto' : '1'),
+              width: showCustomCode && (codeLayoutMode === 'left' || codeLayoutMode === 'right') ? `${previewWidth}px` : '100%'
+            }}
+          >
               {showPreviewLabels && (
                 <>
                   <div className="promo-preview-label promo-preview-label-top-left">Preview</div>
@@ -1282,7 +1316,7 @@ const Profile = ({ navigate }) => {
                       <!DOCTYPE html>
                       <html>
                       <head>
-                        <style>${profileCSS}</style>
+                        <style>${profileCSS || ''}</style>
                       <style>
                         [data-prebuilt-item] {
                           position: relative !important;
@@ -1320,46 +1354,37 @@ const Profile = ({ navigate }) => {
                       </style>
                       </head>
                       <body>
-                      ${processPreviewHTML(profileHTML)}
-                        <script>${profileJS}</script>
+                      ${processPreviewHTML(profileHTML || '')}
+                        <script>${profileJS || ''}</script>
                       </body>
                       </html>
                     `
                   }}
                 />
-              </div>
-          )}
+          </div>
 
           {/* Resize Handle - Positioned between preview and code editor based on layout mode */}
-          {showCustomCode && (profileHTML || profileCSS || profileJS) && (
-            <>
-              {codeLayoutMode === 'bottom' && (
-              <div 
-                  className="promo-resize-handle promo-resize-handle-bottom"
-                onMouseDown={handleResizeStart}
-              />
-              )}
-              {codeLayoutMode === 'left' && (
-                <div 
-                  className="promo-resize-handle promo-resize-handle-left"
-                  onMouseDown={handleResizeStart}
-                />
-              )}
-              {codeLayoutMode === 'right' && (
-                <div 
-                  className="promo-resize-handle promo-resize-handle-right"
-                  onMouseDown={handleResizeStart}
-                />
-              )}
-            </>
+          {showCustomCode && codeLayoutMode === 'bottom' && (
+            <div 
+              className="promo-resize-handle promo-resize-handle-bottom"
+              onMouseDown={handleResizeStart}
+            />
+          )}
+          {showCustomCode && codeLayoutMode === 'left' && (
+            <div 
+              className="promo-resize-handle promo-resize-handle-left"
+              onMouseDown={handleResizeStart}
+            />
+          )}
+          {showCustomCode && codeLayoutMode === 'right' && (
+            <div 
+              className="promo-resize-handle promo-resize-handle-right"
+              onMouseDown={handleResizeStart}
+            />
           )}
 
-          {/* Placeholder or Code Editor */}
-          {!profileHTML && !profileCSS && !profileJS ? (
-            <div className="promo-edit-placeholder">
-              <p>Choose a prebuilt template or add items to start building your profile</p>
-            </div>
-          ) : showCustomCode ? (
+          {/* Code Editor - Always visible when showCustomCode is true */}
+          {showCustomCode && (
             <>
               {/* Code Editor with Tabs */}
               <div 
@@ -1375,7 +1400,7 @@ const Profile = ({ navigate }) => {
               >
                 <div className={`code-section-tabs ${isTabsCompact ? 'compact' : ''}`} ref={editorTabsRef}>
                   <button
-                    className={`code-tab ${activeTab === 'html' ? 'active' : ''}`}
+                    className={`code-tab code-tab-html ${activeTab === 'html' ? 'active html-active' : ''}`}
                     onClick={() => setActiveTab('html')}
                     title="HTML"
                   >
@@ -1383,7 +1408,7 @@ const Profile = ({ navigate }) => {
                     {!isTabsCompact && <span>HTML</span>}
                   </button>
                   <button
-                    className={`code-tab ${activeTab === 'css' ? 'active' : ''}`}
+                    className={`code-tab code-tab-css ${activeTab === 'css' ? 'active css-active' : ''}`}
                     onClick={() => setActiveTab('css')}
                     title="CSS"
                   >
@@ -1391,37 +1416,13 @@ const Profile = ({ navigate }) => {
                     {!isTabsCompact && <span>CSS</span>}
                   </button>
                   <button
-                    className={`code-tab ${activeTab === 'js' ? 'active' : ''}`}
+                    className={`code-tab code-tab-js ${activeTab === 'js' ? 'active js-active' : ''}`}
                     onClick={() => setActiveTab('js')}
                     title="JavaScript"
                   >
                     <Brackets size={14} />
                     {!isTabsCompact && <span>JavaScript</span>}
                   </button>
-                  
-                  <div className="code-layout-controls">
-                    <button
-                      className={`layout-btn ${codeLayoutMode === 'right' ? 'active' : ''}`}
-                      onClick={() => setCodeLayoutMode('right')}
-                      title="Code on right side"
-                    >
-                      <PanelRightClose size={18} />
-                    </button>
-                    <button
-                      className={`layout-btn ${codeLayoutMode === 'bottom' ? 'active' : ''}`}
-                      onClick={() => setCodeLayoutMode('bottom')}
-                      title="Code below preview"
-                    >
-                      <Rows size={18} />
-                    </button>
-                    <button
-                      className={`layout-btn ${codeLayoutMode === 'left' ? 'active' : ''}`}
-                      onClick={() => setCodeLayoutMode('left')}
-                      title="Code on left side"
-                    >
-                      <PanelLeftClose size={18} />
-                  </button>
-                  </div>
                 </div>
 
                 <div className="code-section-content">
@@ -1462,7 +1463,7 @@ const Profile = ({ navigate }) => {
                 </div>
               </div>
             </>
-          ) : null}
+          )}
         </div>
 
         {/* Sidebar */}
@@ -1524,20 +1525,18 @@ const Profile = ({ navigate }) => {
                 <span>Description</span>
               </button>
             </div>
-            </div>
+          </div>
 
           {/* Sidebar Footer with Save/Cancel buttons */}
           <div className="sidebar-footer">
-            {(profileHTML || profileCSS || profileJS) && (
-              <button 
-                className="promo-custom-code-toggle-btn" 
-                onClick={() => setShowCustomCode(!showCustomCode)}
-                title={showCustomCode ? 'Hide Code' : 'Show Code'}
-              >
-                <span className="code-symbol">&lt;/&gt;</span>
-                <span className="code-btn-text">{showCustomCode ? 'exit code view' : 'add custom design to current'}</span>
-              </button>
-            )}
+            <button 
+              className={`promo-custom-code-toggle-btn ${showCustomCode ? 'active' : ''}`}
+              onClick={() => setShowCustomCode(!showCustomCode)}
+              title={showCustomCode ? 'Close Code View' : 'Open Code View'}
+            >
+              <span className="code-symbol">&lt;/&gt;</span>
+              <span className="code-btn-text">{showCustomCode ? 'close code view' : 'open code view'}</span>
+            </button>
             <div className="button-row">
               <button className="cancel-promo-btn" onClick={handleCancel}>
                 <X size={18} />

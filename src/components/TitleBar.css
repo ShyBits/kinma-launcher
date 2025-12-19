@@ -24,6 +24,9 @@
   align-items: center;
   gap: 0px;
   -webkit-app-region: no-drag;
+  padding-left: 0;
+  min-height: 32px;
+  height: 32px;
 }
 
 .title-bar-logo-wrapper {
@@ -35,6 +38,11 @@
   border-radius: 4px;
   transition: background 0.2s ease;
   -webkit-app-region: no-drag;
+  height: 32px;
+  flex-shrink: 0;
+  margin-right: 5px;
+  position: relative;
+  min-width: fit-content;
 }
 
 .title-bar-logo-wrapper:hover {
@@ -66,16 +74,56 @@
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.25px;
-  opacity: 0;
-  max-width: 0;
-  overflow: hidden;
   white-space: nowrap;
-  transition: opacity 0.2s ease, max-width 0.2s ease;
 }
 
-.title-bar-logo-wrapper:hover .title-bar-logo-text {
-  opacity: 1;
-  max-width: 100px;
+.title-bar-logo-text-studio {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-primary);
+  letter-spacing: -0.25px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  margin-left: 2px;
+}
+
+
+.title-bar-studio-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 8px;
+  background: transparent;
+  border: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 0;
+  transition: all 0.2s ease;
+  margin-left: 0;
+  -webkit-app-region: no-drag;
+  flex-shrink: 0;
+}
+
+.title-bar-studio-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+  user-select: none;
+  margin-left: 0;
+}
+
+.title-bar-studio-btn:hover {
+  background: var(--bg-hover);
+  color: var(--accent-primary);
+}
+
+.title-bar-studio-btn:active {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .app-logo {
@@ -133,7 +181,59 @@
 
 .title-bar-right {
   display: flex;
+  align-items: center;
+  gap: 6px;
   -webkit-app-region: no-drag;
+}
+
+.title-bar-zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.title-bar-zoom-btn {
+  width: 24px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+  padding: 0;
+  border-radius: 0;
+}
+
+.title-bar-zoom-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.title-bar-zoom-btn:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.title-bar-zoom-level {
+  min-width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 0;
+  user-select: none;
+}
+
+.title-bar-separator-vertical {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 2px;
 }
 
 .title-bar-button {

@@ -4,6 +4,8 @@
   flex-direction: row;
   background: var(--bg-primary);
   overflow: hidden;
+  position: relative;
+  z-index: 1;
 }
 
 /* Market Main Container */

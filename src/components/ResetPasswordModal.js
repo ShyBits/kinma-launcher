@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import './ResetPasswordModal.css';
 
-const ResetPasswordModal = ({ isOpen, onClose, token, onSuccess }) => {
+const ResetPasswordModal = ({ isOpen, onClose, token, onSuccess, variant = 'modal' }) => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -99,13 +99,16 @@ const ResetPasswordModal = ({ isOpen, onClose, token, onSuccess }) => {
 
   if (!isOpen) return null;
 
-  if (tokenValid === false) {
-    return (
-      <div className="reset-password-modal-overlay" onClick={handleClose}>
-        <div className="reset-password-modal" onClick={(e) => e.stopPropagation()}>
-          <button className="reset-password-modal-close" onClick={handleClose}>
-            <X size={20} />
-          </button>
+  const content = (
+    <>
+      {variant === 'modal' && (
+        <button className="reset-password-modal-close" onClick={handleClose} disabled={submitting}>
+          <X size={20} />
+        </button>
+      )}
+
+      {tokenValid === false ? (
+        <>
           <h2 className="reset-password-modal-title">Invalid Reset Link</h2>
           <p className="reset-password-modal-description">
             {error || 'This password reset link is invalid or has expired. Please request a new password reset link.'}
@@ -113,6 +116,105 @@ const ResetPasswordModal = ({ isOpen, onClose, token, onSuccess }) => {
           <button className="auth-submit" onClick={handleClose}>
             Close
           </button>
+        </>
+      ) : (
+        <>
+          <h2 className="reset-password-modal-title">Reset Password</h2>
+          <p className="reset-password-modal-description">
+            Enter your new password. It cannot be the same as your previous password.
+          </p>
+
+          <form onSubmit={handleSubmit} className="reset-password-form">
+            <div className="auth-field">
+              <label>New Password</label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => {
+                  setNewPassword(e.target.value);
+                  if (fieldErrors.newPassword) {
+                    setFieldErrors(prev => {
+                      const newErrors = { ...prev };
+                      delete newErrors.newPassword;
+                      return newErrors;
+                    });
+                  }
+                }}
+                className={fieldErrors.newPassword ? 'error' : ''}
+                placeholder="Enter new password"
+                autoComplete="new-password"
+                disabled={submitting || tokenValid === null}
+              />
+              {fieldErrors.newPassword && (
+                <div className="auth-field-error">{fieldErrors.newPassword}</div>
+              )}
+              {!fieldErrors.newPassword && newPassword && newPassword.length < 6 && (
+                <div className="auth-field-error">Password must be at least 6 characters</div>
+              )}
+            </div>
+
+            <div className="auth-field">
+              <label>Confirm New Password</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  if (fieldErrors.confirmPassword) {
+                    setFieldErrors(prev => {
+                      const newErrors = { ...prev };
+                      delete newErrors.confirmPassword;
+                      return newErrors;
+                    });
+                  }
+                }}
+                className={fieldErrors.confirmPassword ? 'error' : ''}
+                placeholder="Confirm new password"
+                autoComplete="new-password"
+                disabled={submitting || tokenValid === null}
+              />
+              {fieldErrors.confirmPassword && (
+                <div className="auth-field-error">{fieldErrors.confirmPassword}</div>
+              )}
+              {!fieldErrors.confirmPassword && confirmPassword && newPassword !== confirmPassword && (
+                <div className="auth-field-error">Passwords do not match</div>
+              )}
+            </div>
+
+            {error && (
+              <div className="auth-error-message">{error}</div>
+            )}
+
+            <div className="reset-password-actions">
+              {variant === 'modal' && (
+                <button
+                  type="button"
+                  className="forgot-password-cancel"
+                  onClick={handleClose}
+                  disabled={submitting}
+                >
+                  Cancel
+                </button>
+              )}
+              <button
+                type="submit"
+                className="auth-submit"
+                disabled={submitting || tokenValid === null || !newPassword.trim() || !confirmPassword.trim()}
+              >
+                {submitting ? 'Resetting...' : 'Reset Password'}
+              </button>
+            </div>
+          </form>
+        </>
+      )}
+    </>
+  );
+
+  if (variant === 'page') {
+    return (
+      <div className="reset-password-page">
+        <div className="reset-password-page-content">
+          {content}
         </div>
       </div>
     );
@@ -121,94 +223,7 @@ const ResetPasswordModal = ({ isOpen, onClose, token, onSuccess }) => {
   return (
     <div className="reset-password-modal-overlay" onClick={handleClose}>
       <div className="reset-password-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="reset-password-modal-close" onClick={handleClose} disabled={submitting}>
-          <X size={20} />
-        </button>
-
-        <h2 className="reset-password-modal-title">Reset Password</h2>
-        <p className="reset-password-modal-description">
-          Enter your new password. It cannot be the same as your previous password.
-        </p>
-
-        <form onSubmit={handleSubmit} className="reset-password-form">
-          <div className="auth-field">
-            <label>New Password</label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => {
-                setNewPassword(e.target.value);
-                if (fieldErrors.newPassword) {
-                  setFieldErrors(prev => {
-                    const newErrors = { ...prev };
-                    delete newErrors.newPassword;
-                    return newErrors;
-                  });
-                }
-              }}
-              className={fieldErrors.newPassword ? 'error' : ''}
-              placeholder="Enter new password"
-              autoComplete="new-password"
-              disabled={submitting || tokenValid === null}
-            />
-            {fieldErrors.newPassword && (
-              <div className="auth-field-error">{fieldErrors.newPassword}</div>
-            )}
-            {!fieldErrors.newPassword && newPassword && newPassword.length < 6 && (
-              <div className="auth-field-error">Password must be at least 6 characters</div>
-            )}
-          </div>
-
-          <div className="auth-field">
-            <label>Confirm New Password</label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => {
-                setConfirmPassword(e.target.value);
-                if (fieldErrors.confirmPassword) {
-                  setFieldErrors(prev => {
-                    const newErrors = { ...prev };
-                    delete newErrors.confirmPassword;
-                    return newErrors;
-                  });
-                }
-              }}
-              className={fieldErrors.confirmPassword ? 'error' : ''}
-              placeholder="Confirm new password"
-              autoComplete="new-password"
-              disabled={submitting || tokenValid === null}
-            />
-            {fieldErrors.confirmPassword && (
-              <div className="auth-field-error">{fieldErrors.confirmPassword}</div>
-            )}
-            {!fieldErrors.confirmPassword && confirmPassword && newPassword !== confirmPassword && (
-              <div className="auth-field-error">Passwords do not match</div>
-            )}
-          </div>
-
-          {error && (
-            <div className="auth-error-message">{error}</div>
-          )}
-
-          <div className="reset-password-actions">
-            <button
-              type="button"
-              className="forgot-password-cancel"
-              onClick={handleClose}
-              disabled={submitting}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="auth-submit"
-              disabled={submitting || tokenValid === null || !newPassword.trim() || !confirmPassword.trim()}
-            >
-              {submitting ? 'Resetting...' : 'Reset Password'}
-            </button>
-          </div>
-        </form>
+        {content}
       </div>
     </div>
   );

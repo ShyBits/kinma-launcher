@@ -857,6 +857,45 @@
   color: rgba(212, 228, 255, 1);
 }
 
+/* Active state - Red when code view is open */
+.promo-custom-code-toggle-btn.active {
+  background: linear-gradient(135deg, rgba(45, 25, 25, 0.98) 0%, rgba(36, 18, 18, 0.98) 100%);
+  border-color: rgba(255, 77, 77, 0.5);
+  color: #ffb8b8;
+  box-shadow: 
+    0 3px 12px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 77, 77, 0.25) inset,
+    0 2px 4px rgba(255, 255, 255, 0.06) inset;
+}
+
+.promo-custom-code-toggle-btn.active:hover {
+  background: linear-gradient(135deg, rgba(55, 35, 35, 1) 0%, rgba(46, 28, 28, 1) 100%);
+  border-color: rgba(255, 77, 77, 0.7);
+  color: #ffd4d4;
+  box-shadow: 
+    0 5px 20px rgba(255, 77, 77, 0.3),
+    0 0 0 1px rgba(255, 77, 77, 0.35) inset,
+    0 3px 6px rgba(255, 255, 255, 0.1) inset;
+}
+
+.promo-custom-code-toggle-btn.active .code-symbol {
+  color: #ff4d4d;
+  text-shadow: 0 0 8px rgba(255, 77, 77, 0.6);
+}
+
+.promo-custom-code-toggle-btn.active:hover .code-symbol {
+  color: #ff6b6b;
+  text-shadow: 0 0 12px rgba(255, 107, 107, 0.8);
+}
+
+.promo-custom-code-toggle-btn.active .code-btn-text {
+  color: rgba(255, 184, 184, 0.9);
+}
+
+.promo-custom-code-toggle-btn.active:hover .code-btn-text {
+  color: rgba(255, 212, 212, 1);
+}
+
 .promo-edit-actions {
   display: flex;
   gap: 12px;
@@ -1487,10 +1526,82 @@
   background: transparent !important;
 }
 
-.code-tab:hover::before {
+/* HTML Tab Hover - Orange/Red (only when not active) */
+.code-tab.code-tab-html:hover:not(.active) {
+  color: #ff6b35;
+}
+
+.code-tab.code-tab-html:hover:not(.active)::before {
+  left: 0;
+  right: 0;
+  background: rgba(255, 107, 53, 0.4);
+}
+
+.code-tab.code-tab-html:hover:not(.active)::after {
+  opacity: 1;
+  background: linear-gradient(to top, 
+    rgba(255, 107, 53, 0.06) 0%, 
+    rgba(255, 107, 53, 0.02) 30%, 
+    rgba(255, 107, 53, 0.008) 60%, 
+    transparent 100%
+  );
+}
+
+.code-tab.code-tab-html:hover:not(.active) svg {
+  color: #ff6b35;
+  stroke: #ff6b35;
+}
+
+/* CSS Tab Hover - Blue (only when not active) */
+.code-tab.code-tab-css:hover:not(.active) {
+  color: #4a9eff;
+}
+
+.code-tab.code-tab-css:hover:not(.active)::before {
   left: 0;
   right: 0;
   background: rgba(74, 158, 255, 0.4);
+}
+
+.code-tab.code-tab-css:hover:not(.active)::after {
+  opacity: 1;
+  background: linear-gradient(to top, 
+    rgba(74, 158, 255, 0.06) 0%, 
+    rgba(74, 158, 255, 0.02) 30%, 
+    rgba(74, 158, 255, 0.008) 60%, 
+    transparent 100%
+  );
+}
+
+.code-tab.code-tab-css:hover:not(.active) svg {
+  color: #4a9eff;
+  stroke: #4a9eff;
+}
+
+/* JavaScript Tab Hover - Yellow (only when not active) */
+.code-tab.code-tab-js:hover:not(.active) {
+  color: #f7df1e;
+}
+
+.code-tab.code-tab-js:hover:not(.active)::before {
+  left: 0;
+  right: 0;
+  background: rgba(247, 223, 30, 0.4);
+}
+
+.code-tab.code-tab-js:hover:not(.active)::after {
+  opacity: 1;
+  background: linear-gradient(to top, 
+    rgba(247, 223, 30, 0.06) 0%, 
+    rgba(247, 223, 30, 0.02) 30%, 
+    rgba(247, 223, 30, 0.008) 60%, 
+    transparent 100%
+  );
+}
+
+.code-tab.code-tab-js:hover:not(.active) svg {
+  color: #f7df1e;
+  stroke: #f7df1e;
 }
 
 .code-tab:not(:hover):not(.active)::before {
@@ -1504,7 +1615,47 @@
   color: #4a9eff;
 }
 
-.code-tab.active::after {
+/* HTML Tab - Orange/Red */
+.code-tab.html-active {
+  color: #ff6b35;
+}
+
+.code-tab.html-active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  background: linear-gradient(to top, 
+    rgba(255, 107, 53, 0.25) 0%, 
+    rgba(255, 107, 53, 0.1) 30%, 
+    rgba(255, 107, 53, 0.04) 60%, 
+    transparent 100%
+  );
+  pointer-events: none;
+  border-radius: 0;
+  opacity: 1;
+}
+
+.code-tab.html-active::before {
+  left: 0;
+  right: 0;
+  border-radius: 0;
+  background: #ff6b35;
+}
+
+.code-tab.html-active svg {
+  color: #ff6b35;
+  stroke: #ff6b35;
+}
+
+/* CSS Tab - Blue */
+.code-tab.css-active {
+  color: #4a9eff;
+}
+
+.code-tab.css-active::after {
   content: '';
   position: absolute;
   bottom: 0;
@@ -1522,11 +1673,51 @@
   opacity: 1;
 }
 
-.code-tab.active::before {
+.code-tab.css-active::before {
   left: 0;
   right: 0;
   border-radius: 0;
-  background: var(--accent-primary);
+  background: #4a9eff;
+}
+
+.code-tab.css-active svg {
+  color: #4a9eff;
+  stroke: #4a9eff;
+}
+
+/* JavaScript Tab - Yellow */
+.code-tab.js-active {
+  color: #f7df1e;
+}
+
+.code-tab.js-active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  top: 0;
+  background: linear-gradient(to top, 
+    rgba(247, 223, 30, 0.25) 0%, 
+    rgba(247, 223, 30, 0.1) 30%, 
+    rgba(247, 223, 30, 0.04) 60%, 
+    transparent 100%
+  );
+  pointer-events: none;
+  border-radius: 0;
+  opacity: 1;
+}
+
+.code-tab.js-active::before {
+  left: 0;
+  right: 0;
+  border-radius: 0;
+  background: #f7df1e;
+}
+
+.code-tab.js-active svg {
+  color: #f7df1e;
+  stroke: #f7df1e;
 }
 
 .code-tab svg {
@@ -1541,6 +1732,22 @@
 
 .code-tab.active svg {
   color: rgba(255, 255, 255, 1);
+}
+
+/* Override active svg color for specific tabs */
+.code-tab.html-active.active svg {
+  color: #ff6b35;
+  stroke: #ff6b35;
+}
+
+.code-tab.css-active.active svg {
+  color: #4a9eff;
+  stroke: #4a9eff;
+}
+
+.code-tab.js-active.active svg {
+  color: #f7df1e;
+  stroke: #f7df1e;
 }
 
 .code-tab-separator {

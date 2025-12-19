@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Minus, Maximize, X, Menu, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { Minus, Maximize, X, Menu, ChevronLeft, ChevronRight, ChevronDown, Plus, Layout } from 'lucide-react';
 import KinmaLogo from './KinmaLogo';
-import { getUserData, getCurrentUserId } from '../utils/UserDataManager';
+import { getUserData, getCurrentUserId, saveUserData } from '../utils/UserDataManager';
 import './TitleBar.css';
 
 const TitleBar = ({ onToggleSidebar, navigate }) => {
@@ -11,6 +11,8 @@ const TitleBar = ({ onToggleSidebar, navigate }) => {
   const [canGoForward, setCanGoForward] = useState(false);
   const [activeMenu, setActiveMenu] = useState(null);
   const [isDeveloper, setIsDeveloper] = useState(false);
+  const [gameStudioEnabled, setGameStudioEnabled] = useState(false);
+  const [zoomLevel, setZoomLevel] = useState(100);
   const titleBarMenuJustOpenedRef = useRef(false);
   const titleBarMenuTimeoutRef = useRef(null);
 
@@ -28,6 +30,7 @@ const TitleBar = ({ onToggleSidebar, navigate }) => {
           // User has developer access only if explicitly granted (not pending)
           const isDev = (hasDeveloperAccess || hasGameStudioAccess) && accessStatus !== 'pending';
           setIsDeveloper(isDev);
+          setGameStudioEnabled(isDev);
         } else {
           // Fallback to localStorage for backward compatibility
           const developerIntent = localStorage.getItem('developerIntent');
@@ -115,6 +118,46 @@ const TitleBar = ({ onToggleSidebar, navigate }) => {
       window.electronAPI.closeWindow();
     }
   };
+
+  const zoomIn = () => {
+    const newZoom = Math.min(zoomLevel + 10, 200);
+    setZoomLevel(newZoom);
+    const mainContent = document.querySelector('.main-content');
+    if (mainContent) {
+      mainContent.style.zoom = `${newZoom}%`;
+    }
+  };
+
+  const zoomOut = () => {
+    const newZoom = Math.max(zoomLevel - 10, 50);
+    setZoomLevel(newZoom);
+    const mainContent = document.querySelector('.main-content');
+    if (mainContent) {
+      mainContent.style.zoom = `${newZoom}%`;
+    }
+  };
+
+  // Initialize zoom level on mount
+  useEffect(() => {
+    const savedZoom = localStorage.getItem('zoomLevel');
+    if (savedZoom) {
+      const zoom = parseInt(savedZoom, 10);
+      setZoomLevel(zoom);
+      const mainContent = document.querySelector('.main-content');
+      if (mainContent) {
+        mainContent.style.zoom = `${zoom}%`;
+      }
+    }
+  }, []);
+
+  // Save zoom level when it changes
+  useEffect(() => {
+    localStorage.setItem('zoomLevel', zoomLevel.toString());
+    const mainContent = document.querySelector('.main-content');
+    if (mainContent) {
+      mainContent.style.zoom = `${zoomLevel}%`;
+    }
+  }, [zoomLevel]);
 
   const handleGoBack = () => {
     if (canGoBack) {
@@ -210,7 +253,26 @@ const TitleBar = ({ onToggleSidebar, navigate }) => {
                   <KinmaLogo />
                 </div>
                 <span className="title-bar-logo-text">KINMA</span>
+                {isGameStudio && <span className="title-bar-logo-text-studio">STUDIO</span>}
               </div>
+              {gameStudioEnabled && (
+                <button
+                  className="title-bar-studio-btn"
+                  onClick={() => {
+                    if (isGameStudio) {
+                      navigate('/library');
+                    } else {
+                      navigate('/game-studio');
+                    }
+                  }}
+                  title={isGameStudio ? "Back to Library" : "Game Studio"}
+                >
+                  <Layout size={16} />
+                  <span className="title-bar-studio-text">
+                    {isGameStudio ? "User View" : "Studio View"}
+                  </span>
+                </button>
+              )}
               {!isGameStudio && (
                 <>
                   {/* Library Menu */}
@@ -338,6 +400,24 @@ const TitleBar = ({ onToggleSidebar, navigate }) => {
           )}
         </div>
         <div className="title-bar-right">
+          <div className="title-bar-zoom-controls">
+            <button 
+              className="title-bar-zoom-btn zoom-out" 
+              onClick={zoomOut}
+              title="Zoom Out"
+            >
+              <Minus size={12} />
+            </button>
+            <span className="title-bar-zoom-level">{zoomLevel}%</span>
+            <button 
+              className="title-bar-zoom-btn zoom-in" 
+              onClick={zoomIn}
+              title="Zoom In"
+            >
+              <Plus size={12} />
+            </button>
+          </div>
+          <div className="title-bar-separator-vertical"></div>
           <button className="title-bar-button minimize" onClick={minimizeWindow}>
             <Minus size={14} />
           </button>

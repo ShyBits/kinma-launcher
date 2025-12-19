@@ -45,6 +45,7 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
   const [maxAccountsReached, setMaxAccountsReached] = useState(false);
   const [hasMaxAccounts, setHasMaxAccounts] = useState(false); // Track if 10 accounts exist (for blocking register tab)
   const [hasGhostAccounts, setHasGhostAccounts] = useState(false); // Track if there are any ghost logged-in accounts
+  const [hasAccounts, setHasAccounts] = useState(false); // Track if there are any accounts at all
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [resetToken, setResetToken] = useState(null);
@@ -99,6 +100,7 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
           });
           
           setHasGhostAccounts(ghostAccounts.length > 0);
+          setHasAccounts(visibleUsers.length > 0); // Set to true if there are any accounts
           
           // If we have max accounts and are in register mode, switch to login mode
           if (hasMax && authMode === 'register') {
@@ -108,6 +110,7 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
           console.error('Error checking max accounts:', error);
           setHasMaxAccounts(false);
           setHasGhostAccounts(false);
+          setHasAccounts(false);
         }
       };
       checkMaxAccounts();
@@ -116,7 +119,14 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
 
   // Check for reset token in URL
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) {
+      // When modal closes, reset the reset password state
+      setShowResetPassword(false);
+      setResetToken(null);
+      return;
+    }
+
+    const checkResetToken = () => {
       const hash = window.location.hash || '';
       const searchParams = window.location.search || '';
       
@@ -134,8 +144,27 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
       if (token) {
         setResetToken(token);
         setShowResetPassword(true);
+      } else {
+        // If no token in URL, close the reset modal
+        setShowResetPassword(false);
+        setResetToken(null);
       }
-    }
+    };
+    
+    // Check immediately
+    checkResetToken();
+    
+    // Listen for URL changes (browser navigation)
+    window.addEventListener('popstate', checkResetToken);
+    
+    // Also check periodically in case URL changes programmatically (e.g., Electron navigation)
+    // This handles cases where the URL changes but React Router doesn't detect it
+    const interval = setInterval(checkResetToken, 1000);
+    
+    return () => {
+      window.removeEventListener('popstate', checkResetToken);
+      clearInterval(interval);
+    };
   }, [isOpen]);
 
   // Check for email parameter in URL and pre-fill it
@@ -376,40 +405,6 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
         });
         localStorage.setItem('users', JSON.stringify(sorted));
       } catch (_) {}
-    }
-  };
-
-  // Clear all users from file system and localStorage
-  const clearAllUsers = async () => {
-    try {
-      // Clear from file system using Electron API
-      const api = window.electronAPI;
-      if (api && api.clearAllUsers) {
-        await api.clearAllUsers();
-      }
-      
-      // Clear from localStorage
-      try {
-        localStorage.removeItem('users');
-      } catch (_) {}
-      
-      // Also clear authUser if exists
-      try {
-        localStorage.removeItem('authUser');
-      } catch (_) {}
-      
-      // Reset state
-      setIsExistingUser(null);
-      setIdentifier('');
-      setPassword('');
-      setConfirmPassword('');
-      setFullName('');
-      
-      console.log('All users cleared from file system and cache');
-      return true;
-    } catch (error) {
-      console.error('Error clearing users:', error);
-      return false;
     }
   };
 
@@ -755,6 +750,9 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
     
     const newFieldErrors = {};
     
+    // Trim identifier once at the start for use throughout the function
+    const trimmedIdentifier = identifier ? identifier.trim() : '';
+    
     // Validate inputs first
     if (!identifier || !identifier.trim()) {
       newFieldErrors.identifier = 'This field is required.';
@@ -766,7 +764,6 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
     
     // Validate username length early for register mode
     if (authMode === 'register') {
-      const trimmedIdentifier = identifier.trim();
       if (trimmedIdentifier.length < 1) {
         newFieldErrors.identifier = 'Username must be at least 1 character long.';
       } else if (trimmedIdentifier.length > 20) {
@@ -1113,11 +1110,30 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
   const handleGoToAccountSwitcher = async () => {
     try {
       const api = window.electronAPI;
+      console.log('🔄 Switch account button clicked');
       
-      // For page variant, navigate directly
+      // Try to use Electron API to open account switcher window (works for both variants)
+      if (api && api.openAccountSwitcherWindow) {
+        try {
+          console.log('✅ Using Electron API to open account switcher window');
+          const result = await api.openAccountSwitcherWindow();
+          if (result && result.success) {
+            console.log('✅ Account switcher window opened successfully');
+            return;
+          } else {
+            console.log('⚠️ Account switcher window open returned:', result);
+          }
+        } catch (e) {
+          console.error('❌ Error opening account switcher window:', e);
+        }
+      }
+      
+      // For page variant, navigate directly via hash
       if (variant === 'page') {
+        console.log('📱 Page variant - navigating via hash');
         if (window.location) {
           window.location.hash = '/account-switcher';
+          console.log('✅ Hash set to /account-switcher');
         }
         return;
       }
@@ -1125,22 +1141,12 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
       // For modal variant, close and navigate
       onClose?.();
       
-      // Try to use Electron API to open account switcher window
-      if (api && api.openAccountSwitcherWindow) {
-        try {
-          await api.openAccountSwitcherWindow();
-          return;
-        } catch (e) {
-          console.error('Error opening account switcher window:', e);
-        }
-      }
-      
       // Fallback: navigate via hash
       if (window.location) {
         window.location.hash = '/account-switcher';
       }
     } catch (error) {
-      console.error('Error navigating to account switcher:', error);
+      console.error('❌ Error navigating to account switcher:', error);
       // Final fallback
       if (window.location) {
         window.location.hash = '/account-switcher';
@@ -1260,7 +1266,7 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
                   <div className="auth-field-error">{fieldErrors.identifier}</div>
                 )}
                 </div>
-                {hasGhostAccounts && (
+                {hasAccounts && (
                   <button 
                     className="auth-switch-account-btn-inline" 
                     onClick={handleGoToAccountSwitcher} 
@@ -1719,34 +1725,62 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
   );
 
   if (variant === 'page') {
+    // If reset password is active, show it as full-screen page instead of the auth form
+    if (showResetPassword) {
+      return (
+        <>
+          <ResetPasswordModal
+            isOpen={showResetPassword}
+            onClose={() => {
+              setShowResetPassword(false);
+              setResetToken(null);
+            }}
+            token={resetToken}
+            variant="page"
+            onSuccess={() => {
+              setShowResetPassword(false);
+              setResetToken(null);
+              // Optionally show success message or redirect to login
+              if (onClose) {
+                onClose();
+              }
+            }}
+          />
+        </>
+      );
+    }
+
+    // If forgot password is active, show it as full-screen page instead of the auth form
+    if (showForgotPassword) {
+      // Check if identifier is a valid email to pre-fill
+      const getInitialEmail = () => {
+        if (!identifier || !identifier.trim()) return '';
+        const trimmed = identifier.trim();
+        // Check if it's a valid email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (emailRegex.test(trimmed)) {
+          return trimmed;
+        }
+        return '';
+      };
+
+      return (
+        <>
+          <ForgotPasswordModal
+            isOpen={showForgotPassword}
+            onClose={() => setShowForgotPassword(false)}
+            variant="page"
+            initialEmail={getInitialEmail()}
+          />
+        </>
+      );
+    }
+
     return (
       <>
         <div className={`auth-page ${fullscreen ? 'fullscreen' : ''}`}>
           {Container}
         </div>
-        <ForgotPasswordModal
-          isOpen={showForgotPassword}
-          onClose={() => setShowForgotPassword(false)}
-          onSuccess={() => {
-            setShowForgotPassword(false);
-          }}
-        />
-        <ResetPasswordModal
-          isOpen={showResetPassword}
-          onClose={() => {
-            setShowResetPassword(false);
-            setResetToken(null);
-          }}
-          token={resetToken}
-          onSuccess={() => {
-            setShowResetPassword(false);
-            setResetToken(null);
-            // Optionally show success message or redirect to login
-            if (onClose) {
-              onClose();
-            }
-          }}
-        />
       </>
     );
   }
@@ -1759,9 +1793,16 @@ const AuthModal = ({ isOpen, onClose, onAuthenticated, fullscreen = false, varia
       <ForgotPasswordModal
         isOpen={showForgotPassword}
         onClose={() => setShowForgotPassword(false)}
-        onSuccess={() => {
-          setShowForgotPassword(false);
-        }}
+        initialEmail={(() => {
+          // Check if identifier is a valid email to pre-fill
+          if (!identifier || !identifier.trim()) return '';
+          const trimmed = identifier.trim();
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (emailRegex.test(trimmed)) {
+            return trimmed;
+          }
+          return '';
+        })()}
       />
       <ResetPasswordModal
         isOpen={showResetPassword}

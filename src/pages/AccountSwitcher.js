@@ -116,12 +116,22 @@ const AccountSwitcherPage = ({ navigate }) => {
           const users = result.users;
           userData = users.find(u => u.id === user.id);
           console.log('📋 Found userData:', userData);
+          console.log('📋 userData.isLoggedIn:', userData?.isLoggedIn, 'type:', typeof userData?.isLoggedIn);
           
-          // Check if user is actively logged in (isLoggedIn === true)
-          // Only proceed if explicitly true - any other value (false, undefined, null) means not logged in
-          if (userData && userData.isLoggedIn === true) {
+          // Check if user is actively logged in (isLoggedIn === true, 1, or "1")
+          // Handle both boolean true and numeric 1 (MySQL stores BOOLEAN as TINYINT)
+          const isLoggedIn = userData && (
+            userData.isLoggedIn === true || 
+            userData.isLoggedIn === 1 || 
+            userData.isLoggedIn === '1'
+          );
+          
+          console.log('📋 isLoggedIn check result:', isLoggedIn);
+          
+          if (userData && isLoggedIn) {
             userIsLoggedIn = true;
-            console.log('✅ User is logged in - switching to account and opening main window');
+            console.log('✅ User is logged in (green) - switching directly without auth window');
+            console.log('✅ Proceeding with direct login - NO auth window will be opened');
           } else {
             // User is logged out, status unclear, or isLoggedIn is not true
             // Default to opening auth window as escape route
@@ -225,11 +235,16 @@ const AccountSwitcherPage = ({ navigate }) => {
             const currentUserIndex = users.findIndex(u => u.id === currentAuthUser.id);
             if (currentUserIndex !== -1) {
               const currentUser = users[currentUserIndex];
-              // Always log out the previous user when switching (temporary session termination)
-              // This is just a session logout, NOT a removal from the account switcher
-              users[currentUserIndex].isLoggedIn = false;
+              // Only log out the previous user if they don't have "stayLoggedIn" enabled
+              // This allows multiple accounts to be logged in simultaneously for quick login
+              if (currentUser.stayLoggedIn !== true) {
+                users[currentUserIndex].isLoggedIn = false;
+                console.log('✅ Logged out previous user (stayLoggedIn not enabled)');
+              } else {
+                // Keep previous user logged in for quick login
+                console.log('✅ Keeping previous user logged in (stayLoggedIn enabled)');
+              }
               // IMPORTANT: Do NOT set hiddenInSwitcher: true here - account should remain visible
-              console.log('✅ Logged out previous user (temporary session termination)');
               await api?.saveUsers?.(users);
             }
           }

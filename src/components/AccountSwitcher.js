@@ -269,15 +269,76 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
     return name.substring(0, 2).toUpperCase();
   };
 
-  const handleAccountClick = (user) => {
-    if (isProcessing || isActiveUser(user)) {
+  const handleAccountClick = async (user) => {
+    if (isProcessing) {
       return;
     }
 
-    setIsProcessing(true);
-    setProcessingAccount(user.id);
-    setSwitchingToUser(user); // Store the user being switched to
-    onSwitchAccount?.(user);
+    // Check if user is logged in (green) - if so, log in directly without auth window
+    try {
+      const api = window.electronAPI;
+      const result = await api?.getUsers?.();
+      if (result && result.success && Array.isArray(result.users)) {
+        const userData = result.users.find(u => u.id === user.id);
+        
+        // If user is logged in (green), switch directly - skip auth window
+        // Handle both boolean true and numeric 1 (MySQL stores BOOLEAN as TINYINT)
+        const isLoggedIn = userData.isLoggedIn === true || 
+                          userData.isLoggedIn === 1 || 
+                          userData.isLoggedIn === '1';
+        
+        if (userData && isLoggedIn) {
+          console.log('✅ User is logged in (green) - switching directly without auth window');
+          console.log('📋 UserData isLoggedIn value:', userData.isLoggedIn, 'type:', typeof userData.isLoggedIn);
+          setIsProcessing(true);
+          setProcessingAccount(user.id);
+          setSwitchingToUser(user);
+          onSwitchAccount?.(user);
+          return;
+        } else {
+          // User is not logged in (ghost mode) - open auth window
+          console.log('⚠️ User is not logged in (ghost mode) - opening auth window');
+          const email = user.email || user.username || '';
+          const authResult = await api?.openAuthWindow?.(email);
+          if (!authResult || !authResult.success) {
+            // Fallback: navigate to auth
+            if (window.location) {
+              window.location.hash = email 
+                ? `/auth?addAccount=true&email=${encodeURIComponent(email)}`
+                : '/auth?addAccount=true';
+            }
+          }
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Error checking user login status:', error);
+      // On error, open auth window as fallback
+      const api = window.electronAPI;
+      const email = user.email || user.username || '';
+      const authResult = await api?.openAuthWindow?.(email);
+      if (!authResult || !authResult.success) {
+        if (window.location) {
+          window.location.hash = email 
+            ? `/auth?addAccount=true&email=${encodeURIComponent(email)}`
+            : '/auth?addAccount=true';
+        }
+      }
+      return;
+    }
+    
+    // Fallback: if we can't determine status, open auth window to be safe
+    console.log('⚠️ Could not determine login status - opening auth window as fallback');
+    const api = window.electronAPI;
+    const email = user.email || user.username || '';
+    const authResult = await api?.openAuthWindow?.(email);
+    if (!authResult || !authResult.success) {
+      if (window.location) {
+        window.location.hash = email 
+          ? `/auth?addAccount=true&email=${encodeURIComponent(email)}`
+          : '/auth?addAccount=true';
+      }
+    }
   };
 
   const handleRemoveAccount = async (user, e) => {
@@ -635,11 +696,12 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
                   const isProcessingThis = processingAccount === user.id;
                   const isDisabled = isProcessing || isActive;
                   const isConfirming = confirmingRemove === user.id;
+                  const isLoggedIn = user.isLoggedIn === true; // Check if user is logged in
                   
                   return (
                     <div
                       key={user.id}
-                      className={`account-switcher-card ${isActive ? 'active' : ''} ${isProcessingThis ? 'processing' : ''} ${isDisabled ? 'disabled' : ''} ${isConfirming ? 'confirming' : ''}`}
+                      className={`account-switcher-card ${isActive ? 'active' : ''} ${isProcessingThis ? 'processing' : ''} ${isDisabled ? 'disabled' : ''} ${isConfirming ? 'confirming' : ''} ${isLoggedIn ? 'logged-in' : ''}`}
                       onClick={() => !isDisabled && !isConfirming && handleAccountClick(user)}
                     >
                       {isConfirming ? (

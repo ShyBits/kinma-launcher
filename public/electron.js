@@ -1490,19 +1490,20 @@ ipcMain.handle('logout', async () => {
     
     console.log('Logging out from account:', currentAuthUser.name || currentAuthUser.email);
     
-    // Mark current user as logged out (temporary session termination)
-    // IMPORTANT: Only set isLoggedIn: false, NEVER set hiddenInSwitcher: true
-    // Accounts should remain visible in the account switcher until explicitly removed
+    // Set isLoggedIn to false and clear stayLoggedIn when user logs out
+    // This puts the account in "ghost mode" - visible but not logged in
+    // User will need to log in again when clicking on the account
     try {
       if (!dbManager) {
         dbManager = getDatabaseManager();
         await dbManager.initialize();
       }
+      // Set isLoggedIn to false and stayLoggedIn to false when logging out
       await dbManager.query(
-        'UPDATE users SET isLoggedIn = ? WHERE id = ?',
-        [false, currentAuthUser.id]
+        'UPDATE users SET isLoggedIn = ?, stayLoggedIn = ? WHERE id = ?',
+        [false, false, currentAuthUser.id]
       );
-      console.log('Marked user as logged out (temporary session termination)');
+      console.log('Account logged out - isLoggedIn set to false (ghost mode)');
     } catch (error) {
       console.error('Error updating user logout status:', error);
     }
@@ -2601,11 +2602,11 @@ ipcMain.handle('open-account-switcher-window', (event) => {
     const accountSwitcherWidth = Math.round(screenWidth * 0.30);
     const accountSwitcherHeight = Math.round(accountSwitcherWidth * (9 / 14));
     
-    // Create account switcher window AFTER current window is fully closed
-    const createAccountSwitcherAfterClose = () => {
+    // IMPORTANT: Create account switcher window FIRST, then close current window
+    // This prevents window-all-closed from triggering and opening auth window
     accountSwitcherWindow = new BrowserWindow({
       width: accountSwitcherWidth,
-        height: accountSwitcherHeight,
+      height: accountSwitcherHeight,
       resizable: false, // User cannot resize, but app can resize programmatically
       maximizable: false,
       fullscreenable: false,
@@ -2627,14 +2628,14 @@ ipcMain.handle('open-account-switcher-window', (event) => {
     
     accountSwitcherWindow.loadURL(startUrl);
     
-      // Show window when ready
-      accountSwitcherWindow.once('ready-to-show', () => {
-        if (accountSwitcherWindow && !accountSwitcherWindow.isDestroyed()) {
-    // Center the window
-    accountSwitcherWindow.center();
-      accountSwitcherWindow.show();
-      accountSwitcherWindow.focus();
-        }
+    // Show window when ready
+    accountSwitcherWindow.once('ready-to-show', () => {
+      if (accountSwitcherWindow && !accountSwitcherWindow.isDestroyed()) {
+        // Center the window
+        accountSwitcherWindow.center();
+        accountSwitcherWindow.show();
+        accountSwitcherWindow.focus();
+      }
     });
     
     // Ensure the renderer is on the /account-switcher route
@@ -2649,22 +2650,20 @@ ipcMain.handle('open-account-switcher-window', (event) => {
       `;
       accountSwitcherWindow.webContents.executeJavaScript(navigateToAccountSwitcher);
     });
-      
-      if (isDev) {
-        accountSwitcherWindow.webContents.openDevTools({ mode: 'detach' });
-      }
-    };
     
-    // Close current window first, wait for it to fully close, then open account switcher
-    if (currentWindow && !currentWindow.isDestroyed()) {
-      currentWindow.once('closed', () => {
-        console.log('✅ Current window closed - opening account switcher');
-        createAccountSwitcherAfterClose();
-      });
-      currentWindow.close();
-    } else {
-      // No current window to close, open account switcher immediately
-      createAccountSwitcherAfterClose();
+    if (isDev) {
+      accountSwitcherWindow.webContents.openDevTools({ mode: 'detach' });
+    }
+    
+    // NOW close the current window AFTER account switcher is created
+    // This ensures there's always a window open, preventing window-all-closed from triggering
+    if (currentWindow && !currentWindow.isDestroyed() && currentWindow !== accountSwitcherWindow) {
+      // Wait a moment to ensure account switcher window is ready
+      setTimeout(() => {
+        if (currentWindow && !currentWindow.isDestroyed()) {
+          currentWindow.close();
+        }
+      }, 100);
     }
     
     return { success: true };
@@ -3675,6 +3674,157 @@ ipcMain.handle('db-save-library-settings', async (event, userId, expandedFolders
   } catch (error) {
     console.error('Error saving library settings to database:', error);
     return { success: false, error: error.message };
+  }
+});
+
+// Cart handlers
+ipcMain.handle('db-get-cart-items', async (event, userId) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return JSON.parse(JSON.stringify({ success: false, error: 'Database not available', items: [] }));
+      }
+    }
+    const items = await dbManager.query(
+      'SELECT * FROM cart_items WHERE userId = ? ORDER BY timestamp DESC',
+      [userId]
+    );
+    const parsedItems = [];
+    if (Array.isArray(items)) {
+      for (const item of items) {
+        try {
+          // Convert timestamp to string if it's a Date object
+          let timestamp = item.timestamp;
+          if (timestamp instanceof Date) {
+            timestamp = timestamp.toISOString();
+          } else if (timestamp && typeof timestamp === 'object') {
+            // Handle MySQL date objects
+            try {
+              const dateObj = new Date(timestamp);
+              if (!isNaN(dateObj.getTime())) {
+                timestamp = dateObj.toISOString();
+              } else {
+                timestamp = String(timestamp);
+              }
+            } catch {
+              timestamp = String(timestamp || new Date().toISOString());
+            }
+          } else {
+            timestamp = String(timestamp || new Date().toISOString());
+          }
+          
+          // Parse itemData
+          let itemData = {};
+          if (item.itemData) {
+            try {
+              const parsed = typeof item.itemData === 'string' ? JSON.parse(item.itemData) : item.itemData;
+              if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+                itemData = parsed;
+              }
+            } catch {
+              itemData = {};
+            }
+          }
+          
+          // Create a plain serializable object
+          const plainItem = {
+            id: String(item.id || item.itemId || Date.now()),
+            amount: parseFloat(item.amount || 0),
+            timestamp: timestamp,
+            itemType: String(item.itemType || 'funds'),
+            itemData: itemData
+          };
+          
+          // Ensure it's serializable by using JSON
+          parsedItems.push(JSON.parse(JSON.stringify(plainItem)));
+        } catch {
+          parsedItems.push({
+            id: String(item.id || item.itemId || Date.now()),
+            amount: parseFloat(item.amount || 0),
+            timestamp: new Date().toISOString(),
+            itemType: String(item.itemType || 'funds'),
+            itemData: {}
+          });
+        }
+      }
+    }
+    // Return a serializable response
+    return JSON.parse(JSON.stringify({ success: true, items: parsedItems }));
+  } catch (error) {
+    console.error('Error getting cart items from database:', error);
+    return JSON.parse(JSON.stringify({ success: false, error: String(error.message || 'Unknown error'), items: [] }));
+  }
+});
+
+ipcMain.handle('db-save-cart-items', async (event, userId, items) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return JSON.parse(JSON.stringify({ success: false, error: 'Database not available' }));
+      }
+    }
+    
+    // First, delete all existing cart items for this user
+    await dbManager.query('DELETE FROM cart_items WHERE userId = ?', [userId]);
+    
+    // Then insert all new items
+    if (Array.isArray(items) && items.length > 0) {
+      for (const item of items) {
+        // Ensure all values are primitives
+        const itemId = String(item.id || Date.now());
+        const itemType = String(item.itemType || 'funds');
+        const itemAmount = parseFloat(item.amount || 0);
+        
+        // Convert timestamp to string if it's a Date object
+        let itemTimestamp = item.timestamp;
+        if (itemTimestamp instanceof Date) {
+          itemTimestamp = itemTimestamp.toISOString();
+        } else {
+          itemTimestamp = String(itemTimestamp || new Date().toISOString());
+        }
+        
+        // Serialize itemData
+        let itemDataStr = '{}';
+        if (item.itemData) {
+          try {
+            itemDataStr = JSON.stringify(item.itemData);
+          } catch {
+            itemDataStr = '{}';
+          }
+        }
+        
+        await dbManager.query(
+          `INSERT INTO cart_items (userId, itemId, itemType, amount, itemData, timestamp) 
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [userId, itemId, itemType, itemAmount, itemDataStr, itemTimestamp]
+        );
+      }
+    }
+    return JSON.parse(JSON.stringify({ success: true }));
+  } catch (error) {
+    console.error('Error saving cart items to database:', error);
+    return JSON.parse(JSON.stringify({ success: false, error: String(error.message || 'Unknown error') }));
+  }
+});
+
+ipcMain.handle('db-clear-cart', async (event, userId) => {
+  try {
+    if (!dbManager) {
+      dbManager = getDatabaseManager();
+      const initialized = await dbManager.initialize();
+      if (!initialized) {
+        return JSON.parse(JSON.stringify({ success: false, error: 'Database not available' }));
+      }
+    }
+    await dbManager.query('DELETE FROM cart_items WHERE userId = ?', [userId]);
+    return JSON.parse(JSON.stringify({ success: true }));
+  } catch (error) {
+    console.error('Error clearing cart from database:', error);
+    return JSON.parse(JSON.stringify({ success: false, error: String(error.message || 'Unknown error') }));
   }
 });
 

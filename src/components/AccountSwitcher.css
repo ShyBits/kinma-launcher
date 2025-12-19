@@ -144,11 +144,30 @@
     font-weight: 500;
     position: relative;
     transition: all 0.2s ease;
+    overflow: visible;
+}
+
+.account-switcher-card.logged-in .account-switcher-card-avatar {
+    border-color: #4ade80;
+    border-width: 2px;
+    box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.4);
+}
+
+/* Hide green border when in confirmation mode */
+.account-switcher-card.logged-in.confirming .account-switcher-card-avatar {
+    border-color: rgba(59, 130, 246, 0.2);
+    box-shadow: none;
 }
 
 .account-switcher-card:hover:not(.disabled):not(.processing) .account-switcher-card-avatar {
     background: rgba(59, 130, 246, 0.2);
     border-color: rgba(59, 130, 246, 0.3);
+}
+
+/* Keep green border on hover for logged-in accounts */
+.account-switcher-card.logged-in:hover:not(.disabled):not(.processing) .account-switcher-card-avatar {
+    border-color: #4ade80;
+    box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.5);
 }
 
 .account-switcher-card.active .account-switcher-card-avatar {
@@ -348,6 +367,7 @@
     backdrop-filter: none;
     overflow: hidden;
     border-color: rgba(160, 160, 160, 0.3) !important;
+    box-shadow: none !important;
 }
 
 .account-switcher-card-avatar.confirming-avatar::after {

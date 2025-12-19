@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Settings, Users, MessageSquare, ShoppingCart, Bell, User, Plus, Minus, CreditCard, Coins, Store, Globe, Menu,
-  BarChart3, Package, FileText, Upload, TrendingUp, DollarSign, Download, Check, RefreshCw, AlertCircle, Info, Gift, X, ShoppingBag, Award, Building2, LogOut, ChevronRight
+  BarChart3, Package, FileText, Upload, TrendingUp, DollarSign, Download, Check, RefreshCw, AlertCircle, Info, Gift, X, ShoppingBag, Award, Building2, LogOut, ChevronRight, ChevronLeft
 } from 'lucide-react';
 import AuthModal from './AuthModal';
 import { getUserData, saveUserData, getCurrentUserId } from '../utils/UserDataManager';
@@ -58,9 +58,16 @@ const TopNavigation = ({
 }) => {
   const [showBalanceMenu, setShowBalanceMenu] = useState(false);
   const [showTransactionMenu, setShowTransactionMenu] = useState(false);
+  const [showCheckoutMenu, setShowCheckoutMenu] = useState(false);
   const [topUpAmount, setTopUpAmount] = useState(0);
+  const [cartItems, setCartItems] = useState([]);
+  const [balanceMenuTab, setBalanceMenuTab] = useState('add-funds'); // 'add-funds' or 'cart'
+  const [showCartBadge, setShowCartBadge] = useState(false);
   const balanceMenuRef = useRef(null);
   const transactionMenuRef = useRef(null);
+  const checkoutMenuRef = useRef(null);
+  const checkoutMenuJustOpenedRef = useRef(false);
+  const checkoutMenuTimeoutRef = useRef(null);
 
   // Game Studio dropdown state: 'analytics' | 'content' | 'reports' | null
   const [openStudioMenu, setOpenStudioMenu] = useState(null);
@@ -374,6 +381,65 @@ const TopNavigation = ({
       document.removeEventListener('mousedown', handleBalanceMenuClickOutside);
     };
   }, [showBalanceMenu, handleBalanceMenuEscape, handleBalanceMenuClickOutside]);
+
+  // Memoized handlers for checkout menu
+  const handleCheckoutMenuEscape = useCallback((event) => {
+    if (event.key === 'Escape' && showCheckoutMenu) {
+      setShowCheckoutMenu(false);
+    }
+  }, [showCheckoutMenu]);
+
+  const handleCheckoutMenuClickOutside = useCallback((event) => {
+    // Don't close if menu was just opened (prevent immediate closure)
+    if (checkoutMenuJustOpenedRef.current) {
+      return;
+    }
+    
+    const target = event.target;
+    const isCheckoutButton = target.closest('.checkout-btn');
+    const isMenu = checkoutMenuRef.current && checkoutMenuRef.current.contains(target);
+    
+    if (!isCheckoutButton && !isMenu && checkoutMenuRef.current) {
+      setShowCheckoutMenu(false);
+    }
+  }, []);
+
+  // Handle click outside and Escape key to close checkout menu
+  useEffect(() => {
+    if (!showCheckoutMenu) {
+      checkoutMenuJustOpenedRef.current = false;
+      if (checkoutMenuTimeoutRef.current) {
+        clearTimeout(checkoutMenuTimeoutRef.current);
+        checkoutMenuTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    // Mark menu as just opened and set flag to prevent immediate closure
+    checkoutMenuJustOpenedRef.current = true;
+    if (checkoutMenuTimeoutRef.current) {
+      clearTimeout(checkoutMenuTimeoutRef.current);
+    }
+    checkoutMenuTimeoutRef.current = setTimeout(() => {
+      checkoutMenuJustOpenedRef.current = false;
+    }, 100); // 100ms delay before allowing click outside to close
+
+    // Add event listeners with delay to prevent immediate closure
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('keydown', handleCheckoutMenuEscape);
+      document.addEventListener('mousedown', handleCheckoutMenuClickOutside);
+    }, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (checkoutMenuTimeoutRef.current) {
+        clearTimeout(checkoutMenuTimeoutRef.current);
+        checkoutMenuTimeoutRef.current = null;
+      }
+      document.removeEventListener('keydown', handleCheckoutMenuEscape);
+      document.removeEventListener('mousedown', handleCheckoutMenuClickOutside);
+    };
+  }, [showCheckoutMenu, handleCheckoutMenuEscape, handleCheckoutMenuClickOutside]);
 
   // Handle Escape key and click outside for transaction menu
   useEffect(() => {
@@ -731,6 +797,7 @@ const TopNavigation = ({
       'home': isGameStudio ? '/game-studio' : '/store',
       'store': '/store',
       'market': '/market',
+      'library': '/library',
       'notifications': '/notifications',
       'community': '/community',
       'profile': '/profile',
@@ -805,6 +872,87 @@ const TopNavigation = ({
     }
   };
 
+  // Load cart items from database when user changes or on mount
+  useEffect(() => {
+    const loadCartItems = async () => {
+      const userId = await getCurrentUserId();
+      if (!userId) {
+        setCartItems([]);
+        return;
+      }
+
+      try {
+        const api = window.electronAPI;
+        if (api?.dbGetCartItems) {
+          const result = await api.dbGetCartItems(userId);
+          if (result && result.success && Array.isArray(result.items)) {
+            // Ensure all items are plain serializable objects
+            const serializableItems = result.items.map(item => ({
+              id: String(item.id || Date.now()),
+              amount: parseFloat(item.amount || 0),
+              timestamp: String(item.timestamp || new Date().toISOString()),
+              itemType: String(item.itemType || 'funds'),
+              itemData: item.itemData && typeof item.itemData === 'object' ? item.itemData : {}
+            }));
+            setCartItems(serializableItems);
+          } else {
+            setCartItems([]);
+          }
+        } else {
+          // Fallback to localStorage if database API not available
+          const stored = localStorage.getItem(`cartItems_${userId}`);
+          if (stored) {
+            try {
+              setCartItems(JSON.parse(stored));
+            } catch {
+              setCartItems([]);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading cart items:', error);
+        setCartItems([]);
+      }
+    };
+
+    loadCartItems();
+  }, [authUser?.id]); // Reload when user changes
+
+  // Save cart items to database whenever they change
+  useEffect(() => {
+    const saveCartItems = async () => {
+      const userId = await getCurrentUserId();
+      if (!userId) {
+        return;
+      }
+
+      try {
+        const api = window.electronAPI;
+        if (api?.dbSaveCartItems) {
+          // Ensure all items are plain serializable objects before sending
+          const serializableItems = cartItems.map(item => ({
+            id: String(item.id || Date.now()),
+            amount: parseFloat(item.amount || 0),
+            timestamp: String(item.timestamp || new Date().toISOString()),
+            itemType: String(item.itemType || 'funds'),
+            itemData: item.itemData && typeof item.itemData === 'object' ? item.itemData : {}
+          }));
+          await api.dbSaveCartItems(userId, serializableItems);
+        } else {
+          // Fallback to localStorage if database API not available
+          localStorage.setItem(`cartItems_${userId}`, JSON.stringify(cartItems));
+        }
+      } catch (error) {
+        console.error('Error saving cart items:', error);
+      }
+    };
+
+    // Only save if we have a user (avoid saving on initial empty state)
+    if (authUser?.id) {
+      saveCartItems();
+    }
+  }, [cartItems, authUser?.id]);
+
   // Update user level when user changes
   // IMPORTANT: Always delay updates to prevent menu closures during user changes
   useEffect(() => {
@@ -858,8 +1006,26 @@ const TopNavigation = ({
           if (api?.getUsers) {
             const result = await api.getUsers();
             if (result && result.success && Array.isArray(result.users)) {
-              // Filter to only show logged-in users (isLoggedIn !== false)
-              const loggedInUsers = result.users.filter(u => u.isLoggedIn !== false);
+              // Filter to only show logged-in users (green accounts) and exclude guest accounts
+              // Handle both boolean true and numeric 1 (MySQL stores BOOLEAN as TINYINT)
+              const loggedInUsers = result.users.filter(u => {
+                // Only include users that are explicitly logged in (green accounts)
+                const isLoggedIn = u.isLoggedIn === true || 
+                                  u.isLoggedIn === 1 || 
+                                  u.isLoggedIn === '1';
+                if (!isLoggedIn) return false;
+                
+                // Exclude guest accounts
+                const isGuest = u.isGuest === true || 
+                               u.isGuest === 1 || 
+                               u.isGuest === '1' ||
+                               u.id?.toString().startsWith('guest_') || 
+                               u.username?.toString().startsWith('guest_') || 
+                               u.name === 'Guest';
+                if (isGuest) return false;
+                
+                return true;
+              });
               // Sort: current user first, then by lastLoginTime, then alphabetically
               const sorted = loggedInUsers.sort((a, b) => {
                 if (a.id === authUser.id) return -1;
@@ -904,8 +1070,26 @@ const TopNavigation = ({
           if (api?.getUsers) {
             const result = await api.getUsers();
             if (result && result.success && Array.isArray(result.users)) {
-              // Filter to only show logged-in users (isLoggedIn !== false)
-              const loggedInUsers = result.users.filter(u => u.isLoggedIn !== false);
+              // Filter to only show logged-in users (green accounts) and exclude guest accounts
+              // Handle both boolean true and numeric 1 (MySQL stores BOOLEAN as TINYINT)
+              const loggedInUsers = result.users.filter(u => {
+                // Only include users that are explicitly logged in (green accounts)
+                const isLoggedIn = u.isLoggedIn === true || 
+                                  u.isLoggedIn === 1 || 
+                                  u.isLoggedIn === '1';
+                if (!isLoggedIn) return false;
+                
+                // Exclude guest accounts
+                const isGuest = u.isGuest === true || 
+                               u.isGuest === 1 || 
+                               u.isGuest === '1' ||
+                               u.id?.toString().startsWith('guest_') || 
+                               u.username?.toString().startsWith('guest_') || 
+                               u.name === 'Guest';
+                if (isGuest) return false;
+                
+                return true;
+              });
               // Sort: current user first, then by lastLoginTime, then alphabetically
               const sorted = loggedInUsers.sort((a, b) => {
                 if (a.id === authUser.id) return -1;
@@ -1150,7 +1334,7 @@ const TopNavigation = ({
         const menuRect = menu.getBoundingClientRect();
         const parentRect = button.parentElement.getBoundingClientRect();
         const windowWidth = window.innerWidth;
-        const menuWidth = menuRect.width || 250; // fallback width
+        const menuWidth = menuRect.width || 260; // fallback width
         
         // Calculate button center relative to parent
         const buttonCenterInParent = buttonRect.left - parentRect.left + (buttonRect.width / 2);
@@ -1264,8 +1448,8 @@ const TopNavigation = ({
               // Menu is closed, show "open" icon on hover
               return <ChevronRight size={18} />;
             } else if (!isCollapsed && isMenuToggleHovered) {
-              // Menu is open, show "close" icon on hover
-              return <X size={18} />;
+              // Menu is open, show "close" icon on hover (left arrow)
+              return <ChevronLeft size={18} />;
             } else {
               // Default: show hamburger icon
               return <Menu size={18} />;
@@ -1280,9 +1464,6 @@ const TopNavigation = ({
           className="home-btn"
           onClick={() => handleNavigation('home')}
         >
-          {isGameStudio && (
-            <span className="kinma-subtitle">studio view</span>
-          )}
         </button>
         
         {/* Main Navigation Links - Aligned with Content Area */}
@@ -1390,37 +1571,6 @@ const TopNavigation = ({
               )}
             </div>
             
-            <div className="nav-separator" />
-            
-            {/* Switch to Player View Button - Only in Game Studio */}
-            <button 
-              className="nav-item nav-item-with-text"
-              onClick={() => navigate('/library')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 12px',
-                background: 'rgba(0, 212, 255, 0.1)',
-                border: '1px solid var(--accent-primary)',
-                borderRadius: '8px',
-                color: 'var(--accent-primary)',
-                cursor: 'pointer',
-                fontSize: '14px',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(0, 212, 255, 0.15)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(0, 212, 255, 0.1)';
-              }}
-            >
-              <LogOut size={18} />
-              <span>Player View</span>
-            </button>
-            
-            <div className="nav-separator" />
             
             {/* Analytics Menu */}
             <div ref={analyticsWrapperRef} className="analytics-wrapper" style={{ position: 'relative' }}>
@@ -1663,66 +1813,6 @@ const TopNavigation = ({
         ) : (
           /* Regular navigation - Right side items */
           <>
-            {/* Game Studio Toggle Button - Always visible */}
-            {authUser && (
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '8px',
-                padding: '4px 8px',
-                background: 'rgba(255, 255, 255, 0.03)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: '8px'
-              }}>
-                <span style={{ 
-                  fontSize: '12px', 
-                  color: 'var(--text-secondary)',
-                  whiteSpace: 'nowrap'
-                }}>
-                  Game Studio
-                </span>
-                <label style={{ 
-                  position: 'relative',
-                  display: 'inline-block',
-                  width: '40px',
-                  height: '20px',
-                  cursor: 'pointer'
-                }}>
-                  <input
-                    type="checkbox"
-                    checked={gameStudioEnabled}
-                    onChange={(e) => handleGameStudioToggle(e.target.checked)}
-                    style={{
-                      opacity: 0,
-                      width: 0,
-                      height: 0
-                    }}
-                  />
-                  <span style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: gameStudioEnabled ? 'var(--accent-primary)' : 'rgba(255, 255, 255, 0.2)',
-                    borderRadius: '20px',
-                    transition: 'background-color 0.2s ease'
-                  }}>
-                    <span style={{
-                      position: 'absolute',
-                      top: '2px',
-                      left: gameStudioEnabled ? '22px' : '2px',
-                      width: '16px',
-                      height: '16px',
-                      backgroundColor: '#ffffff',
-                      borderRadius: '50%',
-                      transition: 'left 0.2s ease',
-                      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
-                    }} />
-                  </span>
-                </label>
-              </div>
-            )}
             
             {/* Notification Button */}
             {authUser && (
@@ -1900,7 +1990,7 @@ const TopNavigation = ({
                 </button>
                 
                 {/* Balance Menu */}
-                {showBalanceMenu && (
+                {(showBalanceMenu || showCheckoutMenu) && (
                   <div ref={balanceMenuRef} className="balance-menu" style={{
                     position: 'absolute',
                     top: '100%',
@@ -1908,93 +1998,250 @@ const TopNavigation = ({
                     marginTop: '8px',
                     zIndex: 1001
                   }}>
-                    <div className="balance-menu-header">
-                      <h2>Add Funds</h2>
+                    <div className="balance-menu-tabs">
+                      <button
+                        className={`balance-tab ${balanceMenuTab === 'add-funds' ? 'active' : ''}`}
+                        onClick={() => {
+                          setBalanceMenuTab('add-funds');
+                          setShowCheckoutMenu(false);
+                        }}
+                        title="Add Funds"
+                      >
+                        <Plus size={16} />
+                        <span>Add Funds</span>
+                      </button>
+                      <button
+                        className={`balance-tab ${balanceMenuTab === 'cart' ? 'active' : ''}`}
+                        onClick={() => {
+                          setBalanceMenuTab('cart');
+                          setShowCheckoutMenu(false);
+                        }}
+                        title="Cart"
+                      >
+                        <ShoppingCart size={16} />
+                        <span>Cart</span>
+                        {cartItems.length > 0 && (
+                          <span className="balance-tab-badge">{cartItems.length}</span>
+                        )}
+                      </button>
                     </div>
                     
-                    <div className="balance-input-section">
-                      <div className="balance-input-controls">
-                        <button 
-                          className="amount-btn" 
-                          onClick={() => handleAmountChange(-5)}
-                          disabled={topUpAmount === 0}
-                        >
-                          <Minus size={36} />
-                        </button>
-                        <div className="balance-input-display">
-                          <span className="currency">$</span>
-                          <input 
-                            type="text" 
-                            value={topUpAmount} 
-                            onChange={(e) => {
-                              const inputValue = e.target.value;
-                              if (inputValue === '' || inputValue === '0') {
+                    {balanceMenuTab === 'add-funds' ? (
+                      <>
+                        <div className="balance-input-section">
+                          <div className="balance-input-controls">
+                            <button 
+                              className="amount-btn" 
+                              onClick={() => handleAmountChange(-5)}
+                              disabled={topUpAmount === 0}
+                            >
+                              <Minus size={36} />
+                            </button>
+                            <div className="balance-input-display">
+                              <span className="currency">$</span>
+                              <input 
+                                type="text" 
+                                value={topUpAmount} 
+                                onChange={(e) => {
+                                  const inputValue = e.target.value;
+                                  if (inputValue === '' || inputValue === '0') {
+                                    setTopUpAmount(0);
+                                  } else if (topUpAmount === 0 && inputValue.length > 1) {
+                                    const parsedValue = Math.min(parseInt(inputValue), 1000000);
+                                    setTopUpAmount(parsedValue);
+                                  } else {
+                                    const parsedValue = Math.min(parseFloat(inputValue) || 0, 1000000);
+                                    setTopUpAmount(Math.max(0, parsedValue));
+                                  }
+                                }}
+                                placeholder="0"
+                                className="balance-amount-input"
+                                inputMode="numeric"
+                              />
+                            </div>
+                            <button 
+                              className="amount-btn" 
+                              onClick={() => handleAmountChange(5)}
+                              disabled={topUpAmount >= 1000000}
+                            >
+                              <Plus size={36} />
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <div className="balance-presets">
+                          <button 
+                            className="preset-btn" 
+                            onClick={() => handlePresetAmount(10)}
+                          >
+                            $10
+                          </button>
+                          <button 
+                            className="preset-btn" 
+                            onClick={() => handlePresetAmount(25)}
+                          >
+                            $25
+                          </button>
+                          <button 
+                            className="preset-btn" 
+                            onClick={() => handlePresetAmount(50)}
+                          >
+                            $50
+                          </button>
+                          <button 
+                            className="preset-btn" 
+                            onClick={() => handlePresetAmount(100)}
+                          >
+                            $100
+                          </button>
+                        </div>
+                        
+                        <div className="balance-actions">
+                          <button 
+                            className="cancel-btn" 
+                            onClick={() => {
+                              setShowBalanceMenu(false);
+                              setShowCheckoutMenu(false);
+                            }}
+                            title="Cancel"
+                          >
+                            <X size={18} />
+                          </button>
+                          <button 
+                            className="add-to-cart-btn" 
+                            onClick={() => {
+                              if (topUpAmount >= 5) {
+                                // Add item to cart
+                                const newItem = {
+                                  id: Date.now(),
+                                  amount: topUpAmount,
+                                  timestamp: new Date().toISOString()
+                                };
+                                setCartItems(prev => [...prev, newItem]);
+                                console.log('Added $' + topUpAmount + ' to cart');
+                                // Reset amount after adding to cart
                                 setTopUpAmount(0);
-                              } else if (topUpAmount === 0 && inputValue.length > 1) {
-                                const parsedValue = Math.min(parseInt(inputValue), 1000000);
-                                setTopUpAmount(parsedValue);
-                              } else {
-                                const parsedValue = Math.min(parseFloat(inputValue) || 0, 1000000);
-                                setTopUpAmount(Math.max(0, parsedValue));
                               }
                             }}
-                            placeholder="0"
-                            className="balance-amount-input"
-                            inputMode="numeric"
-                          />
+                            disabled={topUpAmount < 5}
+                            title="Add to Cart"
+                          >
+                            <Plus size={16} />
+                            <ShoppingCart size={16} />
+                            {cartItems.length > 0 && (
+                              <span className="cart-badge">{cartItems.length}</span>
+                            )}
+                          </button>
+                          <button 
+                            className="checkout-btn" 
+                            onClick={() => {
+                              if (cartItems.length > 0) {
+                                // Switch to cart tab
+                                setBalanceMenuTab('cart');
+                              }
+                            }}
+                            disabled={cartItems.length === 0}
+                            title="Checkout"
+                          >
+                            <CreditCard size={18} />
+                          </button>
                         </div>
-                        <button 
-                          className="amount-btn" 
-                          onClick={() => handleAmountChange(5)}
-                          disabled={topUpAmount >= 1000000}
-                        >
-                          <Plus size={36} />
-                        </button>
+                      </>
+                    ) : (
+                      <div className="balance-cart-section">
+                        {cartItems.length > 0 ? (
+                          <>
+                            <div className="balance-cart-items-scrollable">
+                              <h3>Items in Cart</h3>
+                              {(() => {
+                                // Group items by amount
+                                const groupedItems = cartItems.reduce((acc, item) => {
+                                  const key = item.amount.toFixed(2);
+                                  if (!acc[key]) {
+                                    acc[key] = { amount: item.amount, count: 0, ids: [] };
+                                  }
+                                  acc[key].count++;
+                                  acc[key].ids.push(item.id);
+                                  return acc;
+                                }, {});
+                                
+                                return Object.values(groupedItems).map((group, index) => (
+                                  <div key={index} className="balance-cart-item">
+                                    <span className="balance-cart-item-amount">
+                                      ${group.amount.toFixed(2)}
+                                      {group.count > 1 && <span className="balance-cart-item-multiplier"> ×{group.count}</span>}
+                                    </span>
+                                    <button 
+                                      className="balance-cart-item-remove"
+                                      onClick={() => {
+                                        setCartItems(prev => prev.filter(i => !group.ids.includes(i.id)));
+                                      }}
+                                      title="Remove"
+                                    >
+                                      <X size={14} />
+                                    </button>
+                                  </div>
+                                ));
+                              })()}
+                            </div>
+                            <div className="balance-cart-total">
+                              <span>Total:</span>
+                              <span className="balance-cart-total-amount">
+                                ${cartItems.reduce((sum, item) => sum + item.amount, 0).toFixed(2)}
+                              </span>
+                            </div>
+                            <div className="balance-cart-actions">
+                              <button 
+                                className="balance-cart-cancel-btn" 
+                                onClick={() => {
+                                  setBalanceMenuTab('add-funds');
+                                }}
+                                title="Back"
+                              >
+                                <X size={16} />
+                              </button>
+                              <button 
+                                className="balance-cart-checkout-btn" 
+                                onClick={async () => {
+                                  if (cartItems.length > 0) {
+                                    const total = cartItems.reduce((sum, item) => sum + item.amount, 0);
+                                    console.log('Processing checkout for $' + total.toFixed(2));
+                                    
+                                    // Clear cart from database
+                                    const userId = await getCurrentUserId();
+                                    if (userId) {
+                                      try {
+                                        const api = window.electronAPI;
+                                        if (api?.dbClearCart) {
+                                          await api.dbClearCart(userId);
+                                        }
+                                      } catch (error) {
+                                        console.error('Error clearing cart:', error);
+                                      }
+                                    }
+                                    
+                                    setCartItems([]);
+                                    setShowBalanceMenu(false);
+                                    setShowCheckoutMenu(false);
+                                  }
+                                }}
+                                title="Complete Purchase"
+                              >
+                                <CreditCard size={16} />
+                              </button>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="balance-cart-empty">
+                            <ShoppingCart size={32} />
+                            <p>Your cart is empty</p>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                    
-                    <div className="balance-presets">
-                      <button 
-                        className="preset-btn" 
-                        onClick={() => handlePresetAmount(10)}
-                      >
-                        $10
-                      </button>
-                      <button 
-                        className="preset-btn" 
-                        onClick={() => handlePresetAmount(25)}
-                      >
-                        $25
-                      </button>
-                      <button 
-                        className="preset-btn" 
-                        onClick={() => handlePresetAmount(50)}
-                      >
-                        $50
-                      </button>
-                      <button 
-                        className="preset-btn" 
-                        onClick={() => handlePresetAmount(100)}
-                      >
-                        $100
-                      </button>
-                    </div>
-                    
-                    <div className="balance-actions">
-                      <button className="cancel-btn" onClick={() => setShowBalanceMenu(false)}>Cancel</button>
-                      <button 
-                        className="confirm-btn" 
-                        onClick={() => {
-                          if (topUpAmount >= 5) {
-                            // Handle add funds logic here
-                            setShowBalanceMenu(false);
-                          }
-                        }}
-                        disabled={topUpAmount < 5}
-                      >Add Funds</button>
-                    </div>
+                    )}
                   </div>
                 )}
+
                 
                 {showProfileMenu && (
                   <div 
@@ -2006,7 +2253,7 @@ const TopNavigation = ({
                       left: '50%',
                       transform: 'translateX(-50%)',
                       marginTop: '8px',
-                      width: '320px',
+                      width: '260px',
                       zIndex: 1000
                     }}
                   >
@@ -2048,83 +2295,121 @@ const TopNavigation = ({
                       </div>
                     </div>
 
-                    {showQuickSwitchMenu && availableUsers.length > 1 && (
-                      <div className="profile-menu-quick-switch-section">
-                        <div className="quick-switch-header">
-                          <span>Quick Switch</span>
+                    <div className="profile-menu-content">
+                      {showQuickSwitchMenu && availableUsers.length > 1 && (
+                        <div className="profile-menu-quick-switch-section">
+                          <div className="quick-switch-accounts">
+                            {loadingUsers ? (
+                              <div className="quick-switch-loading">Loading accounts...</div>
+                            ) : (
+                              // Show only top 3 non-current accounts
+                              availableUsers
+                                .filter((u) => u.id !== authUser?.id)
+                                .slice(0, 3)
+                                .map((user) => {
+                                  const userInitials = getInitials(user);
+                                  const userDisplayName = user.name || user.username || user.email?.split('@')[0] || 'User';
+                                  
+                                  return (
+                                    <button
+                                      key={user.id}
+                                      className="quick-switch-item"
+                                      onClick={() => {
+                                        handleQuickSwitchFromMenu(user);
+                                        setShowQuickSwitchMenu(false);
+                                      }}
+                                    >
+                                      <div className="quick-switch-avatar">{userInitials}</div>
+                                      <div className="quick-switch-info">
+                                        <span className="quick-switch-name">{userDisplayName}</span>
+                                      </div>
+                                    </button>
+                                  );
+                                })
+                            )}
+                          </div>
+                          <button 
+                            className="quick-switch-manage-btn"
+                            onClick={async () => { 
+                              setShowProfileMenu(false);
+                              setShowQuickSwitchMenu(false);
+                              const api = window.electronAPI || window.electron;
+                              try {
+                                const result = await api?.openAccountSwitcherWindow?.();
+                                if (!result || !result.success) {
+                                  navigate('/account-switcher');
+                                }
+                              } catch (error) {
+                                console.error('Error opening account switcher window:', error);
+                                navigate('/account-switcher');
+                              }
+                            }}
+                          >
+                            <Users size={16} />
+                            <span>Manage Accounts</span>
+                          </button>
                         </div>
-                        <div className="quick-switch-accounts">
-                          {loadingUsers ? (
-                            <div className="quick-switch-loading">Loading accounts...</div>
-                          ) : (
-                            // Show only top 3 non-current accounts
-                            availableUsers
-                              .filter((u) => u.id !== authUser?.id)
-                              .slice(0, 3)
-                              .map((user) => {
-                                const userInitials = getInitials(user);
-                                const userDisplayName = user.name || user.username || user.email?.split('@')[0] || 'User';
-                                
-                                return (
-                                  <button
-                                    key={user.id}
-                                    className={`quick-switch-item`}
-                                    onClick={() => {
-                                      handleQuickSwitchFromMenu(user);
-                                      setShowQuickSwitchMenu(false);
-                                    }}
-                                  >
-                                    <div className="quick-switch-avatar">{userInitials}</div>
-                                    <div className="quick-switch-info">
-                                      <span className="quick-switch-name">{userDisplayName}</span>
-                                    </div>
-                                  </button>
-                                );
-                              })
+                      )}
+
+                      <div className="profile-menu-items">
+                        <button 
+                          className="profile-menu-item"
+                          onClick={() => { handleNavigation('library'); setShowProfileMenu(false); }}
+                        >
+                          <Package size={18} />
+                          <span>Library</span>
+                        </button>
+                        
+                        <button 
+                          className="profile-menu-item"
+                          onClick={() => { handleNavigation('friends'); setShowProfileMenu(false); }}
+                        >
+                          <Users size={18} />
+                          <span>Friends</span>
+                        </button>
+                        
+                        <button 
+                          className="profile-menu-item"
+                          onClick={() => { handleNavigation('notifications'); setShowProfileMenu(false); }}
+                        >
+                          <Bell size={18} />
+                          <span>Notifications</span>
+                        </button>
+                        
+                        <button 
+                          className="profile-menu-item"
+                          onClick={(e) => { 
+                            e.stopPropagation();
+                            setShowBalanceMenu(true);
+                            setBalanceMenuTab('add-funds');
+                            setShowProfileMenu(false);
+                            setShowCheckoutMenu(false);
+                          }}
+                        >
+                          <DollarSign size={18} />
+                          <span>Add Funds</span>
+                        </button>
+                        
+                        <button 
+                          className="profile-menu-item"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowBalanceMenu(true);
+                            setBalanceMenuTab('cart');
+                            setShowProfileMenu(false);
+                            setShowCheckoutMenu(false);
+                          }}
+                        >
+                          <ShoppingCart size={18} />
+                          <span>Cart</span>
+                          {cartItems.length > 0 && (
+                            <span className="profile-menu-cart-badge">{cartItems.length}</span>
                           )}
-                        </div>
-                        {null}
+                        </button>
                       </div>
-                    )}
-
-                    {showQuickSwitchMenu && <div className="profile-menu-divider"></div>}
-
-                    <div className="profile-menu-manage-accounts">
-                      <button 
-                        className="profile-menu-action-btn"
-                        onClick={async () => { 
-                          setShowProfileMenu(false);
-                          const api = window.electronAPI || window.electron;
-                          try {
-                            const result = await api?.openAccountSwitcherWindow?.();
-                            if (!result || !result.success) {
-                              navigate('/account-switcher');
-                            }
-                          } catch (error) {
-                            console.error('Error opening account switcher window:', error);
-                            navigate('/account-switcher');
-                          }
-                        }}
-                      >
-                        <Users size={16} />
-                        <span>Manage Accounts</span>
-                      </button>
                     </div>
 
-                    <div className="profile-menu-divider"></div>
-
-                    <div className="profile-menu-actions">
-                      <button 
-                        className="profile-menu-action-btn add-funds"
-                        onClick={(e) => { 
-                          e.stopPropagation();
-                          setShowBalanceMenu(true);
-                          setShowProfileMenu(false);
-                        }}
-                      >
-                        <DollarSign size={16} />
-                        <span>Add Funds</span>
-                      </button>
+                    <div className="profile-menu-bottom-actions">
                       <button 
                         className="profile-menu-action-btn"
                         onClick={() => { handleNavigation('settings'); setShowProfileMenu(false); }}

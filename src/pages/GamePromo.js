@@ -4510,7 +4510,7 @@ const GamePromo = ({ gamesData = {} }) => {
                 >
                   <div className={`code-section-tabs ${isTabsCompact ? 'compact' : ''}`} ref={editorTabsRef}>
                     <button
-                      className={`code-tab ${activeTab === 'html' ? 'active' : ''}`}
+                      className={`code-tab code-tab-html ${activeTab === 'html' ? 'active html-active' : ''}`}
                       onClick={() => setActiveTab('html')}
                       title="HTML"
                     >
@@ -4518,7 +4518,7 @@ const GamePromo = ({ gamesData = {} }) => {
                       {!isTabsCompact && <span>HTML</span>}
                     </button>
                     <button
-                      className={`code-tab ${activeTab === 'css' ? 'active' : ''}`}
+                      className={`code-tab code-tab-css ${activeTab === 'css' ? 'active css-active' : ''}`}
                       onClick={() => setActiveTab('css')}
                       title="CSS"
                     >
@@ -4526,7 +4526,7 @@ const GamePromo = ({ gamesData = {} }) => {
                       {!isTabsCompact && <span>CSS</span>}
                     </button>
                     <button
-                      className={`code-tab ${activeTab === 'js' ? 'active' : ''}`}
+                      className={`code-tab code-tab-js ${activeTab === 'js' ? 'active js-active' : ''}`}
                       onClick={() => setActiveTab('js')}
                       title="JavaScript"
                     >
