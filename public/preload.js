@@ -80,6 +80,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openAuthWindow: (email) => ipcRenderer.invoke('open-auth-window', email),
   openAccountSwitcherWindow: () => ipcRenderer.invoke('open-account-switcher-window'),
   openAdminWindow: () => ipcRenderer.invoke('open-admin-window'),
+  openPopOutWindow: (route) => ipcRenderer.invoke('open-pop-out-window', route),
+  closePopOutWindow: (route) => ipcRenderer.invoke('close-pop-out-window', route),
+  getWindowNumber: () => ipcRenderer.invoke('get-window-number'),
+  onWindowNumberChanged: (callback) => {
+    ipcRenderer.on('window-number-changed', (event, number) => callback(number));
+  },
+  removeWindowNumberListener: () => {
+    ipcRenderer.removeAllListeners('window-number-changed');
+  },
+  getTotalWindowCount: () => ipcRenderer.invoke('get-total-window-count'),
+  onTotalWindowCountChanged: (callback) => {
+    ipcRenderer.on('total-window-count-changed', (event, count) => callback(count));
+  },
+  removeTotalWindowCountListener: () => {
+    ipcRenderer.removeAllListeners('total-window-count-changed');
+  },
   
   // Database API - Users
   dbGetUsers: () => ipcRenderer.invoke('db-get-users'),

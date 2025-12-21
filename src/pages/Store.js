@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Star, Download, Play, Users, TrendingUp, TrendingDown, Share2, Bookmark, MessageSquare, Bell, Search, X, ChevronDown, DollarSign, Settings, Save, Volume2, VolumeX, ChevronLeft, ChevronRight, CheckCircle2, Flame, Gift, User, CreditCard, ShoppingCart } from 'lucide-react';
+import { Star, Download, Play, Users, TrendingUp, TrendingDown, Share2, Bookmark, MessageSquare, Bell, Search, X, ChevronDown, DollarSign, Settings, Save, Volume2, VolumeX, ChevronLeft, ChevronRight, CheckCircle2, Flame, Gift, User, CreditCard, ShoppingCart, SlidersHorizontal } from 'lucide-react';
 import { getUserData, getUserScopedKey, getAllUsersData, saveUserData, getCurrentUserId } from '../utils/UserDataManager';
 import { startDownload as startGlobalDownload } from '../utils/DownloadSpeedStore';
 import CustomVideoPlayer from '../components/CustomVideoPlayer';
@@ -14,6 +14,10 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
   const [isBannerHovered, setIsBannerHovered] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  const [isSearchExpanded, setIsSearchExpanded] = useState(false);
+  const searchInputRef = useRef(null);
+  const searchHoverTimeoutRef = useRef(null);
+  const searchWrapperRef = useRef(null);
   const [bannerColors, setBannerColors] = useState({}); // Store extracted colors: { gameId: 'rgb(r, g, b)' }
   const [bannerAverageColors, setBannerAverageColors] = useState({}); // Store average colors (not darkened): { gameId: { r, g, b } }
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
@@ -1167,6 +1171,43 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
     setSearchResults(results);
   }, [searchQuery, gamesData]);
 
+  // Auto-focus and select input when search expands (from hover)
+  useEffect(() => {
+    if (isSearchExpanded && searchInputRef.current) {
+      // Small delay to ensure input is rendered and visible
+      const focusTimer = setTimeout(() => {
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+          searchInputRef.current.select(); // Force select all text
+        }
+      }, 100);
+      return () => clearTimeout(focusTimer);
+    }
+  }, [isSearchExpanded]);
+
+  // Auto-focus and select input when search expands (from hover)
+  useEffect(() => {
+    if (isSearchExpanded && searchInputRef.current) {
+      // Small delay to ensure input is rendered and visible
+      const focusTimer = setTimeout(() => {
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+          searchInputRef.current.select(); // Force select all text so user can immediately type
+        }
+      }, 100);
+      return () => clearTimeout(focusTimer);
+    }
+  }, [isSearchExpanded]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchHoverTimeoutRef.current) {
+        clearTimeout(searchHoverTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Calculate content area width (window width minus sidebar)
   // Minimum app size: 1280px width - 260px sidebar = 1020px content width
   const [contentWidth, setContentWidth] = useState(() => {
@@ -1243,7 +1284,7 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                     } : {}),
                     opacity: index === currentBannerIndex ? 1 : 0,
                     transform: `translateX(${(index - currentBannerIndex) * 100}%)`,
-                    transition: 'opacity 0.5s ease-in-out, transform 0.5s ease-in-out',
+                    transition: 'none',
                     pointerEvents: index === currentBannerIndex ? 'auto' : 'none'
                   }}
                 >
@@ -1266,7 +1307,7 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
               style={{
                 opacity: index === currentBannerIndex ? 1 : 0,
                 transform: `translateX(${(index - currentBannerIndex) * 100}%)`,
-                transition: 'opacity 0.5s ease-in-out, transform 0.5s ease-in-out',
+                transition: 'none',
                 pointerEvents: index === currentBannerIndex ? 'auto' : 'none'
               }}
             >
@@ -1505,24 +1546,85 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
 
             {/* Right Section - Search */}
             <div className="taskbar-right">
-              {/* Search Bar (Just underline with icon) */}
-              <div className="taskbar-search-wrapper">
+              {/* Search Button/Bar - Expands on hover */}
+              <div 
+                ref={searchWrapperRef}
+                className={`taskbar-search-wrapper ${isSearchExpanded ? 'expanded' : ''}`}
+                onMouseEnter={() => {
+                  // Expand after 0.2s of hovering (focus/select handled by useEffect)
+                  searchHoverTimeoutRef.current = setTimeout(() => {
+                    setIsSearchExpanded(true);
+                  }, 200);
+                }}
+                onMouseLeave={() => {
+                  // Clear timeout if mouse leaves before 0.2s
+                  if (searchHoverTimeoutRef.current) {
+                    clearTimeout(searchHoverTimeoutRef.current);
+                    searchHoverTimeoutRef.current = null;
+                  }
+                  // Don't collapse on mouse leave - only on blur
+                }}
+              >
+                <button 
+                  className="taskbar-search-button"
+                  onClick={() => {
+                    setIsSearchExpanded(true);
+                    // Focus and select after a short delay to ensure DOM is updated
+                    setTimeout(() => {
+                      if (searchInputRef.current) {
+                        searchInputRef.current.focus();
+                        searchInputRef.current.select(); // Select all text so user can immediately type
+                      }
+                    }, 50);
+                  }}
+                >
+                  <Search size={18} />
+                </button>
+                <div className="taskbar-search-input-wrapper">
                 <Search size={18} className="taskbar-search-icon" />
                 <input
+                    ref={searchInputRef}
                   type="text"
                   placeholder="Search games..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="taskbar-search-input"
+                    onBlur={(e) => {
+                      // Close search bar when it loses focus
+                      // Use setTimeout to check activeElement after blur completes
+                      setTimeout(() => {
+                        // Check if focus moved outside the search wrapper
+                        const activeElement = document.activeElement;
+                        if (searchWrapperRef.current && !searchWrapperRef.current.contains(activeElement)) {
+                          setIsSearchExpanded(false);
+                        }
+                      }, 100);
+                    }}
                 />
                 {searchQuery && (
                   <button 
                     className="taskbar-search-clear"
-                    onClick={() => setSearchQuery('')}
+                      onClick={() => {
+                        setSearchQuery('');
+                        if (searchInputRef.current) {
+                          searchInputRef.current.focus();
+                        }
+                      }}
                   >
                     <X size={14} />
                   </button>
                 )}
+                  <button 
+                    className="taskbar-search-filter"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // TODO: Open filter menu
+                    }}
+                    title="Filter"
+                  >
+                    <SlidersHorizontal size={16} />
+                  </button>
+                </div>
               </div>
             </div>
           </div>

@@ -42,7 +42,7 @@
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.02);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
   position: relative;
   overflow: hidden;
   width: 100%;
@@ -64,7 +64,7 @@
     rgba(255, 255, 255, 0.05),
     transparent
   );
-  transition: left 0.5s ease;
+  transition: none !important;
 }
 
 .image-upload-dropzone:hover::before,
@@ -134,7 +134,7 @@
   width: auto;
   height: auto;
   display: block;
-  transition: opacity 0.2s ease;
+  transition: none !important;
   object-fit: contain;
 }
 

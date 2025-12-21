@@ -212,7 +212,7 @@ const Admin = () => {
                     gap: '6px',
                     fontSize: '14px',
                     fontWeight: 600,
-                    transition: 'all 0.2s ease'
+                    transition: 'none'
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = 'rgba(16, 185, 129, 0.2)';
@@ -238,7 +238,7 @@ const Admin = () => {
                     gap: '6px',
                     fontSize: '14px',
                     fontWeight: 600,
-                    transition: 'all 0.2s ease'
+                    transition: 'none'
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';

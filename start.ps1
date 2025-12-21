@@ -61,7 +61,7 @@ try {
         Write-Host ""
         Write-Host "Build complete! Starting Electron..." -ForegroundColor Green
         Write-Host "Press Ctrl+C to stop all processes`n" -ForegroundColor Yellow
-        npm run electron
+        npm run electron-prod
     }
     else {
         Write-Host "Invalid choice. Starting in Development Mode..." -ForegroundColor Yellow

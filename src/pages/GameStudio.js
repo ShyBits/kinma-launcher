@@ -60,6 +60,12 @@ const GameStudio = ({ navigate }) => {
     try {
       const customGames = getUserData('customGames', []);
       
+      // Ensure customGames is always an array
+      if (!Array.isArray(customGames)) {
+        console.warn('customGames is not an array, defaulting to empty array:', customGames);
+        return [];
+      }
+      
       // Convert custom games to Studio format
       const customGamesFormatted = customGames.map((game, index) => ({
         id: index + 1,
@@ -979,7 +985,8 @@ const GameStudio = ({ navigate }) => {
       let fd = null;
       if (!metadata) {
         const customGames = getUserData('customGames', []);
-        const customGame = customGames.find(g => g.gameId === game.gameId);
+        const customGamesArray = Array.isArray(customGames) ? customGames : [];
+        const customGame = customGamesArray.find(g => g.gameId === game.gameId);
         
         if (customGame && customGame.fullFormData) {
           fd = customGame.fullFormData;
@@ -1100,7 +1107,8 @@ const GameStudio = ({ navigate }) => {
       
       // Remove from user-specific storage
       const customGames = getUserData('customGames', []);
-      const updatedGames = customGames.filter(game => game.gameId !== gameToDelete.gameId);
+      const customGamesArray = Array.isArray(customGames) ? customGames : [];
+      const updatedGames = customGamesArray.filter(game => game.gameId !== gameToDelete.gameId);
       saveUserData('customGames', updatedGames);
       
       // Dispatch event to update other components
@@ -1548,7 +1556,7 @@ const GameStudio = ({ navigate }) => {
                       top: '50%',
                       left: isModalMinimized ? '80px' : '50%',
                       transform: 'translate(-50%, -50%)',
-                      transition: 'left 0.3s ease'
+                      transition: 'none'
                     }}
                   >
                     {isModalMinimized ? (
@@ -2201,7 +2209,7 @@ const GameStudio = ({ navigate }) => {
                             borderRadius: '8px',
                             background: 'rgba(255, 255, 255, 0.02)',
                             cursor: 'pointer',
-                            transition: 'all 0.2s ease',
+                            transition: 'none',
                             position: 'relative'
                           }}>
                             <button 
@@ -2226,7 +2234,7 @@ const GameStudio = ({ navigate }) => {
                                 alignItems: 'center',
                                 gap: '4px',
                                 color: 'white',
-                                transition: 'all 0.2s ease',
+                                transition: 'none',
                                 zIndex: 10,
                                 opacity: 0.9
                               }}
@@ -2300,7 +2308,7 @@ const GameStudio = ({ navigate }) => {
                             cursor: 'pointer',
                             fontSize: '14px',
                             fontWeight: 600,
-                            transition: 'all 0.2s ease'
+                            transition: 'none'
                           }}
                         >
                           Store
@@ -2316,7 +2324,7 @@ const GameStudio = ({ navigate }) => {
                             cursor: 'pointer',
                             fontSize: '14px',
                             fontWeight: 600,
-                            transition: 'all 0.2s ease'
+                            transition: 'none'
                           }}
                         >
                           Game Menu
@@ -2332,7 +2340,7 @@ const GameStudio = ({ navigate }) => {
                             cursor: 'pointer',
                             fontSize: '14px',
                             fontWeight: 600,
-                            transition: 'all 0.2s ease'
+                            transition: 'none'
                           }}
                         >
                           Community
@@ -2348,7 +2356,7 @@ const GameStudio = ({ navigate }) => {
                             cursor: 'pointer',
                             fontSize: '14px',
                             fontWeight: 600,
-                            transition: 'all 0.2s ease'
+                            transition: 'none'
                           }}
                         >
                           Market
@@ -2417,6 +2425,12 @@ const GameStudio = ({ navigate }) => {
                             } else {
                               // Get or initialize custom games from user-specific storage
                               let customGames = getUserData('customGames', []);
+                              
+                              // Ensure customGames is always an array
+                              if (!Array.isArray(customGames)) {
+                                console.warn('customGames is not an array, defaulting to empty array:', customGames);
+                                customGames = [];
+                              }
                               
                               const gameId = formData.gameName.toLowerCase().replace(/\s+/g, '-');
                               
@@ -3246,7 +3260,7 @@ const GameStudio = ({ navigate }) => {
                                           borderRadius: '8px', 
                                           overflow: 'hidden',
                                           cursor: 'pointer',
-                                          transition: 'transform 0.2s ease',
+                                          transition: 'none',
                                           boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)'
                                         }}
                                         onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}

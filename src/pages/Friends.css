@@ -81,7 +81,7 @@
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: var(--transition);
+  transition: none !important;
 }
 
 .add-friend-btn:hover {
@@ -106,7 +106,7 @@
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: var(--transition);
+  transition: none !important;
   border-bottom: 2px solid transparent;
 }
 
@@ -146,7 +146,7 @@
   background: var(--bg-secondary);
   border: 1px solid var(--border-primary);
   border-radius: var(--border-radius);
-  transition: var(--transition);
+  transition: none !important;
 }
 
 .friend-item:hover {
@@ -234,7 +234,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: var(--transition);
+  transition: none !important;
 }
 
 .action-btn:hover {

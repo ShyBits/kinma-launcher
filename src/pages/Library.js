@@ -623,7 +623,7 @@ const Library = () => {
         onMouseLeave={handleMouseLeave}
         style={{
           transform: `perspective(1000px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
-          transition: 'transform 0.05s linear, box-shadow 0.3s ease',
+          transition: 'none',
           boxShadow: coloredShadow ? `${coloredShadow}, ${baseShadow}` : baseShadow
         }}
       >

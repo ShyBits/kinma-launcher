@@ -115,7 +115,7 @@ const ImageUpload = ({
               alignItems: 'center',
               justifyContent: 'center',
               color: 'white',
-              transition: 'all 0.2s ease',
+              transition: 'none',
               boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
               zIndex: 10
             }}

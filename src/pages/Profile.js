@@ -1340,7 +1340,7 @@ const Profile = ({ navigate }) => {
                           line-height: 1 !important;
                           padding: 0 !important;
                           z-index: 1000 !important;
-                          transition: all 0.2s ease !important;
+                          transition: 'none';
                           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
                         }
                         .prebuilt-item-remove-btn:hover {

@@ -306,7 +306,11 @@ export const saveUserData = async (baseKey, data, userId = null) => {
               ...game,
               userId: currentUserId
             }));
-            await api.dbSaveGame(serializableGame);
+            const saveResult = await api.dbSaveGame(serializableGame);
+            // Check if save was successful
+            if (!saveResult || (saveResult.success === false)) {
+              throw new Error(saveResult?.error || 'Database connection failed. Please check your connection and try again.');
+            }
           }
           return true;
         }

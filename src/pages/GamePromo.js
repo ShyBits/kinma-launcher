@@ -1040,7 +1040,7 @@ const GamePromo = ({ gamesData = {} }) => {
   font-size: 18px;
   font-weight: 700;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: none;
 }
 
 .minimal-play-btn:hover {
@@ -1200,7 +1200,7 @@ const GamePromo = ({ gamesData = {} }) => {
   font-size: 20px;
   font-weight: 700;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: none;
 }
 
 .hero-play-btn:hover {
@@ -1371,7 +1371,7 @@ const GamePromo = ({ gamesData = {} }) => {
   letter-spacing: 2px;
   border: 3px solid;
   text-transform: uppercase;
-  animation: pulse 2s ease-in-out infinite;
+  animation: none;
   box-shadow: 0 0 20px currentColor;
 }
 
@@ -1396,8 +1396,7 @@ const GamePromo = ({ gamesData = {} }) => {
   box-shadow: 0 0 30px rgba(131, 56, 236, 0.8);
 }
 
-@keyframes pulse {
-  0%, 100% { transform: scale(1); }
+
   50% { transform: scale(1.05); }
 }
 
@@ -1443,7 +1442,7 @@ const GamePromo = ({ gamesData = {} }) => {
   border: 3px solid;
   border-radius: 20px;
   min-width: 140px;
-  transition: all 0.3s ease;
+  transition: 'none';
 }
 
 .meta-item:hover {
@@ -1494,15 +1493,14 @@ const GamePromo = ({ gamesData = {} }) => {
   font-weight: 900;
   letter-spacing: 4px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: 'none';
   text-transform: uppercase;
   box-shadow: 0 0 40px rgba(255, 0, 110, 0.6);
   border-radius: 15px;
-  animation: buttonGlow 2s ease-in-out infinite;
+  animation: none;
 }
 
-@keyframes buttonGlow {
-  0%, 100% { box-shadow: 0 0 40px rgba(255, 0, 110, 0.6); }
+
   50% { box-shadow: 0 0 60px rgba(131, 56, 236, 0.8), 0 0 80px rgba(58, 134, 255, 0.6); }
 }
 
@@ -1573,7 +1571,7 @@ const GamePromo = ({ gamesData = {} }) => {
   border-radius: 20px;
   border: 4px solid rgba(255, 255, 255, 0.3);
   box-shadow: 0 0 30px rgba(255, 255, 255, 0.2);
-  transition: all 0.3s ease;
+  transition: 'none';
 }
 
 .screenshot-wrapper:hover {
@@ -1608,7 +1606,7 @@ const GamePromo = ({ gamesData = {} }) => {
   text-transform: uppercase;
   letter-spacing: 2px;
   color: #ffffff;
-  transition: all 0.3s ease;
+  transition: 'none';
   box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
 }
 
@@ -1790,7 +1788,7 @@ const GamePromo = ({ gamesData = {} }) => {
   letter-spacing: 2px;
   text-transform: uppercase;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: 'none';
   box-shadow: 0 0 30px rgba(255, 68, 68, 0.5);
 }
 
@@ -2016,7 +2014,7 @@ const GamePromo = ({ gamesData = {} }) => {
   letter-spacing: 2px;
   text-transform: uppercase;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: 'none';
   box-shadow: 0 0 30px rgba(212, 175, 55, 0.4);
   font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
 }
@@ -2073,7 +2071,7 @@ const GamePromo = ({ gamesData = {} }) => {
   height: auto;
   object-fit: cover;
   aspect-ratio: 16/9;
-  transition: transform 0.3s ease;
+  transition: 'none';
 }
 
 .rpg-gallery-item:hover img {
@@ -2091,7 +2089,7 @@ const GamePromo = ({ gamesData = {} }) => {
   background: rgba(45, 24, 16, 0.5);
   border: 2px solid rgba(212, 175, 55, 0.3);
   text-align: center;
-  transition: all 0.3s ease;
+  transition: 'none';
 }
 
 .rpg-feature-card:hover {
@@ -2266,7 +2264,7 @@ const GamePromo = ({ gamesData = {} }) => {
   letter-spacing: 3px;
   text-transform: uppercase;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: 'none';
   box-shadow: 0 0 30px rgba(74, 158, 255, 0.3);
 }
 
@@ -2323,7 +2321,7 @@ const GamePromo = ({ gamesData = {} }) => {
   height: auto;
   object-fit: cover;
   aspect-ratio: 16/9;
-  transition: transform 0.3s ease;
+  transition: 'none';
 }
 
 .strategy-showcase-item:hover img {
@@ -2345,7 +2343,7 @@ const GamePromo = ({ gamesData = {} }) => {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 1px;
-  transition: all 0.3s ease;
+  transition: 'none';
 }
 
 .strategy-feature:hover {
@@ -2517,7 +2515,7 @@ const GamePromo = ({ gamesData = {} }) => {
   letter-spacing: 4px;
   text-transform: uppercase;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: 'none';
   box-shadow: 0 0 40px rgba(255, 107, 0, 0.6);
 }
 
@@ -2573,7 +2571,7 @@ const GamePromo = ({ gamesData = {} }) => {
   height: auto;
   object-fit: cover;
   aspect-ratio: 16/9;
-  transition: transform 0.3s ease;
+  transition: 'none';
 }
 
 .comp-highlight-item:hover img {
@@ -2595,7 +2593,7 @@ const GamePromo = ({ gamesData = {} }) => {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 2px;
-  transition: all 0.3s ease;
+  transition: 'none';
 }
 
 .comp-feature-item:hover {
@@ -2765,7 +2763,7 @@ const GamePromo = ({ gamesData = {} }) => {
   letter-spacing: 2px;
   text-transform: uppercase;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: 'none';
   box-shadow: 0 0 30px rgba(212, 165, 116, 0.4);
   font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
 }
@@ -2823,7 +2821,7 @@ const GamePromo = ({ gamesData = {} }) => {
   height: auto;
   object-fit: cover;
   aspect-ratio: 16/9;
-  transition: transform 0.4s ease;
+  transition: 'none';
 }
 
 .adv-gallery-card:hover img {
@@ -2846,7 +2844,7 @@ const GamePromo = ({ gamesData = {} }) => {
   color: #d4a574;
   text-transform: uppercase;
   letter-spacing: 1px;
-  transition: all 0.3s ease;
+  transition: 'none';
 }
 
 .adv-feature-tag:hover {
@@ -3004,7 +3002,7 @@ const GamePromo = ({ gamesData = {} }) => {
   letter-spacing: 2px;
   text-transform: uppercase;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: 'none';
   box-shadow: 0 4px 20px rgba(45, 45, 45, 0.2);
 }
 
@@ -3058,7 +3056,7 @@ const GamePromo = ({ gamesData = {} }) => {
   height: auto;
   object-fit: cover;
   aspect-ratio: 16/9;
-  transition: transform 0.4s ease;
+  transition: 'none';
 }
 
 .indie-gallery-item:hover img {
@@ -3081,7 +3079,7 @@ const GamePromo = ({ gamesData = {} }) => {
   color: #2d2d2d;
   text-transform: uppercase;
   letter-spacing: 1px;
-  transition: all 0.3s ease;
+  transition: 'none';
 }
 
 .indie-tag:hover {
@@ -3256,7 +3254,7 @@ const GamePromo = ({ gamesData = {} }) => {
   letter-spacing: 4px;
   text-transform: uppercase;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: 'none';
   box-shadow: 0 0 30px rgba(196, 30, 58, 0.5);
 }
 
@@ -3315,7 +3313,7 @@ const GamePromo = ({ gamesData = {} }) => {
   object-fit: cover;
   aspect-ratio: 16/9;
   filter: brightness(0.7);
-  transition: filter 0.3s ease, transform 0.3s ease;
+  transition: none;
 }
 
 .horror-gallery-item:hover img {
@@ -3339,7 +3337,7 @@ const GamePromo = ({ gamesData = {} }) => {
   text-transform: uppercase;
   letter-spacing: 2px;
   color: #c41e3a;
-  transition: all 0.3s ease;
+  transition: 'none';
 }
 
 .horror-feature:hover {
@@ -3506,7 +3504,7 @@ const GamePromo = ({ gamesData = {} }) => {
   letter-spacing: 4px;
   text-transform: uppercase;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: 'none';
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
 }
 
@@ -3563,7 +3561,7 @@ const GamePromo = ({ gamesData = {} }) => {
   height: auto;
   object-fit: cover;
   aspect-ratio: 16/9;
-  transition: transform 0.3s ease;
+  transition: 'none';
 }
 
 .sports-gallery-item:hover img {
@@ -3585,7 +3583,7 @@ const GamePromo = ({ gamesData = {} }) => {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 2px;
-  transition: all 0.3s ease;
+  transition: 'none';
   box-shadow: 0 4px 20px rgba(9, 9, 121, 0.2);
 }
 
@@ -3699,7 +3697,7 @@ const GamePromo = ({ gamesData = {} }) => {
       rgba(46, 125, 50, 0.4) 90%, 
       rgba(76, 175, 80, 0.4) 100%);
   background-size: 300% 300%;
-  animation: dankChromeShift 8s ease-in-out infinite;
+  animation: none;
   mix-blend-mode: color;
   filter: contrast(1.2) brightness(1.1);
   z-index: 1;
@@ -3722,18 +3720,14 @@ const GamePromo = ({ gamesData = {} }) => {
       transparent 75%, 
       rgba(67, 160, 71, 0.2) 100%);
   background-size: 200% 200%;
-  animation: dankChromeDistort 6s ease-in-out infinite;
+  animation: none;
   mix-blend-mode: overlay;
   filter: blur(2px) contrast(1.3);
   opacity: 0.7;
   z-index: 1;
 }
 
-@keyframes dankChromeShift {
-  0% { 
-    background-position: 0% 50%;
-    filter: contrast(1.2) brightness(1.1) hue-rotate(0deg);
-  }
+
   33% { 
     background-position: 100% 50%;
     filter: contrast(1.3) brightness(1.2) hue-rotate(30deg);
@@ -3748,12 +3742,7 @@ const GamePromo = ({ gamesData = {} }) => {
   }
 }
 
-@keyframes dankChromeDistort {
-  0% { 
-    background-position: 0% 0%;
-    transform: scale(1) rotate(0deg);
-    filter: blur(2px) contrast(1.3) hue-rotate(0deg);
-  }
+
   25% { 
     background-position: 100% 0%;
     transform: scale(1.02) rotate(1deg);
@@ -3808,7 +3797,7 @@ const GamePromo = ({ gamesData = {} }) => {
   letter-spacing: 2px;
   border: 4px solid;
   text-transform: uppercase;
-  animation: dankPulse 1.5s ease-in-out infinite, dankSpin 3s linear infinite;
+  animation: none;
   box-shadow: 0 0 30px currentColor;
   font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
 }
@@ -3834,13 +3823,11 @@ const GamePromo = ({ gamesData = {} }) => {
   box-shadow: 0 0 40px rgba(131, 56, 236, 0.9);
 }
 
-@keyframes dankPulse {
-  0%, 100% { transform: scale(1); }
+
   50% { transform: scale(1.1); }
 }
 
-@keyframes dankSpin {
-  0% { transform: rotate(0deg); }
+
   100% { transform: rotate(360deg); }
 }
 
@@ -3853,7 +3840,7 @@ const GamePromo = ({ gamesData = {} }) => {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  animation: dankTextBounce 2s ease-in-out infinite;
+  animation: none;
   letter-spacing: 8px;
   text-shadow: 0 0 60px rgba(255, 255, 255, 0.8);
   line-height: 1;
@@ -3861,8 +3848,7 @@ const GamePromo = ({ gamesData = {} }) => {
   text-transform: uppercase;
 }
 
-@keyframes dankTextBounce {
-  0%, 100% { transform: translateY(0px); }
+
   50% { transform: translateY(-10px); }
 }
 
@@ -3873,12 +3859,11 @@ const GamePromo = ({ gamesData = {} }) => {
   margin: 0 0 50px 0;
   font-weight: 700;
   text-shadow: 0 0 30px rgba(255, 255, 255, 0.8);
-  animation: dankBlink 2s ease-in-out infinite;
+  animation: none;
   font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
 }
 
-@keyframes dankBlink {
-  0%, 100% { opacity: 1; }
+
   50% { opacity: 0.5; }
 }
 
@@ -3901,8 +3886,8 @@ const GamePromo = ({ gamesData = {} }) => {
   border: 5px solid;
   border-radius: 25px;
   min-width: 160px;
-  transition: all 0.3s ease;
-  animation: dankFloat 3s ease-in-out infinite;
+  transition: 'none';
+  animation: none;
 }
 
 .dank-stat:nth-child(1) {
@@ -3923,24 +3908,22 @@ const GamePromo = ({ gamesData = {} }) => {
   box-shadow: 0 0 40px rgba(6, 255, 165, 0.6);
 }
 
-@keyframes dankFloat {
-  0%, 100% { transform: translateY(0px) rotate(0deg); }
+
   50% { transform: translateY(-15px) rotate(5deg); }
 }
 
 .dank-stat:hover {
   transform: scale(1.15) rotate(5deg);
-  animation: dankSpin 0.5s linear infinite;
+  animation: none;
 }
 
 .dank-stat-icon {
   font-size: 40px;
   filter: drop-shadow(0 0 15px currentColor);
-  animation: dankIconSpin 2s linear infinite;
+  animation: none;
 }
 
-@keyframes dankIconSpin {
-  0% { transform: rotate(0deg); }
+
   100% { transform: rotate(360deg); }
 }
 
@@ -3970,32 +3953,29 @@ const GamePromo = ({ gamesData = {} }) => {
   font-weight: 900;
   letter-spacing: 6px;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: 'none';
   text-transform: uppercase;
   box-shadow: 0 0 60px rgba(255, 0, 110, 0.8);
   border-radius: 20px;
-  animation: dankButtonGlow 2s ease-in-out infinite, dankButtonBounce 1s ease-in-out infinite;
+  animation: none;
   font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
 }
 
-@keyframes dankButtonGlow {
-  0%, 100% { box-shadow: 0 0 60px rgba(255, 0, 110, 0.8); }
+
   50% { box-shadow: 0 0 100px rgba(131, 56, 236, 1), 0 0 120px rgba(58, 134, 255, 0.8); }
 }
 
-@keyframes dankButtonBounce {
-  0%, 100% { transform: translateY(0px); }
+
   50% { transform: translateY(-8px); }
 }
 
 .dank-btn:hover {
   transform: translateY(-10px) scale(1.1) rotate(5deg);
   box-shadow: 0 0 120px rgba(255, 0, 110, 1);
-  animation: dankButtonSpin 0.3s linear infinite;
+  animation: none;
 }
 
-@keyframes dankButtonSpin {
-  0% { transform: translateY(-10px) scale(1.1) rotate(5deg); }
+
   100% { transform: translateY(-10px) scale(1.1) rotate(365deg); }
 }
 
@@ -4015,13 +3995,12 @@ const GamePromo = ({ gamesData = {} }) => {
   left: 10%;
   font-size: 80px;
   color: #ffbe0b;
-  animation: dankIlluminatiSpin 4s linear infinite;
+  animation: none;
   text-shadow: 0 0 30px #ffbe0b;
   filter: drop-shadow(0 0 20px #ffbe0b);
 }
 
-@keyframes dankIlluminatiSpin {
-  0% { transform: rotate(0deg) scale(1); }
+
   50% { transform: rotate(180deg) scale(1.2); }
   100% { transform: rotate(360deg) scale(1); }
 }
@@ -4031,12 +4010,11 @@ const GamePromo = ({ gamesData = {} }) => {
   top: 30%;
   right: 15%;
   font-size: 60px;
-  animation: dankFloatAround 5s ease-in-out infinite;
+  animation: none;
   filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.8));
 }
 
-@keyframes dankFloatAround {
-  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+
   25% { transform: translate(20px, -20px) rotate(90deg); }
   50% { transform: translate(-20px, -40px) rotate(180deg); }
   75% { transform: translate(-20px, 20px) rotate(270deg); }
@@ -4050,12 +4028,11 @@ const GamePromo = ({ gamesData = {} }) => {
   font-weight: 900;
   color: #06ffa5;
   text-shadow: 0 0 40px #06ffa5;
-  animation: dank420Pulse 2s ease-in-out infinite;
+  animation: none;
   font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
 }
 
-@keyframes dank420Pulse {
-  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.8; }
+
   50% { transform: scale(1.3) rotate(180deg); opacity: 1; }
 }
 
@@ -4064,12 +4041,11 @@ const GamePromo = ({ gamesData = {} }) => {
   bottom: 30%;
   right: 12%;
   font-size: 80px;
-  animation: dankFireSpin 1.5s linear infinite;
+  animation: none;
   filter: drop-shadow(0 0 30px #ff006e);
 }
 
-@keyframes dankFireSpin {
-  0% { transform: rotate(0deg) scale(1); }
+
   100% { transform: rotate(360deg) scale(1.2); }
 }
 
@@ -4085,11 +4061,10 @@ const GamePromo = ({ gamesData = {} }) => {
   border-radius: 30px;
   position: relative;
   overflow: hidden;
-  animation: dankSectionFloat 4s ease-in-out infinite;
+  animation: none;
 }
 
-@keyframes dankSectionFloat {
-  0%, 100% { transform: translateY(0px); }
+
   50% { transform: translateY(-10px); }
 }
 
@@ -4122,13 +4097,12 @@ const GamePromo = ({ gamesData = {} }) => {
   text-shadow: 0 0 30px rgba(255, 255, 255, 0.5);
   letter-spacing: 4px;
   text-align: center;
-  animation: dankTitleRainbow 3s ease infinite;
+  animation: none;
   font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
   text-transform: uppercase;
 }
 
-@keyframes dankTitleRainbow {
-  0% { filter: hue-rotate(0deg); }
+
   100% { filter: hue-rotate(360deg); }
 }
 
@@ -4152,16 +4126,15 @@ const GamePromo = ({ gamesData = {} }) => {
   border-radius: 25px;
   border: 6px solid rgba(255, 255, 255, 0.4);
   box-shadow: 0 0 50px rgba(255, 255, 255, 0.3);
-  transition: all 0.3s ease;
-  animation: dankGalleryFloat 3s ease-in-out infinite;
+  transition: 'none';
+  animation: none;
 }
 
 .dank-gallery-item:nth-child(1) { animation-delay: 0s; }
 .dank-gallery-item:nth-child(2) { animation-delay: 0.3s; }
 .dank-gallery-item:nth-child(3) { animation-delay: 0.6s; }
 
-@keyframes dankGalleryFloat {
-  0%, 100% { transform: translateY(0px) rotate(0deg); }
+
   50% { transform: translateY(-15px) rotate(3deg); }
 }
 
@@ -4169,11 +4142,10 @@ const GamePromo = ({ gamesData = {} }) => {
   transform: translateY(-20px) scale(1.1) rotate(5deg);
   border-color: rgba(255, 255, 255, 0.8);
   box-shadow: 0 0 80px rgba(255, 255, 255, 0.6);
-  animation: dankGallerySpin 0.5s linear infinite;
+  animation: none;
 }
 
-@keyframes dankGallerySpin {
-  0% { transform: translateY(-20px) scale(1.1) rotate(5deg); }
+
   100% { transform: translateY(-20px) scale(1.1) rotate(365deg); }
 }
 
@@ -4203,9 +4175,9 @@ const GamePromo = ({ gamesData = {} }) => {
   text-transform: uppercase;
   letter-spacing: 3px;
   color: #ffffff;
-  transition: all 0.3s ease;
+  transition: 'none';
   box-shadow: 0 0 30px rgba(255, 255, 255, 0.3);
-  animation: dankFeaturePulse 2s ease-in-out infinite;
+  animation: none;
   font-family: 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
 }
 
@@ -4217,8 +4189,7 @@ const GamePromo = ({ gamesData = {} }) => {
   animation-delay: 0.5s;
 }
 
-@keyframes dankFeaturePulse {
-  0%, 100% { transform: scale(1); }
+
   50% { transform: scale(1.1); }
 }
 
@@ -4226,11 +4197,10 @@ const GamePromo = ({ gamesData = {} }) => {
   transform: translateY(-10px) scale(1.2) rotate(5deg);
   background: linear-gradient(135deg, rgba(255, 0, 110, 0.6) 0%, rgba(131, 56, 236, 0.6) 100%);
   box-shadow: 0 0 60px rgba(255, 255, 255, 0.6);
-  animation: dankFeatureSpin 0.3s linear infinite;
+  animation: none;
 }
 
-@keyframes dankFeatureSpin {
-  0% { transform: translateY(-10px) scale(1.2) rotate(5deg); }
+
   100% { transform: translateY(-10px) scale(1.2) rotate(365deg); }
 }`,
         js: ''
@@ -4441,7 +4411,7 @@ const GamePromo = ({ gamesData = {} }) => {
                             line-height: 1 !important;
                             padding: 0 !important;
                             z-index: 1000 !important;
-                            transition: all 0.2s ease !important;
+                            transition: 'none';
                             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
                           }
                           .prebuilt-item-remove-btn:hover {

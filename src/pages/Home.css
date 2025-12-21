@@ -63,7 +63,7 @@
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: var(--transition);
+  transition: none !important;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -120,7 +120,7 @@
   padding: 20px;
   border-radius: var(--border-radius);
   border: 1px solid var(--border-primary);
-  transition: var(--transition);
+  transition: none !important;
   cursor: pointer;
 }
 

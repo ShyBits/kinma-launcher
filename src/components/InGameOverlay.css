@@ -13,7 +13,7 @@
   z-index: 99999;
   display: flex;
   flex-direction: column;
-  transition: all 0.2s ease;
+  transition: none !important;
   overflow: hidden;
 }
 
@@ -51,7 +51,7 @@
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
-  transition: all 0.15s ease;
+  transition: none !important;
 }
 
 .overlay-btn:hover {
@@ -79,7 +79,7 @@
   color: rgba(255, 255, 255, 0.6);
   cursor: pointer;
   border-radius: 6px;
-  transition: all 0.2s ease;
+  transition: none !important;
   font-size: 12px;
   font-weight: 500;
 }
@@ -122,7 +122,7 @@
   border-radius: 8px;
   color: #ffffff;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
 }
 
 .quick-action-btn:hover {
@@ -208,7 +208,7 @@
   color: #ffffff;
   cursor: pointer;
   font-weight: 600;
-  transition: all 0.2s ease;
+  transition: none !important;
 }
 
 .overlay-send-btn:hover {
@@ -229,7 +229,7 @@
   padding: 10px;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 8px;
-  transition: all 0.2s ease;
+  transition: none !important;
 }
 
 .overlay-friend-item:hover {
@@ -288,7 +288,7 @@
   background: rgba(255, 255, 255, 0.05);
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
 }
 
 .overlay-setting-item:hover {
@@ -323,7 +323,7 @@
   cursor: pointer;
   font-size: 12px;
   font-weight: 600;
-  transition: all 0.2s ease;
+  transition: none !important;
 }
 
 .overlay-close-btn:hover {

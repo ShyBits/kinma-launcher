@@ -12,7 +12,7 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: none !important;
 }
 
 .code-editor-wrapper:focus-within {
@@ -54,7 +54,7 @@
   padding: 0;
   color: rgba(255, 255, 255, 0.35);
   font-size: 14px;
-  transition: color 0.2s ease;
+  transition: none !important;
   display: flex;
   align-items: center;
   justify-content: center;

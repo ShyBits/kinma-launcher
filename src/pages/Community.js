@@ -1,4 +1,5 @@
-import React, { useRef } from 'react';
+import React, { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import WorkshopSection from '../components/WorkshopSection';
 import { MessageSquare, Package, Users, Bookmark, TrendingUp, Heart, Globe, Sparkles, Plus, Search, Filter, Bell, BellOff } from 'lucide-react';
@@ -210,7 +211,7 @@ const Community = () => {
       let list = [{ id: 'all', name: 'All Games', banner: null }];
       try {
         // Get all games from all users (shared)
-        const allGames = getAllUsersData('customGames');
+        const allGames = await getAllUsersData('customGames');
         
         // Filter to only show published games
         const publishedGames = allGames.filter(game => {
@@ -499,17 +500,86 @@ const Community = () => {
     setShowPostForm(false);
   };
 
+  // Position dropdown menu dynamically
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0, width: 0 });
+  const menuRef = useRef(null);
+  
+  // Helper to safely get document.body
+  const getBodyElement = () => {
+    if (typeof document !== 'undefined' && document.body) {
+      return document.body;
+    }
+    return null;
+  };
+
+  // Update menu position when picker opens or window resizes
+  const updateMenuPosition = React.useCallback(() => {
+    if (pickerOpen && pickerRef.current) {
+      const buttonRect = pickerRef.current.getBoundingClientRect();
+      const menuWidth = Math.max(200, Math.min(250, communityLeftSidebarWidth));
+      
+      // Position menu to the left of the button
+      let leftPos = buttonRect.left - menuWidth - 5; // 5px gap
+      
+      // Ensure menu doesn't go off-screen to the left
+      const finalLeft = Math.max(5, leftPos);
+      
+      // Calculate top position (align with button top)
+      const finalTop = buttonRect.top;
+      
+      setMenuPosition({
+        top: finalTop,
+        left: finalLeft,
+        width: menuWidth,
+      });
+    }
+  }, [pickerOpen, communityLeftSidebarWidth]);
+
+  // Update position when picker opens or dependencies change
+  React.useEffect(() => {
+    if (pickerOpen) {
+      updateMenuPosition();
+      
+      // Update on scroll/resize
+      const handleUpdate = () => updateMenuPosition();
+      window.addEventListener('scroll', handleUpdate, true);
+      window.addEventListener('resize', handleUpdate);
+      
+      return () => {
+        window.removeEventListener('scroll', handleUpdate, true);
+        window.removeEventListener('resize', handleUpdate);
+      };
+    }
+  }, [pickerOpen, updateMenuPosition]);
+
   // Close picker when clicking outside
   React.useEffect(() => {
+    if (!pickerOpen) return;
+    
     const handleClickOutside = (e) => {
-      if (!pickerOpen) return;
-      const el = pickerRef.current;
-      if (el && !el.contains(e.target)) {
+      const buttonEl = pickerRef.current;
+      const menuEl = menuRef.current;
+      
+      // Check if click is outside both the button and the menu
+      if (
+        buttonEl && 
+        !buttonEl.contains(e.target) && 
+        menuEl && 
+        !menuEl.contains(e.target)
+      ) {
         setPickerOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    
+    // Use capture phase and a small delay to ensure we catch the event
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside, true);
+    }, 0);
+    
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('mousedown', handleClickOutside, true);
+    };
   }, [pickerOpen]);
 
 
@@ -549,127 +619,109 @@ const Community = () => {
                     }
                   </span>
                 </button>
-                {pickerOpen && (
-                  <div className="comm-picker-menu">
-                    <div className="comm-picker-search">
-                      <input
-                        className="comm-picker-input"
-                        value={pickerQuery}
-                        onChange={(e) => setPickerQuery(e.target.value)}
-                        placeholder="Search games..."
-                        autoFocus
-                      />
-                    </div>
-                    {gameList.filter(g => g.name.toLowerCase().includes(pickerQuery.toLowerCase())).length === 0 ? (
-                      <div className="comm-picker-empty">
-                        <span>No games found</span>
+                {pickerOpen && (() => {
+                  const bodyEl = getBodyElement();
+                  if (!bodyEl) return null;
+                  
+                  return createPortal(
+                    <div 
+                      className="comm-picker-menu" 
+                      ref={menuRef}
+                      style={{
+                        top: `${menuPosition.top}px`,
+                        left: `${menuPosition.left}px`,
+                        width: `${menuPosition.width}px`,
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="comm-picker-search">
+                        <input
+                          className="comm-picker-input"
+                          value={pickerQuery}
+                          onChange={(e) => setPickerQuery(e.target.value)}
+                          placeholder="Search games..."
+                          autoFocus
+                        />
                       </div>
-                    ) : (
-                      gameList.filter(g => g.name.toLowerCase().includes(pickerQuery.toLowerCase())).map(g => (
-                        <div 
-                          key={g.id} 
-                          className={`comm-picker-option ${g.id === 'all' ? 'is-all' : ''} ${(selectedTab === 'posts' ? postsGame : workshopGame) === g.id ? 'active' : ''}`} 
-                          onClick={() => {
-                            if (selectedTab === 'posts') {
-                              setPostsGame(g.id);
-                              if (g.id === 'all') navigate('/community');
-                              else navigate(`/game/${g.id}/community`);
-                            } else {
-                              setWorkshopGame(g.id);
-                            }
-                            setPickerOpen(false);
-                          }}
-                        >
-                          {g.id !== 'all' && (
-                            <div className="comm-picker-logo">
-                              {g.logo ? <img src={g.logo} alt={g.name} /> : <span>🎮</span>}
-                            </div>
-                          )}
-                          <span className="comm-picker-name">{g.name}</span>
-                          {g.id !== 'all' && (
-                            <div className="comm-picker-notifications" onClick={(e) => e.stopPropagation()}>
-                              <button
-                                className="comm-picker-notification-toggle"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleGameNotification(g.id, 'posts', e);
-                                }}
-                                style={{
-                                  background: gameNotifications[g.id]?.posts
-                                    ? 'rgba(74, 158, 255, 0.15)'
-                                    : 'transparent',
-                                  border: gameNotifications[g.id]?.posts
-                                    ? '1px solid rgba(74, 158, 255, 0.3)'
-                                    : '1px solid rgba(255, 255, 255, 0.1)',
-                                  color: gameNotifications[g.id]?.posts
-                                    ? '#4a9eff'
-                                    : 'rgba(255, 255, 255, 0.4)'
-                                }}
-                                title="Posts notifications"
-                              >
-                                <Bell size={12} style={{ 
-                                  color: gameNotifications[g.id]?.posts
-                                    ? '#4a9eff'
-                                    : 'rgba(255, 255, 255, 0.4)'
-                                }} />
-                              </button>
-                              <button
-                                className="comm-picker-notification-toggle"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleGameNotification(g.id, 'threads', e);
-                                }}
-                                style={{
-                                  background: gameNotifications[g.id]?.threads
-                                    ? 'rgba(74, 158, 255, 0.15)'
-                                    : 'transparent',
-                                  border: gameNotifications[g.id]?.threads
-                                    ? '1px solid rgba(74, 158, 255, 0.3)'
-                                    : '1px solid rgba(255, 255, 255, 0.1)',
-                                  color: gameNotifications[g.id]?.threads
-                                    ? '#4a9eff'
-                                    : 'rgba(255, 255, 255, 0.4)'
-                                }}
-                                title="Threads notifications"
-                              >
-                                <Bell size={12} style={{ 
-                                  color: gameNotifications[g.id]?.threads
-                                    ? '#4a9eff'
-                                    : 'rgba(255, 255, 255, 0.4)'
-                                }} />
-                              </button>
-                              <button
-                                className="comm-picker-notification-toggle"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleGameNotification(g.id, 'workshop', e);
-                                }}
-                                style={{
-                                  background: gameNotifications[g.id]?.workshop
-                                    ? 'rgba(74, 158, 255, 0.15)'
-                                    : 'transparent',
-                                  border: gameNotifications[g.id]?.workshop
-                                    ? '1px solid rgba(74, 158, 255, 0.3)'
-                                    : '1px solid rgba(255, 255, 255, 0.1)',
-                                  color: gameNotifications[g.id]?.workshop
-                                    ? '#4a9eff'
-                                    : 'rgba(255, 255, 255, 0.4)'
-                                }}
-                                title="Workshop notifications"
-                              >
-                                <Bell size={12} style={{ 
-                                  color: gameNotifications[g.id]?.workshop
-                                    ? '#4a9eff'
-                                    : 'rgba(255, 255, 255, 0.4)'
-                                }} />
-                              </button>
-                            </div>
-                          )}
+                      {gameList.filter(g => g.name.toLowerCase().includes(pickerQuery.toLowerCase())).length === 0 ? (
+                        <div className="comm-picker-empty">
+                          <span>No games found</span>
                         </div>
-                      ))
-                    )}
-                  </div>
-                )}
+                      ) : (
+                        gameList.filter(g => g.name.toLowerCase().includes(pickerQuery.toLowerCase())).map(g => (
+                          <div 
+                            key={g.id} 
+                            className={`comm-picker-option ${g.id === 'all' ? 'is-all' : ''} ${(selectedTab === 'posts' ? postsGame : workshopGame) === g.id ? 'active' : ''}`} 
+                            onClick={() => {
+                              if (selectedTab === 'posts') {
+                                setPostsGame(g.id);
+                                if (g.id === 'all') navigate('/community');
+                                else navigate(`/game/${g.id}/community`);
+                              } else {
+                                setWorkshopGame(g.id);
+                              }
+                              setPickerOpen(false);
+                            }}
+                          >
+                            {g.id !== 'all' && (
+                              <div className="comm-picker-logo">
+                                {g.logo ? <img src={g.logo} alt={g.name} /> : <span>🎮</span>}
+                              </div>
+                            )}
+                            <span className="comm-picker-name">{g.name}</span>
+                              {g.id !== 'all' && (
+                                <div className="comm-picker-notifications" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    className={`comm-picker-notification-toggle ${gameNotifications[g.id]?.posts ? 'enabled' : ''}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleGameNotification(g.id, 'posts', e);
+                                    }}
+                                    title={gameNotifications[g.id]?.posts ? "Posts notifications enabled" : "Enable posts notifications"}
+                                  >
+                                    <Bell size={12} style={{ 
+                                      color: gameNotifications[g.id]?.posts
+                                        ? '#4a9eff'
+                                        : 'rgba(255, 255, 255, 0.4)'
+                                    }} />
+                                  </button>
+                                  <button
+                                    className={`comm-picker-notification-toggle ${gameNotifications[g.id]?.threads ? 'enabled' : ''}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleGameNotification(g.id, 'threads', e);
+                                    }}
+                                    title={gameNotifications[g.id]?.threads ? "Threads notifications enabled" : "Enable threads notifications"}
+                                  >
+                                    <Bell size={12} style={{ 
+                                      color: gameNotifications[g.id]?.threads
+                                        ? '#4a9eff'
+                                        : 'rgba(255, 255, 255, 0.4)'
+                                    }} />
+                                  </button>
+                                  <button
+                                    className={`comm-picker-notification-toggle ${gameNotifications[g.id]?.workshop ? 'enabled' : ''}`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleGameNotification(g.id, 'workshop', e);
+                                    }}
+                                    title={gameNotifications[g.id]?.workshop ? "Workshop notifications enabled" : "Enable workshop notifications"}
+                                  >
+                                    <Bell size={12} style={{ 
+                                      color: gameNotifications[g.id]?.workshop
+                                        ? '#4a9eff'
+                                        : 'rgba(255, 255, 255, 0.4)'
+                                    }} />
+                                  </button>
+                                </div>
+                              )}
+                          </div>
+                        ))
+                      )}
+                    </div>,
+                    bodyEl
+                  );
+                })()}
               </div>
             </div>
 
@@ -934,7 +986,7 @@ const Community = () => {
                         </span>
                         <svg width="12" height="8" viewBox="0 0 12 8" fill="none" style={{ 
                           transform: threadTypeDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                          transition: 'transform 0.2s ease'
+                          transition: 'none'
                         }}>
                           <path d="M1 1L6 6L11 1" stroke="rgba(255, 255, 255, 0.6)" strokeWidth="2" strokeLinecap="round"/>
                         </svg>
@@ -1308,7 +1360,7 @@ const Community = () => {
                         </span>
                         <svg width="12" height="8" viewBox="0 0 12 8" fill="none" style={{ 
                           transform: postTypeDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                          transition: 'transform 0.2s ease'
+                          transition: 'none'
                         }}>
                           <path d="M1 1L6 6L11 1" stroke="rgba(255, 255, 255, 0.6)" strokeWidth="2" strokeLinecap="round"/>
                         </svg>

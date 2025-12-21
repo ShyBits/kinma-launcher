@@ -1,8 +1,12 @@
 ﻿const { app, BrowserWindow, Menu, ipcMain, dialog, shell, globalShortcut, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const isDev = require('electron-is-dev');
+const electronIsDev = require('electron-is-dev');
 const Store = require('electron-store');
+
+// Allow forcing production mode via environment variable
+// Set ELECTRON_IS_DEV=0 to force production mode (use build folder)
+const isDev = process.env.ELECTRON_IS_DEV !== '0' && electronIsDev;
 const { autoUpdater } = require('electron-updater');
 const { getDatabaseManager } = require(path.join(__dirname, '../src/utils/DatabaseManager'));
 
@@ -16,6 +20,9 @@ let mainWindow;
 let authWindow;
 let accountSwitcherWindow; // Track account switcher window
 let adminWindow; // Track admin window
+let popOutWindows = new Map(); // Track all pop-out windows (key: unique ID, value: window object)
+let popOutWindowCounter = 0; // Counter for unique window IDs
+let windowNumberCounter = 0; // Counter for window numbers (1, 2, 3, ...)
 let pendingMainWindowShow = false; // Flag to show main window after account switcher closes
 
 function getZoomLimits() {
@@ -78,12 +85,27 @@ function createMainWindow() {
     show: false,
     icon: path.join(__dirname, 'assets/icon.png')
   });
+  
+  // Assign window number 1 to main window
+  mainWindow.windowNumber = 1;
+  windowNumberCounter = 1;
 
   const startUrl = isDev 
     ? 'http://localhost:3000' 
     : `file://${path.join(__dirname, '../build/index.html')}`;
   
   mainWindow.loadURL(startUrl);
+  
+  // Close all pop-out windows when main window closes
+  mainWindow.on('close', () => {
+    popOutWindows.forEach((window) => {
+      if (window && !window.isDestroyed()) {
+        window.close();
+      }
+    });
+    popOutWindows.clear();
+    windowNumberCounter = 0; // Reset counter when main window closes
+  });
 
   mainWindow.once('ready-to-show', () => {
     // Don't auto-show if we're waiting for account switcher to close
@@ -91,6 +113,10 @@ function createMainWindow() {
     const authUser = settingsStore.get('authUser');
     if (!pendingMainWindowShow && authUser && authUser.id) {
       mainWindow.show();
+      // Broadcast initial window number
+      setTimeout(() => {
+        broadcastWindowNumbers();
+      }, 500);
     } else if (!authUser || !authUser.id) {
       // User is not authenticated - close the window
       console.log('Main window ready but no authenticated user - closing window');
@@ -194,11 +220,17 @@ function createAuthWindow() {
   // Ensure the renderer is on the /auth route (works in dev and prod)
   authWindow.webContents.once('did-finish-load', () => {
     if (authWindow && !authWindow.isDestroyed()) {
-    const navigateToAuth = `
+    const navigateToAuth = isDev ? `
       try {
         if (window.location.pathname !== '/auth') {
           window.history.pushState({}, '', '/auth');
           window.dispatchEvent(new Event('popstate'));
+        }
+      } catch (e) {}
+    ` : `
+      try {
+        if (window.location.hash !== '#/auth') {
+          window.location.hash = '/auth';
         }
       } catch (e) {}
     `;
@@ -815,6 +847,14 @@ app.on('window-all-closed', () => {
 });
 
 app.on('activate', async () => {
+  // Close all pop-out windows on app activate (ensure clean state)
+  popOutWindows.forEach((window, route) => {
+    if (window && !window.isDestroyed()) {
+      window.close();
+    }
+  });
+  popOutWindows.clear();
+  
   if (BrowserWindow.getAllWindows().length === 0) {
     // FIRST: Check if there's a user that should be auto-logged in (didn't log out)
     const autoLoginUser = await findAutoLoginUser();
@@ -1008,7 +1048,7 @@ ipcMain.handle('close-window', async (event) => {
             if (win && !win.isDestroyed() && win !== senderWindow) {
               try {
                 const url = win.webContents.getURL();
-                if (url && (url.includes('/auth') || url.includes('addAccount=true'))) {
+                if (url && (url.includes('/auth') || url.includes('#/auth') || url.includes('addAccount=true'))) {
                   authWindowExists = true;
                   console.log('✅ Auth window detected in open windows - skipping auto-login');
                   break;
@@ -1349,7 +1389,7 @@ ipcMain.handle('auth-success', async (event, user) => {
   if (senderWindow && !senderWindow.isDestroyed()) {
     try {
       const url = senderWindow.webContents.getURL();
-      if (url.includes('/account-switcher')) {
+      if (url.includes('/account-switcher') || url.includes('#/account-switcher')) {
         isFromAccountSwitcher = true;
       }
     } catch (e) {
@@ -1838,7 +1878,7 @@ let updateDownloaded = false;
 
 // Configure autoUpdater
 if (!isDev) {
-  autoUpdater.setAutoDownload(false);
+  autoUpdater.autoDownload = false;
   
   autoUpdater.on('checking-for-update', () => {
     console.log('Checking for update...');
@@ -2439,11 +2479,11 @@ ipcMain.handle('open-auth-window', (event, email = '') => {
       console.log('✅ Auth window created and stored in global variable');
       
       // Build URL with email parameter if provided
-      // IMPORTANT: Use pathname routing (not hash) since app uses BrowserRouter
+      // Use hash routing for production (file:// protocol), pathname routing for dev (http:// protocol)
       const emailParam = email ? `&email=${encodeURIComponent(email)}` : '';
     const startUrl = isDev 
         ? `http://localhost:3000/auth?addAccount=true${emailParam}` 
-        : `file://${path.join(__dirname, '../build/index.html')}/auth?addAccount=true${emailParam}`;
+        : `file://${path.join(__dirname, '../build/index.html')}#/auth?addAccount=true${emailParam}`;
     
       console.log('🔐 Loading auth window with URL:', startUrl);
       console.log('📧 Email param in URL:', emailParam);
@@ -2680,6 +2720,261 @@ ipcMain.handle('open-admin-window', (event) => {
     return result;
   } catch (error) {
     console.error('Error opening admin window:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Open pop-out window for Studio View menus
+ipcMain.handle('open-pop-out-window', (event, route) => {
+  console.log('🔲 Pop-out window requested for route:', route);
+  try {
+    const currentWindow = BrowserWindow.fromWebContents(event.sender);
+    if (!currentWindow) {
+      console.error('❌ Current window not found');
+      return { success: false, error: 'Current window not found' };
+    }
+    console.log('✅ Current window found');
+    
+    // Generate unique ID for this window
+    const windowId = `popout-${++popOutWindowCounter}-${Date.now()}`;
+    
+    // Assign next window number
+    windowNumberCounter++;
+    const windowNumber = windowNumberCounter;
+    
+    // Clean up destroyed windows
+    for (const [id, window] of popOutWindows.entries()) {
+      if (window.isDestroyed()) {
+        popOutWindows.delete(id);
+      }
+    }
+    
+    // Get screen size for window positioning
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+    
+    // Get minimum size from main window (1200x720) or use defaults
+    const mainWindowMinWidth = mainWindow && !mainWindow.isDestroyed() ? 1200 : 1200;
+    const mainWindowMinHeight = mainWindow && !mainWindow.isDestroyed() ? 720 : 720;
+    
+    // Use main window's minimum size for pop-out window
+    const windowWidth = mainWindowMinWidth;
+    const windowHeight = mainWindowMinHeight;
+    
+    // Position window to the right of main window
+    const mainWindowBounds = currentWindow.getBounds();
+    const windowX = mainWindowBounds.x + mainWindowBounds.width + 20;
+    const windowY = mainWindowBounds.y;
+    
+    // Create pop-out window
+    const popOutWindow = new BrowserWindow({
+      width: windowWidth,
+      height: windowHeight,
+      minWidth: mainWindowMinWidth,
+      minHeight: mainWindowMinHeight,
+      x: windowX,
+      y: windowY,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        enableRemoteModule: false,
+        preload: path.join(__dirname, 'preload.js')
+      },
+      frame: false,
+      titleBarStyle: 'hidden',
+      show: false,
+      icon: path.join(__dirname, 'assets/icon.png'),
+      parent: null // Independent window
+    });
+    
+    // Store window reference with unique ID
+    popOutWindow.windowId = windowId;
+    popOutWindow.route = route;
+    popOutWindow.windowNumber = windowNumber;
+    popOutWindows.set(windowId, popOutWindow);
+    
+    // Notify all windows about their window numbers
+    broadcastWindowNumbers();
+    
+    // Build URL with route
+    const startUrl = isDev 
+      ? `http://localhost:3000${route}` 
+      : `file://${path.join(__dirname, '../build/index.html')}#${route}`;
+    
+    console.log('🔲 Loading pop-out window with URL:', startUrl);
+    popOutWindow.loadURL(startUrl);
+    
+    // Show window when ready
+    popOutWindow.once('ready-to-show', () => {
+      console.log('🔲 Pop-out window ready to show');
+      if (popOutWindow && !popOutWindow.isDestroyed()) {
+        popOutWindow.show();
+        popOutWindow.focus();
+        console.log('✅ Pop-out window shown');
+        // Notify window about its number
+        setTimeout(() => {
+          broadcastWindowNumbers();
+        }, 100);
+      }
+    });
+    
+    // Ensure the renderer is on the correct route
+    popOutWindow.webContents.once('did-finish-load', () => {
+      console.log('🔲 Pop-out window finished loading, navigating to route:', route);
+      // Notify window about its number after page loads
+      setTimeout(() => {
+        broadcastWindowNumbers();
+      }, 300);
+      const navigateToRoute = `
+        try {
+          const targetRoute = '${route}';
+          console.log('🔲 Navigating to route:', targetRoute);
+          console.log('🔲 Current pathname:', window.location.pathname);
+          console.log('🔲 Current hash:', window.location.hash);
+          
+          if (window.location.pathname !== targetRoute && !window.location.hash.includes(targetRoute)) {
+            if (window.location.protocol === 'file:') {
+              // HashRouter mode
+              window.location.hash = targetRoute;
+            } else {
+              // BrowserRouter mode
+              window.history.pushState({}, '', targetRoute);
+              window.dispatchEvent(new Event('popstate'));
+            }
+            console.log('✅ Navigation completed');
+          } else {
+            console.log('✅ Already on correct route');
+          }
+        } catch (e) {
+          console.error('❌ Navigation error:', e);
+        }
+      `;
+      popOutWindow.webContents.executeJavaScript(navigateToRoute);
+    });
+    
+    // Handle navigation errors
+    popOutWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+      console.error('❌ Pop-out window failed to load:', errorCode, errorDescription);
+    });
+    
+    // Close pop-out window when main window closes
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.once('closed', () => {
+        // Close all pop-out windows when main window closes
+        popOutWindows.forEach((window) => {
+          if (window && !window.isDestroyed()) {
+            window.close();
+          }
+        });
+        popOutWindows.clear();
+      });
+    }
+    
+    // Clean up when pop-out window closes
+    popOutWindow.on('closed', () => {
+      popOutWindows.delete(windowId);
+      // Window numbers don't change when a window closes, so no need to broadcast
+    });
+    
+    if (isDev) {
+      popOutWindow.webContents.openDevTools({ mode: 'detach' });
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error opening pop-out window:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get window number for a specific window
+function getWindowNumber(webContents) {
+  const window = BrowserWindow.fromWebContents(webContents);
+  if (!window) return null;
+  
+  if (window === mainWindow) {
+    return mainWindow.windowNumber || 1;
+  }
+  
+  // Check pop-out windows
+  for (const [id, popOutWindow] of popOutWindows.entries()) {
+    if (popOutWindow === window) {
+      return popOutWindow.windowNumber;
+    }
+  }
+  
+  return null;
+}
+
+// Get total window count
+function getTotalWindowCount() {
+  let count = 0;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    count++;
+  }
+  popOutWindows.forEach((window) => {
+    if (window && !window.isDestroyed()) {
+      count++;
+    }
+  });
+  return count;
+}
+
+// Broadcast window numbers and total count to all windows
+function broadcastWindowNumbers() {
+  const totalCount = getTotalWindowCount();
+  console.log('🔲 Broadcasting window numbers. Total count:', totalCount);
+  
+  // Send to main window
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    const mainNumber = mainWindow.windowNumber || 1;
+    console.log('🔲 Sending to main window - number:', mainNumber, 'total:', totalCount);
+    mainWindow.webContents.send('window-number-changed', mainNumber);
+    mainWindow.webContents.send('total-window-count-changed', totalCount);
+  }
+  // Send to all pop-out windows
+  popOutWindows.forEach((window) => {
+    if (window && !window.isDestroyed()) {
+      console.log('🔲 Sending to pop-out window - number:', window.windowNumber, 'total:', totalCount);
+      window.webContents.send('window-number-changed', window.windowNumber);
+      window.webContents.send('total-window-count-changed', totalCount);
+    }
+  });
+}
+
+// Get window number IPC handler
+ipcMain.handle('get-window-number', (event) => {
+  return getWindowNumber(event.sender);
+});
+
+// Get total window count IPC handler
+ipcMain.handle('get-total-window-count', () => {
+  return getTotalWindowCount();
+});
+
+// Close pop-out window (by window ID or route)
+ipcMain.handle('close-pop-out-window', (event, routeOrId) => {
+  try {
+    // Try to find by ID first
+    if (popOutWindows.has(routeOrId)) {
+      const window = popOutWindows.get(routeOrId);
+      if (window && !window.isDestroyed()) {
+        window.close();
+      }
+      popOutWindows.delete(routeOrId);
+      return { success: true };
+    }
+    // Try to find by route (for backward compatibility)
+    for (const [id, window] of popOutWindows.entries()) {
+      if (window.route === routeOrId && !window.isDestroyed()) {
+        window.close();
+        popOutWindows.delete(id);
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Window not found' };
+  } catch (error) {
+    console.error('Error closing pop-out window:', error);
     return { success: false, error: error.message };
   }
 });

@@ -21,13 +21,13 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    transition: width 0.25s ease, min-width 0.25s ease;
+    transition: none !important;
     overflow: hidden;
     flex-shrink: 0;
 }
 
 .sidebar.resizing {
-    transition: none;
+    transition: none !important;
 }
 
 .sidebar.collapsed {
@@ -39,8 +39,8 @@
 
 /* Top Section */
 .sidebar-top {
-    padding: 16px 20px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 10px;
+    border-bottom: none;
     background: transparent;
     position: relative;
     z-index: 10;
@@ -54,21 +54,22 @@
 }
 
 .sidebar-home-icon {
-    width: 36px;
-    height: 36px;
-    min-width: 36px;
-    min-height: 36px;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
     padding: 0;
     background: transparent;
     color: var(--text-secondary);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 0;
+    border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: none;
+    transition: none !important;
     flex-shrink: 0;
+    margin-left: 8px;
 }
 
 .sidebar-home-icon:hover {
@@ -88,7 +89,7 @@
 
 .sidebar-home-icon svg {
     color: inherit;
-    transition: color 0.2s ease;
+    transition: none !important;
 }
 
 .sidebar-btn {
@@ -104,7 +105,7 @@
     cursor: pointer;
     font-size: 14px;
     font-weight: 500;
-    transition: none;
+    transition: none !important;
 }
 
 .sidebar-btn:hover {
@@ -124,7 +125,7 @@
 
 .sidebar-btn svg {
     color: inherit;
-    transition: color 0.2s ease;
+    transition: none !important;
 }
 
 /* Search */
@@ -132,23 +133,26 @@
     display: flex;
     align-items: center;
     gap: 0;
-    padding: 12px 14px;
+    padding: 6px 4px 6px 14px;
     background: rgba(0, 0, 0, 0.5);
-    border: none;
-    border-radius: 0;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
     flex: 1;
     min-width: 0;
     height: 36px;
-    transition: none;
+    transition: none !important;
+    box-sizing: border-box;
 }
 
 .sidebar-search:hover {
     background: rgba(0, 0, 0, 0.6);
+    border-color: rgba(255, 255, 255, 0.15);
 }
 
 .sidebar-search:focus-within {
     background: rgba(0, 0, 0, 0.7);
-    box-shadow: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .sidebar-search input {
@@ -161,6 +165,7 @@
     min-width: 0;
     width: 100%;
     font-weight: 400;
+    padding: 0;
 }
 
 .sidebar-search input::placeholder {
@@ -170,12 +175,47 @@
 
 .sidebar-search svg {
     color: rgba(255, 255, 255, 0.5);
-    transition: color 0.2s ease;
+    transition: none !important;
     flex-shrink: 0;
 }
 
 .sidebar-search:focus-within svg {
     color: var(--accent-primary);
+}
+
+.sidebar-view-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    transition: none !important;
+    flex-shrink: 0;
+    outline: none;
+}
+
+.sidebar-view-toggle:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+}
+
+.sidebar-view-toggle:active {
+    transform: scale(0.95);
+}
+
+.sidebar-view-toggle svg {
+    width: 14px;
+    height: 14px;
 }
 
 /* Game List */
@@ -188,6 +228,102 @@
     position: relative;
     min-height: 0;
     cursor: context-menu; /* Show context menu cursor */
+}
+
+/* Grid View */
+.sidebar-games-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+    gap: 8px;
+    padding: 8px 12px;
+}
+
+.sidebar-game-grid-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 8px;
+    transition: none !important;
+    position: relative;
+}
+
+.sidebar-game-grid-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.sidebar-game-grid-item.active {
+    background: rgba(59, 130, 246, 0.15);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.sidebar-game-grid-icon {
+    width: 56px;
+    height: 56px;
+    min-width: 56px;
+    min-height: 56px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.sidebar-game-grid-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.sidebar-game-grid-name {
+    font-size: 10px;
+    color: var(--text-primary);
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
+    line-height: 1.2;
+    padding: 0 2px;
+}
+
+.sidebar-game-grid-item.active .sidebar-game-grid-name {
+    color: var(--accent-primary);
+}
+
+.sidebar-game-grid-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--accent-primary);
+    transition: none !important;
+}
+
+.sidebar-game-grid-item.updating {
+    background: rgba(255, 167, 38, 0.08);
+    border: 1px solid rgba(255, 167, 38, 0.4);
+}
+
+.sidebar-game-grid-item.downloading {
+    background: rgba(var(--download-blue-rgb), 0.08);
+    border: 1px solid rgba(var(--download-blue-rgb), 0.4);
+}
+
+.sidebar-game-grid-item.playing {
+    background: rgba(34, 197, 94, 0.08);
+    border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.sidebar-game-grid-item.completed-download,
+.sidebar-game-grid-item.completed-update {
+    animation: none !important;
 }
 
 /* Root-level game items should extend to the left edge and full width */
@@ -214,6 +350,22 @@
     background: transparent;
 }
 
+/* Empty State */
+.sidebar-empty-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 14px;
+    opacity: 0.6;
+}
+
+.sidebar-empty-state p {
+    margin: 0;
+}
+
 /* Section Header */
 .section-header {
     width: 100%;
@@ -231,7 +383,7 @@
     gap: 8px;
     border-radius: 0;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: none !important;
     margin-top: 0px;
     position: relative;
 }
@@ -249,12 +401,12 @@
 
 .section-header .rotated {
     transform: rotate(180deg);
-    transition: transform 0.2s ease;
+    transition: none !important;
 }
 
 .section-header svg {
     color: var(--text-secondary);
-    transition: all 0.2s ease;
+    transition: none !important;
 }
 
 .section-header:hover svg {
@@ -305,7 +457,7 @@
     background: var(--accent-primary);
     z-index: 1;
     display: none;
-    transition: height 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: none !important;
 }
 
 /* Show colored line when section has active item */
@@ -351,7 +503,7 @@
     border-radius: 0;
     padding: 0;
     cursor: pointer;
-    transition: none;
+    transition: none !important;
     overflow: visible;
     width: 100%;
     align-items: flex-start;
@@ -389,10 +541,6 @@
         border-color: rgba(var(--download-blue-rgb), 0.3);
         box-shadow: 0 0 0 0 rgba(var(--download-blue-rgb), 0);
     }
-    50% {
-        border-color: rgba(var(--download-blue-rgb), 0.6);
-        box-shadow: 0 0 12px rgba(var(--download-blue-rgb), 0.3);
-    }
 }
 
 /* Connection lines and points should always show, even for updating items */
@@ -412,19 +560,9 @@
         border-color: rgba(255, 167, 38, 0.3);
         box-shadow: 0 0 0 0 rgba(255, 167, 38, 0);
     }
-    50% {
-        border-color: rgba(255, 167, 38, 0.6);
-        box-shadow: 0 0 12px rgba(255, 167, 38, 0.3);
-    }
 }
 
 @keyframes update-fill {
-    from {
-        clip-path: inset(0 100% 0 0);
-    }
-    to {
-        clip-path: inset(0 0% 0 0);
-    }
 }
 
 .game-item:hover {
@@ -470,21 +608,9 @@
 }
 
 @keyframes active-line-expand {
-    0% {
-        clip-path: inset(50% 0 50% 0);
-    }
-    100% {
-        clip-path: inset(0 0 0 0);
-    }
 }
 
 @keyframes active-gradient-expand {
-    0% {
-        background-size: 0% 100%;
-    }
-    100% {
-        background-size: 100% 100%;
-    }
 }
 
 /* Horizontal line for active items - keep original position and always visible */
@@ -542,12 +668,6 @@
 }
 
 @keyframes active-border-expand-orange {
-    0% {
-        border-left-color: transparent;
-    }
-    100% {
-        border-left-color: var(--accent-warning);
-    }
 }
 
 .game-item.updating.active::before {
@@ -574,7 +694,7 @@
 
 .game-item.completed-download .game-name {
     color: var(--accent-primary);
-    animation: completion-pulse 1s ease-out;
+    animation: none !important;
 }
 
 .game-item.playing .game-name {
@@ -583,34 +703,19 @@
 
 .game-item.completed-update .game-name {
     color: var(--accent-success);
-    animation: completion-pulse 1s ease-out;
+    animation: none !important;
 }
 
 .game-item.completed-download,
 .game-item.completed-update {
-    animation: completion-outline 1s ease-out;
+    animation: none !important;
 }
 
 @keyframes completion-pulse {
-    0% {
-        transform: scale(1);
-    }
-    50% {
-        transform: scale(1.05);
-    }
-    100% {
-        transform: scale(1);
-    }
 }
 
 @keyframes completion-outline {
     0%, 100% {
-        border: 1px solid transparent;
-    }
-    50% {
-        border: 1px solid var(--accent-success);
-    }
-    100% {
         border: 1px solid transparent;
     }
 }
@@ -621,7 +726,7 @@
     justify-content: space-between;
     padding: 8px 0px 8px 8px;
     color: rgba(255, 255, 255, 0.9);
-    transition: none;
+    transition: none !important;
     border-radius: 0;
     min-height: 40px; /* lock row height */
     text-align: left;
@@ -673,8 +778,9 @@
     border-radius: 0;
     background: rgba(59, 130, 246, 0.08);
     flex-shrink: 0;
-    overflow: hidden;
-    transition: none;
+    overflow: visible;
+    transition: none !important;
+    position: relative;
 }
 
 .game-icon img {
@@ -702,11 +808,11 @@
     justify-content: center;
     padding: 6px;
     border-radius: 0;
-    transition: all 0.2s ease;
+    transition: none !important;
 }
 
 .update-icon-btn svg {
-    transition: none;
+    transition: none !important;
 }
 
 /* 🟠 Active Update (orange, spinning) */
@@ -745,7 +851,7 @@
 .icon-btn:hover { opacity: 0.75; }
 
 .update-icon-btn.spinning svg {
-    animation: spin 1s linear infinite;
+    animation: none !important;
 }
 
 /* Hover states - higher specificity for spinning hover */
@@ -781,29 +887,10 @@ svg[data-pause="true"] {
     background: rgba(255, 167, 38, 0.3);
     border-radius: 0;
     overflow: hidden;
-    animation: progress 3s ease-in-out forwards;
+    animation: none !important;
     box-shadow: 0 0 10px rgba(255, 167, 38, 0.3);
 }
 
-@keyframes spin {
-    from {
-        transform: rotate(0deg);
-    }
-
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-@keyframes progress {
-    from {
-        width: 0%;
-    }
-
-    to {
-        width: 100%;
-    }
-}
 
 /* Sidebar Footer */
 .sidebar-footer {
@@ -884,7 +971,7 @@ svg[data-pause="true"] {
     box-shadow: none;
     cursor: pointer;
     color: var(--text-secondary);
-    transition: color 0.2s ease;
+    transition: none !important;
     padding: 0;
     flex-shrink: 0;
 }
@@ -927,7 +1014,7 @@ svg[data-pause="true"] {
 .footer-progress-fill {
     height: 100%;
     background: var(--accent-primary);
-    transition: width 0.1s linear;
+    transition: none !important;
 }
 
 /* Footer progress bar colors */
@@ -947,7 +1034,7 @@ svg[data-pause="true"] {
     height: 100%;
     background: var(--accent-primary);
     border-radius: 0;
-    transition: width 0.1s linear;
+    transition: none !important;
     z-index: 0;
     opacity: 0.2;
 }
@@ -1005,7 +1092,7 @@ svg[data-pause="true"] {
     font-size: 11px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: none !important;
     white-space: nowrap;
 }
 
@@ -1025,22 +1112,7 @@ svg[data-pause="true"] {
 }
 
 .footer-update-btn .spinning {
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-/* Side Menu for Footer Downloads */
-.footer-download-item,
-.footer-update-item {
-    position: relative;
+    animation: none !important;
 }
 
 .footer-download-side-menu {
@@ -1050,23 +1122,7 @@ svg[data-pause="true"] {
     border-radius: 0;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     z-index: 10000;
-    animation: slideInRight 0.2s ease;
-}
-
-@keyframes slideInRight {
-    from {
-        opacity: 0;
-        transform: translateX(-8px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-.side-menu-header {
-    padding: 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    animation: none !important;
 }
 
 .side-menu-title {
@@ -1122,7 +1178,7 @@ svg[data-pause="true"] {
     font-size: 12px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: none !important;
 }
 
 .side-menu-btn:hover {
@@ -1166,7 +1222,7 @@ svg[data-pause="true"] {
     font-size: 13px;
     text-align: left;
     cursor: pointer;
-    transition: background 0.15s ease;
+    transition: none !important;
     border-radius: 0;
 }
 
@@ -1198,43 +1254,22 @@ svg[data-pause="true"] {
 /* Add Category Input */
 .sidebar-add-category {
     margin-top: 12px;
-    padding: 0 12px;
-    animation: slideDown 0.2s ease-out;
+    padding: 0;
+    width: 100%;
+    animation: none !important;
 }
 
 .sidebar-rename-category {
-    padding: 0 12px;
+    padding: 0;
     margin-bottom: 8px;
-    animation: slideDown 0.2s ease-out;
-}
-
-@keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-8px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.add-category-input-wrapper {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1.5px solid rgba(255, 255, 255, 0.15);
-    border-radius: 0;
-    padding: 10px 12px;
-    transition: none;
-    backdrop-filter: blur(4px);
+    width: 100%;
+    animation: none !important;
 }
 
 .add-category-input-wrapper:focus-within {
-    background: rgba(255, 255, 255, 0.07);
-    border-color: var(--accent-primary, #00c9ff);
-    box-shadow: 0 0 0 3px rgba(0, 201, 255, 0.1);
+    background: rgba(0, 0, 0, 0.7);
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .add-category-input {
@@ -1244,9 +1279,11 @@ svg[data-pause="true"] {
     color: rgba(255, 255, 255, 0.95);
     font-size: 13px;
     padding: 0;
+    padding-right: 8px;
     outline: none;
     font-weight: 400;
     letter-spacing: 0.01em;
+    min-width: 0;
 }
 
 .add-category-input::placeholder {
@@ -1257,8 +1294,8 @@ svg[data-pause="true"] {
 .add-category-actions {
     display: flex;
     align-items: center;
-    gap: 6px;
-    margin-left: 4px;
+    gap: 4px;
+    flex-shrink: 0;
 }
 
 .add-category-btn {
@@ -1266,20 +1303,22 @@ svg[data-pause="true"] {
     align-items: center;
     justify-content: center;
     background: transparent;
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.1);
     color: rgba(255, 255, 255, 0.6);
     cursor: pointer;
-    padding: 6px;
-    border-radius: 0;
-    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 0;
+    border-radius: 50%;
+    transition: none !important;
     width: 24px;
     height: 24px;
     position: relative;
+    flex-shrink: 0;
 }
 
 .add-category-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.9);
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.4);
+    color: #60a5fa;
     transform: scale(1.05);
 }
 

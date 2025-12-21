@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Settings, Users, MessageSquare, ShoppingCart, Bell, User, Plus, Minus, CreditCard, Coins, Store, Globe, Menu,
-  BarChart3, Package, FileText, Upload, TrendingUp, DollarSign, Download, Check, RefreshCw, AlertCircle, Info, Gift, X, ShoppingBag, Award, Building2, LogOut, ChevronRight, ChevronLeft
+  BarChart3, Package, FileText, Upload, TrendingUp, DollarSign, Download, Check, RefreshCw, AlertCircle, Info, Gift, X, ShoppingBag, Award, Building2, LogOut, ChevronRight, ChevronLeft, Calendar, Clock, Layout, BarChart
 } from 'lucide-react';
 import AuthModal from './AuthModal';
 import { getUserData, saveUserData, getCurrentUserId } from '../utils/UserDataManager';
@@ -71,9 +71,6 @@ const TopNavigation = ({
 
   // Game Studio dropdown state: 'analytics' | 'content' | 'reports' | null
   const [openStudioMenu, setOpenStudioMenu] = useState(null);
-  const analyticsWrapperRef = useRef(null);
-  const contentWrapperRef = useRef(null);
-  const reportsWrapperRef = useRef(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('credit');
   const [showPayPalConnect, setShowPayPalConnect] = useState(false);
   const [showCryptoConnect, setShowCryptoConnect] = useState(false);
@@ -255,11 +252,19 @@ const TopNavigation = ({
   }, []);
   
   // Check if we're in Game Studio
-  const isGameStudio = location?.pathname === '/game-studio' || location?.pathname === '/game-studio-settings';
+  const isGameStudio = location?.pathname === '/game-studio' || location?.pathname === '/game-studio-settings' || location?.pathname === '/game-studio/calendar' || location?.pathname === '/game-studio/analytics' || location?.pathname === '/game-studio/team';
   
   // Check if user has game studio access
   const [hasGameStudioAccess, setHasGameStudioAccess] = useState(false);
   const [gameStudioEnabled, setGameStudioEnabled] = useState(false);
+  
+  // Earnings data state
+  const [earningsData, setEarningsData] = useState({
+    allTime: 0,
+    thisMonth: 0,
+    activeGames: 0,
+    totalDownloads: 0
+  });
   
   useEffect(() => {
     const checkAccess = () => {
@@ -314,6 +319,90 @@ const TopNavigation = ({
       window.dispatchEvent(new CustomEvent('user-changed'));
     }
   };
+
+  // Load and calculate earnings data for studio view
+  useEffect(() => {
+    if (!isGameStudio) return;
+
+    const loadEarningsData = async () => {
+      try {
+        const customGames = await getUserData('customGames', []);
+        
+        // Calculate earnings from games
+        let allTimeRevenue = 0;
+        let thisMonthRevenue = 0;
+        let activeGamesCount = 0;
+        let totalDownloadsCount = 0;
+        
+        const currentDate = new Date();
+        const currentMonth = currentDate.getMonth();
+        const currentYear = currentDate.getFullYear();
+        
+        customGames.forEach(game => {
+          const downloads = game.downloads || 0;
+          const revenue = downloads * 2.5; // $2.5 per download
+          allTimeRevenue += revenue;
+          totalDownloadsCount += downloads;
+          
+          // Check if game is active (published and has downloads)
+          const status = game.status || game.fullFormData?.status || 'draft';
+          if ((status === 'public' || status === 'published') && downloads > 0) {
+            activeGamesCount++;
+          }
+          
+          // Calculate this month's revenue
+          // If game has lastUpdated or createdAt, check if it's this month
+          const gameDate = game.lastUpdated || game.fullFormData?.updatedAt || game.createdAt || game.fullFormData?.createdAt;
+          if (gameDate) {
+            const gameDateObj = new Date(gameDate);
+            if (gameDateObj.getMonth() === currentMonth && gameDateObj.getFullYear() === currentYear) {
+              // For simplicity, assume all downloads happened this month if game was updated this month
+              // In a real system, you'd track download dates separately
+              thisMonthRevenue += revenue;
+            }
+          }
+        });
+        
+        // If no date tracking, estimate this month as 20% of all time (rough estimate)
+        if (thisMonthRevenue === 0 && allTimeRevenue > 0) {
+          thisMonthRevenue = allTimeRevenue * 0.2;
+        }
+        
+        setEarningsData({
+          allTime: allTimeRevenue,
+          thisMonth: thisMonthRevenue,
+          activeGames: activeGamesCount,
+          totalDownloads: totalDownloadsCount
+        });
+      } catch (error) {
+        console.error('Error loading earnings data:', error);
+        setEarningsData({
+          allTime: 0,
+          thisMonth: 0,
+          activeGames: 0,
+          totalDownloads: 0
+        });
+      }
+    };
+    
+    loadEarningsData();
+    
+    // Reload when games are updated
+    const handleGameUpdate = () => {
+      loadEarningsData();
+    };
+    
+    window.addEventListener('customGameUpdate', handleGameUpdate);
+    window.addEventListener('storage', (e) => {
+      if (e.key && e.key.includes('customGames')) {
+        loadEarningsData();
+      }
+    });
+    
+    return () => {
+      window.removeEventListener('customGameUpdate', handleGameUpdate);
+    };
+  }, [isGameStudio]);
   
   const handleAmountChange = (delta) => {
     setTopUpAmount(prev => Math.max(0, prev + delta));
@@ -733,7 +822,6 @@ const TopNavigation = ({
   };
 
   // Unified outside-click/Escape handling for Game Studio dropdowns
-  const publishingWrapperRef = useRef(null);
   
   const handleStudioMenuEscape = useCallback((event) => {
     if (event.key === 'Escape' && openStudioMenu) {
@@ -748,11 +836,8 @@ const TopNavigation = ({
     }
     
     const target = event.target;
-    const wrappers = [analyticsWrapperRef.current, publishingWrapperRef.current, contentWrapperRef.current, reportsWrapperRef.current];
-    const clickedInside = wrappers.some((ref) => ref && ref.contains(target));
-    if (!clickedInside) {
-      setOpenStudioMenu(null);
-    }
+    // No publishing menu in navigation anymore
+    setOpenStudioMenu(null);
   }, []);
   
   useEffect(() => {
@@ -791,6 +876,7 @@ const TopNavigation = ({
     };
   }, [openStudioMenu, handleStudioMenuEscape, handleStudioMenuClickOutside]);
 
+
   const handleNavigation = (pageId) => {
     setCurrentPage(pageId);
     const routeMap = {
@@ -802,6 +888,7 @@ const TopNavigation = ({
       'community': '/community',
       'profile': '/profile',
       'friends': '/friends',
+      'calendar': '/game-studio/calendar',
       'settings': isGameStudio ? '/game-studio-settings' : '/settings'
     };
     const newPath = routeMap[pageId] || '/';
@@ -1467,348 +1554,260 @@ const TopNavigation = ({
         </button>
         
         {/* Main Navigation Links - Aligned with Content Area */}
-        {!isGameStudio && (
-          <div className={`nav-main-links ${isResizing ? 'resizing' : ''}`}>
-            <button 
-              className={`nav-item nav-item-with-text ${currentPage === 'store' ? 'active' : ''}`}
-              onClick={() => handleNavigation('store')}
-            >
-              <Store size={18} />
-              <span>Store</span>
-            </button>
-            
-            <button 
-              className={`nav-item nav-item-with-text ${currentPage === 'market' ? 'active' : ''}`}
-              onClick={() => handleNavigation('market')}
-            >
-              <ShoppingCart size={18} />
-              <span>Market</span>
-            </button>
-            
-            <button 
-              className={`nav-item nav-item-with-text ${currentPage === 'community' ? 'active' : ''}`}
-              onClick={() => handleNavigation('community')}
-            >
-              <Globe size={18} />
-              <span>Community</span>
-            </button>
-          </div>
-        )}
+        <div className={`nav-main-links ${isResizing ? 'resizing' : ''}`}>
+          {isGameStudio ? null : (
+            /* User View - Regular navigation */
+            <>
+              <button 
+                className={`nav-item nav-item-with-text ${currentPage === 'store' ? 'active' : ''}`}
+                onClick={() => handleNavigation('store')}
+              >
+                <Store size={18} />
+                <span>Store</span>
+              </button>
+              
+              <button 
+                className={`nav-item nav-item-with-text ${currentPage === 'market' ? 'active' : ''}`}
+                onClick={() => handleNavigation('market')}
+              >
+                <ShoppingCart size={18} />
+                <span>Market</span>
+              </button>
+              
+              <button 
+                className={`nav-item nav-item-with-text ${currentPage === 'community' ? 'active' : ''}`}
+                onClick={() => handleNavigation('community')}
+              >
+                <Globe size={18} />
+                <span>Community</span>
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* Right Section - Smart Navigation Order */}
-      <div className="nav-right">
-        {isGameStudio ? (
-          /* Game Studio specific navigation */
-          <>
-            {/* Revenue Display */}
-            <div className="balance-wrapper">
+      {/* Middle Section - All Studio buttons with Earnings (Studio View Only) */}
+      {isGameStudio && (
+        <div className="nav-center">
+          <div className="nav-center-group">
+            <button 
+              className={`nav-item nav-item-with-text ${location?.pathname === '/game-studio' ? 'active' : ''}`}
+              onClick={() => {
+                setShowBalanceMenu(false);
+                navigate('/game-studio');
+              }}
+            >
+              <Building2 size={18} />
+              <span>Studio</span>
+            </button>
+            <div className="nav-separator"></div>
+            <button 
+              className={`nav-item nav-item-with-text ${location?.pathname === '/game-studio/analytics' ? 'active' : ''}`}
+              onClick={() => {
+                setShowBalanceMenu(false);
+                navigate('/game-studio/analytics');
+              }}
+            >
+              <BarChart size={18} />
+              <span>Analytics</span>
+            </button>
+            <div className="balance-wrapper" style={{ position: 'relative' }}>
               <CustomTooltip text={showBalanceMenu ? '' : 'Earnings'}>
-                <div 
-                  className={`nav-balance ${showBalanceMenu ? 'active' : ''}`} 
+                <button
+                  className={`nav-item nav-item-earnings ${showBalanceMenu ? 'active' : ''}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowBalanceMenu(!showBalanceMenu);
                   }}
                 >
-                  <DollarSign size={18} />
-                  <span className="balance-amount">$12,450.50</span>
-                </div>
+                  <span className="balance-amount">${earningsData.allTime.toFixed(2)}</span>
+                </button>
               </CustomTooltip>
               
               {/* Balance Menu - Studio Earnings View */}
               {showBalanceMenu && (
-                <div ref={balanceMenuRef} className="balance-menu">
-                  <div className="balance-menu-header">
-                    <h2>Earnings</h2>
-                    <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                      Total revenue from your published games
-                    </p>
+                <div ref={balanceMenuRef} className="earnings-menu">
+                  <div className="earnings-menu-header">
+                    <h2 className="earnings-title">Earnings</h2>
+                    <p className="earnings-subtitle">Total revenue from your published games</p>
                   </div>
                   
-                  <div style={{ padding: '24px' }}>
-                    <div style={{ marginBottom: '16px' }}>
-                      <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>This Month</span>
-                      <div style={{ fontSize: '24px', fontWeight: 700, color: '#10b981', marginTop: '4px' }}>
-                        $2,450.50
-                      </div>
+                  <div className="earnings-content">
+                    <div className="earnings-metric">
+                      <span className="earnings-metric-label">This Month</span>
+                      <div className="earnings-metric-value earnings-metric-value-green">${earningsData.thisMonth.toFixed(2)}</div>
                     </div>
-                    <div style={{ marginBottom: '16px' }}>
-                      <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>All Time</span>
-                      <div style={{ fontSize: '20px', fontWeight: 600, color: 'white', marginTop: '4px' }}>
-                        $12,450.50
-                      </div>
+                    
+                    <div className="earnings-metric">
+                      <span className="earnings-metric-label">All Time</span>
+                      <div className="earnings-metric-value">${earningsData.allTime.toFixed(2)}</div>
                     </div>
-                    <div style={{ 
-                      padding: '12px', 
-                      background: 'rgba(255, 255, 255, 0.03)', 
-                      borderRadius: '8px',
-                      fontSize: '13px',
-                      color: 'var(--text-secondary)'
-                    }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                        <span>Active Games:</span>
-                        <span style={{ color: 'white' }}>3</span>
+                    
+                    <div className="earnings-stats">
+                      <div className="earnings-stat-item">
+                        <span className="earnings-stat-label">Active Games:</span>
+                        <span className="earnings-stat-value">{earningsData.activeGames}</span>
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Total Downloads:</span>
-                        <span style={{ color: 'white' }}>1,801</span>
+                      <div className="earnings-stat-item">
+                        <span className="earnings-stat-label">Total Downloads:</span>
+                        <span className="earnings-stat-value">{earningsData.totalDownloads.toLocaleString()}</span>
                       </div>
                     </div>
                   </div>
                   
-                  <div className="balance-actions">
-                    <button className="cancel-btn" onClick={() => setShowBalanceMenu(false)}>Close</button>
+                  <div className="earnings-actions">
+                    <button className="earnings-btn earnings-btn-close" onClick={() => setShowBalanceMenu(false)}>
+                      Close
+                    </button>
                     <button 
-                      className="confirm-btn" 
+                      className="earnings-btn earnings-btn-primary" 
                       onClick={() => {
-                        // Handle view detailed earnings
                         setShowBalanceMenu(false);
                       }}
-                    >View Details</button>
+                    >
+                      View Details
+                    </button>
                   </div>
                 </div>
               )}
             </div>
-            
-            
-            {/* Analytics Menu */}
-            <div ref={analyticsWrapperRef} className="analytics-wrapper" style={{ position: 'relative' }}>
-              <button 
-                className={`nav-item nav-item-with-text ${openStudioMenu === 'analytics' ? 'active' : ''}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowBalanceMenu(false);
-                  setOpenStudioMenu(openStudioMenu === 'analytics' ? null : 'analytics');
-                }}
-              >
-                <BarChart3 size={18} />
-                <span>Analytics</span>
-              </button>
-                
-                {openStudioMenu === 'analytics' && (
-                  <div className="analytics-menu" style={{
-                    position: 'absolute',
-                    top: '100%',
-                    right: 0,
-                    marginTop: '8px',
-                    background: 'var(--bg-secondary)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '12px',
-                    padding: '8px',
-                    minWidth: '220px',
-                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-                    zIndex: 1000
-                  }}>
-                    <div className="game-studio-menu-item" onClick={() => { 
-                      setOpenStudioMenu(null);
-                      navigate('/game-studio#performance-dashboard');
-                    }}>
-                      <BarChart3 size={18} />
-                      <span>Performance Dashboard</span>
-                    </div>
-                    <div className="game-studio-menu-item" onClick={() => { 
-                      setOpenStudioMenu(null);
-                      navigate('/game-studio#player-statistics');
-                    }}>
-                      <TrendingUp size={18} />
-                      <span>Player Statistics</span>
-                    </div>
-                    <div className="game-studio-menu-item" onClick={() => { 
-                      setOpenStudioMenu(null);
-                      navigate('/game-studio#engagement-metrics');
-                    }}>
-                      <Users size={18} />
-                      <span>Engagement Metrics</span>
-                    </div>
-                    <div className="game-studio-menu-item" onClick={() => { 
-                      setOpenStudioMenu(null);
-                      navigate('/game-studio#revenue-analytics');
-                    }}>
-                      <DollarSign size={18} />
-                      <span>Revenue Analytics</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            
-            <div ref={publishingWrapperRef} className="publishing-wrapper" style={{ position: 'relative' }}>
-              <button 
-                className={`nav-item nav-item-with-text ${openStudioMenu === 'publishing' ? 'active' : ''}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowBalanceMenu(false);
-                  setOpenStudioMenu(openStudioMenu === 'publishing' ? null : 'publishing');
-                }}
-              >
-                <Upload size={18} />
-                <span>Publishing</span>
-              </button>
-                
-                {openStudioMenu === 'publishing' && (
-                  <div className="publishing-menu" style={{
-                    position: 'absolute',
-                    top: '100%',
-                    right: 0,
-                    marginTop: '8px',
-                    background: 'var(--bg-secondary)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '12px',
-                    padding: '8px',
-                    minWidth: '220px',
-                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-                    zIndex: 1000
-                  }}>
-                    <div className="game-studio-menu-item" onClick={() => { 
-                      setOpenStudioMenu(null);
-                      window.dispatchEvent(new CustomEvent('studio-open-upload-modal'));
-                    }}>
-                      <Upload size={18} />
-                      <span>New Game</span>
-                    </div>
-                    <div className="game-studio-menu-item" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>
-                      <FileText size={18} />
-                      <span>From Template</span>
-                    </div>
-                    <div className="game-studio-menu-item" disabled style={{ opacity: 0.5, cursor: 'not-allowed' }}>
-                      <Download size={18} />
-                      <span>Import Game</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            
-            <div className="nav-separator" />
-            
-            {/* Content Menu */}
-            <div ref={contentWrapperRef} className="content-wrapper" style={{ position: 'relative' }}>
-              <button 
-                className={`nav-item nav-item-with-text ${openStudioMenu === 'content' ? 'active' : ''}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowBalanceMenu(false);
-                  setOpenStudioMenu(openStudioMenu === 'content' ? null : 'content');
-                }}
-              >
-                <Package size={18} />
-                <span>Content</span>
-              </button>
-                
-                {openStudioMenu === 'content' && (
-                  <div className="content-menu" style={{
-                    position: 'absolute',
-                    top: '100%',
-                    right: 0,
-                    marginTop: '8px',
-                    background: 'var(--bg-secondary)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '12px',
-                    padding: '8px',
-                    minWidth: '220px',
-                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-                    zIndex: 1000
-                  }}>
-                    <div className="game-studio-menu-item" onClick={() => { 
-                      setOpenStudioMenu(null);
-                      navigate('/game-studio#all-content');
-                    }}>
-                      <Package size={18} />
-                      <span>All Content</span>
-                    </div>
-                    <div className="game-studio-menu-item" onClick={() => { 
-                      setOpenStudioMenu(null);
-                      navigate('/game-studio#assets');
-                    }}>
-                      <FileText size={18} />
-                      <span>Assets</span>
-                    </div>
-                    <div className="game-studio-menu-item" onClick={() => { 
-                      setOpenStudioMenu(null);
-                      navigate('/game-studio#add-content');
-                    }}>
-                      <Upload size={18} />
-                      <span>Add New Content</span>
-                    </div>
-                    <div className="game-studio-menu-item" onClick={() => { 
-                      setOpenStudioMenu(null);
-                      navigate('/game-studio#content-settings');
-                    }}>
-                      <Settings size={18} />
-                      <span>Content Settings</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            
-            {/* Reports Menu */}
-            <div ref={reportsWrapperRef} className="reports-wrapper" style={{ position: 'relative' }}>
-              <button 
-                className={`nav-item nav-item-with-text ${openStudioMenu === 'reports' ? 'active' : ''}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowBalanceMenu(false);
-                  setOpenStudioMenu(openStudioMenu === 'reports' ? null : 'reports');
-                }}
-              >
-                <FileText size={18} />
-                <span>Reports</span>
-              </button>
-                
-                {openStudioMenu === 'reports' && (
-                  <div className="reports-menu" style={{
-                    position: 'absolute',
-                    top: '100%',
-                    right: 0,
-                    marginTop: '8px',
-                    background: 'var(--bg-secondary)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '12px',
-                    padding: '8px',
-                    minWidth: '220px',
-                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
-                    zIndex: 1000
-                  }}>
-                    <div className="game-studio-menu-item" onClick={() => { 
-                      setOpenStudioMenu(null);
-                      navigate('/game-studio#sales-reports');
-                    }}>
-                      <FileText size={18} />
-                      <span>Sales Reports</span>
-                    </div>
-                    <div className="game-studio-menu-item" onClick={() => { 
-                      setOpenStudioMenu(null);
-                      navigate('/game-studio#analytics-reports');
-                    }}>
-                      <BarChart3 size={18} />
-                      <span>Analytics Reports</span>
-                    </div>
-                    <div className="game-studio-menu-item" onClick={() => { 
-                      setOpenStudioMenu(null);
-                      navigate('/game-studio#user-reports');
-                    }}>
-                      <Users size={18} />
-                      <span>User Reports</span>
-                    </div>
-                    <div className="game-studio-menu-item" onClick={() => { 
-                      setOpenStudioMenu(null);
-                      navigate('/game-studio#content-reports');
-                    }}>
-                      <Package size={18} />
-                      <span>Content Reports</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            
-            <div className="nav-separator" />
-            
             <button 
-              className={`nav-item nav-item-with-text ${currentPage === 'settings' ? 'active' : ''}`}
-              onClick={() => handleNavigation('settings')}
+              className={`nav-item nav-item-with-text ${location?.pathname === '/game-studio/calendar' ? 'active' : ''}`}
+              onClick={() => {
+                setShowBalanceMenu(false);
+                navigate('/game-studio/calendar');
+              }}
             >
-              <Settings size={18} />
-              <span>Settings</span>
+              <Calendar size={18} />
+              <span>Calendar</span>
             </button>
+            <div className="nav-separator"></div>
+            <button 
+              className={`nav-item nav-item-with-text ${location?.pathname === '/game-studio/team' ? 'active' : ''}`}
+              onClick={() => {
+                setShowBalanceMenu(false);
+                navigate('/game-studio/team');
+              }}
+            >
+              <Users size={18} />
+              <span>Team</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Right Section - Smart Navigation Order */}
+      <div className="nav-right">
+        {isGameStudio ? (
+          /* Game Studio specific navigation - Profile section */
+          <>
+            {/* Profile with Balance Inside - Same as User View */}
+            {authUser && (
+              <div className="profile-with-balance-wrapper" style={{ position: 'relative' }}>
+                <button 
+                  ref={profileButtonRef}
+                  className={`nav-item nav-item-profile ${showProfileMenu ? 'active' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowProfileMenu((v) => !v);
+                  }}
+                >
+                  <div className="nav-profile-avatar">
+                    {authUser?.avatar && !avatarError ? (
+                      <img 
+                        src={authUser.avatar} 
+                        alt={userName}
+                        onError={() => setAvatarError(true)}
+                      />
+                    ) : (
+                      <span className="nav-profile-avatar-initials">
+                        {getInitials(authUser)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="nav-profile-info">
+                    <span className="nav-user-name">{userName}</span>
+                    {!isGameStudio && (
+                      <span className="nav-balance-inline">${userBalance.toFixed(2)}</span>
+                    )}
+                  </div>
+                </button>
+                
+                {/* Profile Menu */}
+                {showProfileMenu && (
+                  <div
+                    ref={profileMenuRef}
+                    className="profile-menu"
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      right: 0,
+                      marginTop: '8px',
+                      zIndex: 1001
+                    }}
+                  >
+                    <div className="profile-menu-header">
+                      <div className="profile-menu-user-info">
+                        <div className="profile-menu-avatar">
+                          {authUser?.avatar && !avatarError ? (
+                            <img 
+                              src={authUser.avatar} 
+                              alt={userName}
+                              onError={() => setAvatarError(true)}
+                            />
+                          ) : (
+                            <span className="profile-menu-avatar-initials">
+                              {getInitials(authUser)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="profile-menu-user-details">
+                          <div className="profile-menu-username">{userName}</div>
+                          <div className="profile-menu-level">Level {userLevel}</div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="profile-menu-content">
+                      <div className="profile-menu-item" onClick={() => {
+                        setShowProfileMenu(false);
+                        handleNavigation('profile');
+                      }}>
+                        <User size={18} />
+                        <span>Profile</span>
+                      </div>
+                      <div className="profile-menu-item" onClick={() => {
+                        setShowProfileMenu(false);
+                        handleNavigation('friends');
+                      }}>
+                        <Users size={18} />
+                        <span>Friends</span>
+                      </div>
+                      <div className="profile-menu-divider"></div>
+                      <div className="profile-menu-item" onClick={() => {
+                        setShowProfileMenu(false);
+                        handleNavigation('settings');
+                      }}>
+                        <Settings size={18} />
+                        <span>Settings</span>
+                      </div>
+                      <div className="profile-menu-divider"></div>
+                      <div className="profile-menu-item" onClick={() => {
+                        setShowProfileMenu(false);
+                        // Handle logout
+                        if (window.electronAPI?.logout) {
+                          window.electronAPI.logout();
+                        }
+                        navigate('/auth');
+                      }}>
+                        <LogOut size={18} />
+                        <span>Logout</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </>
         ) : (
           /* Regular navigation - Right side items */

@@ -2467,7 +2467,7 @@ const Market = () => {
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderRadius: '4px',
-                    transition: 'all 0.2s ease'
+                    transition: 'none'
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
@@ -3512,7 +3512,7 @@ const Market = () => {
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderRadius: '4px',
-                    transition: 'all 0.2s ease'
+                    transition: 'none'
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';

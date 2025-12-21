@@ -16,7 +16,7 @@
   font-size: 15px;
   font-weight: 600;
   box-shadow: 0 8px 24px rgba(74, 158, 255, 0.4);
-  transition: all 0.3s ease;
+  transition: none !important;
 }
 
 /* Hide support button when upload modal is open */
@@ -49,30 +49,23 @@ body:has(.upload-modal-overlay) .support-chat {
   display: flex;
   flex-direction: column;
   z-index: 1001;
-  animation: slideInUp 0.3s ease;
+  animation: none !important;
   overflow: hidden;
 }
 
 .support-chat.minimized {
   height: auto;
-  animation: minimizeChat 0.3s ease;
+  animation: none !important;
 }
 
-@keyframes slideInUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
+
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
 
-@keyframes minimizeChat {
-  from {
-    height: 600px;
-  }
+
   to {
     height: auto;
   }
@@ -112,7 +105,7 @@ body:has(.upload-modal-overlay) .support-chat {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: none !important;
   border-radius: 6px;
 }
 
@@ -196,7 +189,7 @@ body:has(.upload-modal-overlay) .support-chat {
   color: var(--text-primary);
   font-size: 14px;
   outline: none;
-  transition: all 0.2s ease;
+  transition: none !important;
 }
 
 .support-chat-input input:focus {
@@ -218,7 +211,7 @@ body:has(.upload-modal-overlay) .support-chat {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: none !important;
 }
 
 .send-btn:hover {

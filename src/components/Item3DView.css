@@ -108,13 +108,13 @@
   border-radius: 50%;
   color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: none !important;
   position: relative;
   flex-shrink: 0;
 }
 
 .item-3d-btn svg {
-  transition: transform 0.2s ease;
+  transition: none !important;
 }
 
 .item-3d-btn:hover {
@@ -196,7 +196,7 @@
   border-radius: 50%;
   color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: none !important;
   z-index: 20;
   padding: 0;
   flex-shrink: 0;

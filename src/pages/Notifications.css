@@ -40,7 +40,7 @@
   right: 0;
   height: 2px;
   background: transparent;
-  transition: background 0.2s ease;
+  transition: none !important;
 }
 
 .notifications-title.active::after {
@@ -53,7 +53,7 @@
 
 .notifications-title svg {
   color: #4a9eff;
-  transition: color 0.2s ease;
+  transition: none !important;
 }
 
 .notifications-title.active svg {
@@ -76,17 +76,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: none !important;
 }
 
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.7;
-  }
-}
 
 .mark-all-read-btn {
   display: flex;
@@ -100,7 +92,7 @@
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
 }
 
 .mark-all-read-btn:hover {
@@ -181,7 +173,7 @@
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0;
-  transition: all 0.2s ease;
+  transition: none !important;
   position: relative;
   cursor: pointer;
 }
@@ -215,21 +207,13 @@
   border-color: rgba(74, 158, 255, 0.4) !important;
   box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2), 0 4px 12px rgba(74, 158, 255, 0.15);
   transform: translateX(0);
-  animation: highlightPulse 1.5s ease-out;
+  animation: none !important;
 }
 
-@keyframes highlightPulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(74, 158, 255, 0.4), 0 4px 12px rgba(74, 158, 255, 0.15);
-  }
+
   50% {
     box-shadow: 0 0 0 4px rgba(74, 158, 255, 0.2), 0 4px 12px rgba(74, 158, 255, 0.25);
   }
-  100% {
-    box-shadow: 0 0 0 2px rgba(74, 158, 255, 0.2), 0 4px 12px rgba(74, 158, 255, 0.15);
-  }
-}
-
 .notification-item.highlighted::before {
   width: 6px !important;
   background: var(--accent-primary) !important;
@@ -358,7 +342,7 @@
   gap: 8px;
   flex-shrink: 0;
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition: none !important;
 }
 
 .notification-item:hover .notification-actions {
@@ -377,7 +361,7 @@
   border-radius: 6px;
   color: #b3b3b3;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
   padding: 0;
 }
 
@@ -423,7 +407,7 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
 }
 
 .filter-btn:hover {

@@ -19,6 +19,8 @@ import {
   FolderOpen,
   ArrowDownCircle,
   BookOpen,
+  Grid,
+  List,
 } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import { subscribe as subscribeDownloadSpeed, setSpeed as setGlobalDownloadSpeed, setPaused as setGlobalPaused, clearSpeed as clearGlobalDownloadSpeed, getPaused, startDownload as startGlobalDownload, stopDownload as stopGlobalDownload, getProgress, getSpeed } from "../utils/DownloadSpeedStore";
@@ -28,6 +30,13 @@ import "./SideBar.css";
 const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isCollapsed, width = 260, isResizing = false }, ref) => {
   const location = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
+  const [viewMode, setViewMode] = useState(() => {
+    try {
+      return localStorage.getItem('libraryViewMode') || 'list';
+    } catch (_) {
+      return 'list';
+    }
+  });
   const [expanded, setExpanded] = useState({ recent: true, myOwn: true });
   const [updatingGames, setUpdatingGames] = useState({}); // track updating states
   const [downloadingGames, setDownloadingGames] = useState({}); // track downloading states
@@ -54,6 +63,8 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
   const [newFolderName, setNewFolderName] = useState("");
   const [renamingFolderId, setRenamingFolderId] = useState(null); // track which folder is being renamed
   const [renameFolderName, setRenameFolderName] = useState(""); // name for renaming folder
+  const [showGameSelectionModal, setShowGameSelectionModal] = useState(false); // show game selection modal for folder creation
+  const [selectedGamesForFolder, setSelectedGamesForFolder] = useState([]); // selected games for new folder
   const updateTimersRef = React.useRef({}); // track update timers for cancellation
   const downloadTimersRef = React.useRef({}); // track download timers for cancellation
   const sidebarContentRef = useRef(null);
@@ -337,16 +348,18 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
       size: customGame.size,
       developer: customGame.developer,
       releaseDate: customGame.releaseDate,
-      isOwnGame: customGame.isOwnGame || false
+      isOwnGame: customGame.isOwnGame || false,
+      status: customGame.status || customGame.fullFormData?.status || 'draft'
     }));
     
-    // Only include own games in myOwn folder that are published
+    // Only include own games in myOwn folder that are published/released (not drafts)
     const myOwnGames = allCustomGamesFormatted.filter(g => {
       if (g.isOwnGame !== true) return false;
-      // Check if game is published
+      // Check if game is published/released
       const originalGame = customGames.find(cg => cg.gameId === g.id);
       if (!originalGame) return false;
       const status = originalGame.status || originalGame.fullFormData?.status || 'draft';
+      // Only show published/public games, not drafts
       return status === 'public' || status === 'published';
     });
     
@@ -405,6 +418,38 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
     
     return result;
   }, [customGames, gamesByCategory, libraryFolders]);
+
+  // Auto-delete empty folders (only when allGames changes, not when libraryFolders changes to avoid loops)
+  useEffect(() => {
+    if (!Array.isArray(libraryFolders) || libraryFolders.length === 0) return;
+    
+    // Check each folder and remove if empty
+    const foldersToKeep = libraryFolders.filter(folder => {
+      const folderGames = allGames[folder.id] || [];
+      return folderGames.length > 0;
+    });
+    
+    // Only update if folders were removed
+    if (foldersToKeep.length !== libraryFolders.length) {
+      const removedFolderIds = libraryFolders
+        .filter(f => !foldersToKeep.some(k => k.id === f.id))
+        .map(f => f.id);
+      
+      setLibraryFolders(foldersToKeep);
+      saveUserData('libraryFolders', foldersToKeep);
+      
+      // Remove from expanded state
+      if (removedFolderIds.length > 0) {
+        setExpanded(prev => {
+          const newExpanded = { ...prev };
+          removedFolderIds.forEach(id => delete newExpanded[id]);
+          return newExpanded;
+        });
+      }
+      // Dispatch event to notify library page
+      window.dispatchEvent(new CustomEvent('libraryFolderUpdate'));
+    }
+  }, [allGames, libraryFolders]);
 
   // Calculate vertical line height for active items - MUST be after allGames is defined
   useEffect(() => {
@@ -514,10 +559,19 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
       return;
     }
     
+    // Show game selection modal instead of creating folder directly
+    setSelectedGamesForFolder([]);
+    setShowGameSelectionModal(true);
+  };
+
+  // Handle confirming folder creation with selected games
+  const handleConfirmFolderCreation = () => {
+    if (!newFolderName.trim()) return;
+    
     const newFolder = {
       id: `folder-${Date.now()}`,
       name: newFolderName.trim(),
-      gameIds: [],
+      gameIds: selectedGamesForFolder,
       createdAt: Date.now()
     };
     
@@ -526,8 +580,30 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
     saveUserData('libraryFolders', updatedFolders);
     setNewFolderName("");
     setShowAddFolderInput(false);
+    setShowGameSelectionModal(false);
+    setSelectedGamesForFolder([]);
     // Dispatch event to notify library page
     window.dispatchEvent(new CustomEvent('libraryFolderUpdate'));
+  };
+
+  // Handle canceling folder creation
+  const handleCancelFolderCreation = () => {
+    setShowGameSelectionModal(false);
+    setSelectedGamesForFolder([]);
+    setNewFolderName("");
+    setShowAddFolderInput(false);
+  };
+
+  // Toggle game selection in modal
+  const toggleGameSelection = (gameId) => {
+    setSelectedGamesForFolder(prev => {
+      const gameIdStr = String(gameId);
+      if (prev.includes(gameIdStr)) {
+        return prev.filter(id => id !== gameIdStr);
+      } else {
+        return [...prev, gameIdStr];
+      }
+    });
   };
 
   // Handle renaming library folder
@@ -944,6 +1020,13 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
       {!isCollapsed && (
         <div className="sidebar-top">
           <div className="sidebar-top-row">
+            <div className="sidebar-search">
+              <input
+                type="text"
+                placeholder="Search games..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             <button
               className={`sidebar-home-icon ${location.pathname === "/library" ? "active" : ""
                 }`}
@@ -952,15 +1035,21 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
             >
               <Home size={16} />
             </button>
-
-            <div className="sidebar-search">
-              <input
-                type="text"
-                placeholder="Search games..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
             </div>
+            <button
+              className="sidebar-view-toggle"
+              onClick={() => {
+                const newMode = viewMode === 'list' ? 'grid' : 'list';
+                setViewMode(newMode);
+                try {
+                  localStorage.setItem('libraryViewMode', newMode);
+                } catch (_) {}
+                window.dispatchEvent(new CustomEvent('libraryViewModeChanged', { detail: { mode: newMode } }));
+              }}
+              title={viewMode === 'list' ? 'Switch to grid view' : 'Switch to list view'}
+            >
+              {viewMode === 'list' ? <Grid size={14} /> : <List size={14} />}
+            </button>
           </div>
         </div>
       )}
@@ -976,12 +1065,30 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
             const libraryGames = filteredGames['library'] || [];
             const otherSections = Object.entries(filteredGames).filter(([section]) => section !== 'library');
             
+            // Helper function to get status color
+            const getStatusColor = (status) => {
+              switch (status?.toLowerCase()) {
+                case 'public':
+                case 'published':
+                  return '#22c55e'; // Green
+                case 'draft':
+                  return '#f59e0b'; // Amber/Orange
+                case 'private':
+                  return '#6b7280'; // Gray
+                case 'archived':
+                  return '#9ca3af'; // Light gray
+                default:
+                  return '#f59e0b'; // Default to amber for draft/unknown
+              }
+            };
+
             // Helper function to render a game item
             const renderGameItem = (game) => {
               const updating = updatingGames[game.id];
               const downloading = downloadingGames[game.id] && !updating;
               const completed = completedGames[game.id];
               const playing = playingGames[game.id];
+              const statusColor = game.isOwnGame && game.status ? getStatusColor(game.status) : null;
 
               return (
                 <div
@@ -992,7 +1099,7 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
                 >
                   <div className="game-row">
                     <div className="game-clickable">
-                      <div className="game-icon">
+                      <div className="game-icon" style={{ position: 'relative' }}>
                         {game.logo ? (
                           <img 
                             src={game.logo}
@@ -1003,6 +1110,23 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
                         <span style={{ display: game.logo ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', fontSize: '10px', fontWeight: 700, color: 'var(--accent-primary)' }}>
                           {(game.name || '?').charAt(0).toUpperCase()}
                         </span>
+                        {/* Status indicator dot for own games */}
+                        {game.isOwnGame && statusColor && (
+                          <span 
+                            style={{
+                              position: 'absolute',
+                              bottom: '-2px',
+                              right: '-2px',
+                              width: '8px',
+                              height: '8px',
+                              borderRadius: '50%',
+                              backgroundColor: statusColor,
+                              border: '2px solid var(--bg-primary)',
+                              boxSizing: 'border-box'
+                            }}
+                            title={game.status || 'draft'}
+                          />
+                        )}
                       </div>
                       <div className="game-name">{game.name}</div>
                     </div>
@@ -1054,12 +1178,80 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
               );
             };
 
+            // Check if there are any folders (user-created folders)
+            const hasFolders = Array.isArray(libraryFolders) && libraryFolders.length > 0;
+            
             return (
               <>
                 {/* Render library games at the same level as folders */}
-                {libraryGames
-                  .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
-                  .map(renderGameItem)}
+                {viewMode === 'grid' ? (
+                  <div className="sidebar-games-grid">
+                    {libraryGames
+                      .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                      .map((game) => {
+                        const updating = updatingGames[game.id];
+                        const downloading = downloadingGames[game.id] && !updating;
+                        const completed = completedGames[game.id];
+                        const playing = playingGames[game.id];
+                        const statusColor = game.isOwnGame && game.status ? getStatusColor(game.status) : null;
+                        
+                        return (
+                          <div
+                            key={game.id}
+                            className={`sidebar-game-grid-item ${currentGame === game.id && location.pathname.startsWith('/game/') ? "active" : ""
+                              } ${updating ? "updating" : ""} ${downloading ? "downloading" : ""} ${completed === true ? "completed-download" : ""} ${completed === "update" ? "completed-update" : ""} ${playing ? "playing" : ""}`}
+                            onClick={() => handleGameClick(game.id)}
+                          >
+                            <div className="sidebar-game-grid-icon" style={{ position: 'relative' }}>
+                              {game.logo ? (
+                                <img 
+                                  src={game.logo}
+                                  alt={game.name}
+                                  onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
+                                />
+                              ) : null}
+                              <span style={{ display: game.logo ? 'none' : 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', fontSize: '16px', fontWeight: 700, color: 'var(--accent-primary)' }}>
+                                {(game.name || '?').charAt(0).toUpperCase()}
+                              </span>
+                              {game.isOwnGame && statusColor && (
+                                <span 
+                                  style={{
+                                    position: 'absolute',
+                                    bottom: '4px',
+                                    right: '4px',
+                                    width: '10px',
+                                    height: '10px',
+                                    borderRadius: '50%',
+                                    backgroundColor: statusColor,
+                                    border: '2px solid var(--bg-primary)',
+                                    boxSizing: 'border-box'
+                                  }}
+                                  title={game.status || 'draft'}
+                                />
+                              )}
+                            </div>
+                            <div className="sidebar-game-grid-name">{game.name}</div>
+                            {(downloading || updating) && (
+                              <div className="sidebar-game-grid-progress" style={{
+                                width: `${sidebarProgress[game.id] || 0}%`
+                              }} />
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                ) : (
+                  libraryGames
+                    .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+                    .map(renderGameItem)
+                )}
+                
+                {/* Empty state when no folders exist and no library games */}
+                {!hasFolders && libraryGames.length === 0 && (
+                  <div className="sidebar-empty-state">
+                    <p>There is nothing yet</p>
+                  </div>
+                )}
                 
                 {/* Render folders and other sections */}
                 {otherSections
@@ -1096,9 +1288,14 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
                       categoryName = section.toUpperCase();
                     }
                     
-                    // Only show "My Own Games" section when there are games in it
+                    // Only show "My Own Games" and "Recent" sections when there are games in them
                     // Show folders/categories if they exist, even if empty
-                    return games.length || section === 'recent' || (section === 'myOwn' && games.length) || folder ? (
+                    // Don't show recent or myOwn if they're empty
+                    if (section === 'recent' || section === 'myOwn') {
+                      if (games.length === 0) return null;
+                    }
+                    // For folders, always show them
+                    return games.length > 0 || folder ? (
                       <div key={section} className="sidebar-section">
                         {(renamingFolderId && folder && folder.id === section) ? (
                           <div className="sidebar-rename-category">
@@ -1542,6 +1739,124 @@ const SideBar = React.forwardRef(({ currentGame, onGameSelect, navigate, isColla
                   </span>
                 </div>
               )}
+            </div>
+          </div>,
+          document.body
+        );
+      })()}
+
+      {/* Game Selection Modal for Folder Creation */}
+      {showGameSelectionModal && (() => {
+        // Get available games for selection (library games - games not in myOwn and not in any folder)
+        const availableGames = (allGames['library'] || []).filter(game => {
+          // Don't include games that are already in folders
+          const gameId = String(game.id);
+          const isInFolder = libraryFolders.some(folder => 
+            Array.isArray(folder.gameIds) && folder.gameIds.includes(gameId)
+          );
+          return !isInFolder;
+        });
+        
+        return createPortal(
+          <div className="properties-modal-overlay" onClick={handleCancelFolderCreation}>
+            <div className="switch-game-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px', maxHeight: '80vh' }}>
+              <div className="switch-game-modal-header">
+                <h2>Select Games for "{newFolderName}"</h2>
+                <button className="switch-game-modal-close" onClick={handleCancelFolderCreation}>
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="switch-game-modal-content" style={{ maxHeight: '50vh', overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: '200px' }}>
+                {availableGames.length === 0 ? (
+                  <p style={{ textAlign: 'center', color: 'var(--accent-danger)', padding: '20px', fontSize: '14px', fontWeight: 500 }}>
+                    No games available to add to folder
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {availableGames.map(game => {
+                      const gameId = String(game.id);
+                      const isSelected = selectedGamesForFolder.includes(gameId);
+                      return (
+                        <div
+                          key={game.id}
+                          onClick={() => toggleGameSelection(game.id)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
+                            padding: '12px',
+                            borderRadius: '8px',
+                            background: isSelected ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                            border: `1px solid ${isSelected ? 'var(--accent-primary)' : 'rgba(255, 255, 255, 0.1)'}`,
+                            cursor: 'pointer',
+                            transition: 'none'
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isSelected) {
+                              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isSelected) {
+                              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                            }
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: '20px',
+                              height: '20px',
+                              borderRadius: '4px',
+                              border: `2px solid ${isSelected ? 'var(--accent-primary)' : 'rgba(255, 255, 255, 0.3)'}`,
+                              background: isSelected ? 'var(--accent-primary)' : 'transparent',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0
+                            }}
+                          >
+                            {isSelected && <CheckCircle size={14} style={{ color: 'white' }} fill="white" />}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: 0 }}>
+                            {game.logo && (
+                              <img
+                                src={game.logo}
+                                alt={game.name}
+                                style={{
+                                  width: '32px',
+                                  height: '32px',
+                                  borderRadius: '4px',
+                                  objectFit: 'cover',
+                                  flexShrink: 0
+                                }}
+                                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                              />
+                            )}
+                            <span style={{ color: 'var(--text-primary)', fontSize: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {game.name}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="switch-game-modal-actions">
+                <button 
+                  className="switch-game-modal-btn switch-game-modal-btn-cancel" 
+                  onClick={handleCancelFolderCreation}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className="switch-game-modal-btn switch-game-modal-btn-confirm" 
+                  onClick={handleConfirmFolderCreation}
+                  disabled={availableGames.length === 0 || selectedGamesForFolder.length === 0}
+                >
+                  Create Folder ({selectedGamesForFolder.length} {selectedGamesForFolder.length === 1 ? 'game' : 'games'})
+                </button>
+              </div>
             </div>
           </div>,
           document.body

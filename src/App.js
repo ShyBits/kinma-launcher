@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import { BrowserRouter, HashRouter, Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import TitleBar from './components/TitleBar';
 import TopNavigation from './components/TopNavigation';
 import SideBar from './components/SideBar';
 import Home from './pages/Home';
 import Library from './pages/Library';
 import GameStudio from './pages/GameStudio';
+import StudioCalendar from './pages/StudioCalendar';
+import StudioAnalytics from './pages/StudioAnalytics';
+import StudioTeam from './pages/StudioTeam';
 import Store from './pages/Store';
 import Friends from './pages/Friends';
 import Market from './pages/Market';
@@ -150,9 +153,10 @@ const AppContent = () => {
     }
     
     // Don't redirect if we're on special routes
-    // Check both pathname (for regular routing) and hash (for hash routing)
+    // Check both pathname (for BrowserRouter) and hash (for HashRouter)
     const currentPath = location.pathname;
     const currentHash = location.hash || '';
+    const hashPath = currentHash.replace('#', '');
     
     // Check if we're on special routes (pathname or hash)
     const isSpecialRoute = 
@@ -164,10 +168,14 @@ const AppContent = () => {
       currentPath.startsWith('/auth') ||
       currentPath.startsWith('/admin-window') ||
       currentPath.startsWith('/developer-onboarding') ||
-      currentHash.includes('/account-switcher') ||
-      currentHash.includes('/auth') ||
-      currentHash.includes('/admin-window') ||
-      currentHash.includes('/developer-onboarding');
+      hashPath === '/account-switcher' ||
+      hashPath === '/auth' ||
+      hashPath === '/admin-window' ||
+      hashPath === '/developer-onboarding' ||
+      hashPath.startsWith('/account-switcher') ||
+      hashPath.startsWith('/auth') ||
+      hashPath.startsWith('/admin-window') ||
+      hashPath.startsWith('/developer-onboarding');
     
     if (isSpecialRoute) {
       hasCheckedDeveloperIntent.current = true;
@@ -194,14 +202,14 @@ const AppContent = () => {
       if (userId) {
         const intent = getUserData('developerIntent', 'none', userId);
         // Only redirect if intent is pending AND we're not already on developer-onboarding
-        if (intent === 'pending' && currentPath !== '/developer-onboarding') {
+        if (intent === 'pending' && currentPath !== '/developer-onboarding' && hashPath !== '/developer-onboarding') {
           navigate('/developer-onboarding');
         }
       } else {
         // Fallback to localStorage for backward compatibility
         const intent = localStorage.getItem('developerIntent');
         // Only redirect if intent is pending AND we're not already on developer-onboarding
-        if (intent === 'pending' && currentPath !== '/developer-onboarding') {
+        if (intent === 'pending' && currentPath !== '/developer-onboarding' && hashPath !== '/developer-onboarding') {
           navigate('/developer-onboarding');
         }
       }
@@ -236,7 +244,8 @@ const AppContent = () => {
   };
 
   const getCurrentPage = () => {
-    const path = location.pathname;
+    // Handle both BrowserRouter (pathname) and HashRouter (hash)
+    const path = location.pathname !== '/' ? location.pathname : (location.hash || '#/').replace('#', '');
     switch (path) {
       case '/':
         return 'home';
@@ -252,6 +261,8 @@ const AppContent = () => {
         return 'profile';
       case '/settings':
         return 'settings';
+      case '/game-studio/calendar':
+        return 'calendar';
       default:
         return 'home';
     }
@@ -376,7 +387,7 @@ const AppContent = () => {
       ) : (
         <>
           <TitleBar onToggleSidebar={toggleSidebar} navigate={navigate} />
-          {location.pathname !== '/auth' && location.pathname !== '/account-switcher' && location.pathname !== '/admin-window' && location.hash !== '#/admin-window' && (
+          {(location.pathname !== '/auth' && location.hash !== '#/auth' && location.pathname !== '/account-switcher' && location.hash !== '#/account-switcher' && location.pathname !== '/admin-window' && location.hash !== '#/admin-window') && (
         <TopNavigation 
           currentPage={currentPageId}
           setCurrentPage={setCurrentPage}
@@ -394,7 +405,7 @@ const AppContent = () => {
         />
       )}
       <div className="app-layout">
-        {location.pathname !== '/auth' && location.pathname !== '/account-switcher' && location.pathname !== '/game-studio' && location.pathname !== '/game-studio-settings' && location.pathname !== '/admin-window' && location.hash !== '#/admin-window' && (
+        {(location.pathname !== '/auth' && location.hash !== '#/auth' && location.pathname !== '/account-switcher' && location.hash !== '#/account-switcher' && location.pathname !== '/game-studio' && location.hash !== '#/game-studio' && location.pathname !== '/game-studio/calendar' && location.hash !== '#/game-studio/calendar' && location.pathname !== '/game-studio/analytics' && location.hash !== '#/game-studio/analytics' && location.pathname !== '/game-studio/team' && location.hash !== '#/game-studio/team' && location.pathname !== '/game-studio-settings' && location.hash !== '#/game-studio-settings' && location.pathname !== '/admin-window' && location.hash !== '#/admin-window') && (
           <>
             <SideBar 
               ref={sidebarRef}
@@ -413,7 +424,7 @@ const AppContent = () => {
             />
           </>
         )}
-        <div className="app-content-wrapper" style={{ width: (location.pathname === '/game-studio' || location.pathname === '/game-studio-settings' || location.pathname === '/auth' || location.pathname === '/account-switcher' || location.pathname === '/admin-window' || location.hash === '#/admin-window') ? '100%' : 'auto' }}>
+        <div className="app-content-wrapper" style={{ width: ((location.pathname === '/game-studio' || location.hash === '#/game-studio') || (location.pathname === '/game-studio/calendar' || location.hash === '#/game-studio/calendar') || (location.pathname === '/game-studio/analytics' || location.hash === '#/game-studio/analytics') || (location.pathname === '/game-studio/team' || location.hash === '#/game-studio/team') || (location.pathname === '/game-studio-settings' || location.hash === '#/game-studio-settings') || (location.pathname === '/auth' || location.hash === '#/auth') || (location.pathname === '/account-switcher' || location.hash === '#/account-switcher') || (location.pathname === '/admin-window' || location.hash === '#/admin-window')) ? '100%' : 'auto' }}>
           <div className="main-content">
             <Routes>
               <Route path="/" element={<Navigate to="/library" replace />} />
@@ -421,6 +432,9 @@ const AppContent = () => {
               <Route path="/account-switcher" element={<AccountSwitcherPage navigate={navigate} />} />
               <Route path="/library" element={<Library />} />
               <Route path="/game-studio" element={<GameStudio navigate={navigate} />} />
+              <Route path="/game-studio/calendar" element={<StudioCalendar navigate={navigate} />} />
+              <Route path="/game-studio/analytics" element={<StudioAnalytics navigate={navigate} />} />
+              <Route path="/game-studio/team" element={<StudioTeam navigate={navigate} />} />
               <Route path="/store" element={<Store navigate={navigate} gamesData={{}} sidebarWidth={sidebarCollapsed ? 0 : sidebarWidth} />} />
               <Route path="/store/game/:gameId" element={<GamePromo gamesData={{}} />} />
               <Route path="/friends" element={<Friends />} />
@@ -447,6 +461,10 @@ const AppContent = () => {
 };
 
 const App = () => {
+  // Use HashRouter for production (file:// protocol) and BrowserRouter for dev (http:// protocol)
+  const isDev = !window.location.protocol.startsWith('file');
+  const Router = isDev ? BrowserRouter : HashRouter;
+  
   return (
     <Router>
       <AppContent />

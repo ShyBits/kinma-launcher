@@ -36,7 +36,7 @@
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 4px;
-  transition: background 0.2s ease;
+  transition: none !important;
   -webkit-app-region: no-drag;
   height: 32px;
   flex-shrink: 0;
@@ -102,7 +102,7 @@
   color: var(--text-secondary);
   cursor: pointer;
   border-radius: 0;
-  transition: all 0.2s ease;
+  transition: none !important;
   margin-left: 0;
   -webkit-app-region: no-drag;
   flex-shrink: 0;
@@ -166,10 +166,31 @@
 }
 
 .title-bar-center {
-  flex: 1;
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
   display: flex;
   justify-content: center;
   align-items: center;
+  pointer-events: none;
+  z-index: 10002;
+  height: 32px;
+  width: 100%;
+}
+
+.title-bar-window-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.15);
+  padding: 3px 10px;
+  border-radius: 12px;
+  min-width: 24px;
+  text-align: center;
+  user-select: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .title-decoration {
@@ -182,7 +203,7 @@
 .title-bar-right {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0;
   -webkit-app-region: no-drag;
 }
 
@@ -202,7 +223,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: var(--transition);
+  transition: none !important;
   padding: 0;
   border-radius: 0;
 }
@@ -236,6 +257,29 @@
   margin: 0 2px;
 }
 
+.title-bar-button.pop-out-btn {
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: none !important;
+  border-radius: 0;
+}
+
+.title-bar-button.pop-out-btn:hover {
+  background: var(--bg-hover);
+  color: var(--accent-primary);
+}
+
+.title-bar-button.pop-out-btn:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
 .title-bar-button {
   width: 32px;
   height: 32px;
@@ -246,7 +290,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: var(--transition);
+  transition: none !important;
   border-radius: 0;
   aspect-ratio: 1;
 }
@@ -294,7 +338,7 @@
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition: none !important;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -331,7 +375,7 @@
   padding: 6px 12px;
   color: var(--text-primary);
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: none !important;
   font-size: 11px;
   white-space: nowrap;
   display: flex;

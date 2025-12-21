@@ -34,7 +34,7 @@
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: none !important;
 }
 
 .promo-not-found button:hover {
@@ -107,7 +107,7 @@
   font-weight: 600;
   cursor: pointer;
   backdrop-filter: blur(12px);
-  transition: all 0.3s ease;
+  transition: none !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
@@ -119,7 +119,7 @@
 }
 
 .promo-back-btn svg {
-  transition: transform 0.3s ease;
+  transition: none !important;
 }
 
 .promo-back-btn:hover svg {
@@ -135,18 +135,7 @@
   display: flex;
   flex-direction: column;
   gap: 32px;
-  animation: fadeInUp 0.8s ease-out;
-}
-
-@keyframes fadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  animation: none !important;
 }
 
 .promo-hero-badges {
@@ -195,14 +184,14 @@
   text-shadow: 0 4px 20px rgba(0, 0, 0, 0.8), 0 2px 10px rgba(0, 0, 0, 0.9);
   line-height: 1.1;
   letter-spacing: -2px;
-  animation: fadeInUp 0.8s ease-out 0.2s both;
+  animation: none !important;
 }
 
 .promo-hero-stats {
   display: flex;
   gap: 20px;
   flex-wrap: wrap;
-  animation: fadeInUp 0.8s ease-out 0.4s both;
+  animation: none !important;
 }
 
 .promo-hero-stat {
@@ -218,7 +207,7 @@
   backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-  transition: all 0.3s ease;
+  transition: none !important;
 }
 
 .promo-hero-stat:hover {
@@ -249,14 +238,14 @@
   font-weight: 400;
   color: rgba(255, 255, 255, 0.9);
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-  animation: fadeInUp 0.8s ease-out 0.6s both;
+  animation: none !important;
 }
 
 .promo-hero-tags {
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
-  animation: fadeInUp 0.8s ease-out 0.8s both;
+  animation: none !important;
 }
 
 .promo-tag {
@@ -267,7 +256,7 @@
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.15);
   color: rgba(255, 255, 255, 0.9);
-  transition: all 0.2s ease;
+  transition: none !important;
   backdrop-filter: blur(8px);
 }
 
@@ -279,7 +268,7 @@
 
 .promo-hero-actions {
   margin-top: 12px;
-  animation: fadeInUp 0.8s ease-out 1s both;
+  animation: none !important;
 }
 
 .promo-hero-btn {
@@ -293,7 +282,7 @@
   letter-spacing: 0.5px;
   border: none;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: none !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #ffffff;
@@ -369,7 +358,7 @@
   width: 100%;
   height: 100%;
   opacity: 0;
-  transition: opacity 0.6s ease;
+  transition: none !important;
 }
 
 .promo-media-main-item.active {
@@ -398,7 +387,7 @@
   justify-content: center;
   cursor: pointer;
   z-index: 10;
-  transition: all 0.2s ease;
+  transition: none !important;
   backdrop-filter: blur(8px);
 }
 
@@ -423,7 +412,7 @@
   justify-content: center;
   cursor: pointer;
   z-index: 10;
-  transition: all 0.3s ease;
+  transition: none !important;
   backdrop-filter: blur(12px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
@@ -460,7 +449,7 @@
   background: transparent;
   padding: 0;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: none !important;
   opacity: 0.6;
 }
 
@@ -725,7 +714,7 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  transition: margin-right 0.3s ease;
+  transition: none !important;
   overflow: hidden;
   height: 100%;
   max-height: 100%;
@@ -776,7 +765,7 @@
   border-radius: 10px;
   color: #b8d0ff;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: none !important;
   flex-shrink: 0;
   font-family: var(--font-family-mono);
   font-size: 12px;
@@ -802,7 +791,7 @@
   width: 100%;
   height: 100%;
   background: linear-gradient(90deg, transparent, rgba(74, 158, 255, 0.1), transparent);
-  transition: left 0.5s ease;
+  transition: none !important;
 }
 
 .promo-custom-code-toggle-btn:hover::before {
@@ -911,7 +900,7 @@
   border-radius: 6px;
   font-size: 14px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
 }
 
 .save-promo-btn {
@@ -955,7 +944,7 @@
   min-height: 0;
   max-height: 100%;
   position: relative;
-  transition: filter 0.2s ease;
+  transition: none !important;
 }
 
 .promo-preview-wrapper.resizing {
@@ -1036,7 +1025,7 @@
   position: relative;
   min-height: 0;
   max-height: 100%;
-  transition: filter 0.2s ease;
+  transition: none !important;
 }
 
 .promo-preview-wrapper.resizing .promo-preview-content *,
@@ -1049,7 +1038,7 @@
 .promo-resize-handle {
   flex-shrink: 0;
   background: rgba(255, 255, 255, 0.05);
-  transition: background 0.2s ease;
+  transition: none !important;
   cursor: row-resize;
   position: relative;
   z-index: 100;
@@ -1200,7 +1189,7 @@
   justify-content: center;
   padding: 2px;
   flex-shrink: 0;
-  transition: color 0.2s ease;
+  transition: none !important;
   width: 16px;
   height: 16px;
 }
@@ -1226,7 +1215,7 @@
   height: 28px;
   min-width: 280px;
   box-sizing: border-box;
-  transition: opacity 0.2s ease, visibility 0.2s ease;
+  transition: none !important;
 }
 
 .css-filter-container.hidden {
@@ -1252,7 +1241,7 @@
   color: rgba(255, 255, 255, 0.7);
   font-size: 11px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
   white-space: nowrap;
   font-family: var(--font-family);
   height: 20px;
@@ -1338,7 +1327,7 @@
   border-radius: 0;
   color: #b3b3b3;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
   flex-shrink: 0;
   min-width: 48px;
   position: relative;
@@ -1353,7 +1342,7 @@
   right: 8px;
   height: 2px;
   background: transparent;
-  transition: left 0.2s ease, right 0.2s ease, background 0.2s ease;
+  transition: none !important;
   border-radius: 0 0 8px 8px;
   transform: translateZ(0);
   backface-visibility: hidden;
@@ -1370,7 +1359,7 @@
   pointer-events: none;
   border-radius: 0;
   opacity: 0;
-  transition: opacity 0.2s ease, background 0.2s ease;
+  transition: none !important;
   transform: translateZ(0);
   backface-visibility: hidden;
 }
@@ -1441,7 +1430,7 @@
   width: 18px;
   height: 18px;
   stroke-width: 2;
-  transition: all 0.2s ease;
+  transition: none !important;
   color: rgba(255, 255, 255, 0.7);
   position: relative;
   z-index: 1;
@@ -1466,7 +1455,7 @@
   color: #b3b3b3;
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
   white-space: nowrap;
   height: 100%;
   min-height: 48px;
@@ -1484,7 +1473,7 @@
   right: 8px;
   height: 2px;
   background: transparent;
-  transition: left 0.2s ease, right 0.2s ease, background 0.2s ease;
+  transition: none !important;
   border-radius: 0 0 8px 8px;
   transform: translateZ(0);
   backface-visibility: hidden;
@@ -1501,7 +1490,7 @@
   pointer-events: none;
   border-radius: 0;
   opacity: 0;
-  transition: opacity 0.2s ease, background 0.2s ease;
+  transition: none !important;
   transform: translateZ(0);
   backface-visibility: hidden;
 }
@@ -1721,7 +1710,7 @@
 }
 
 .code-tab svg {
-  transition: all 0.2s ease;
+  transition: none !important;
   flex-shrink: 0;
   color: rgba(255, 255, 255, 0.7);
 }
@@ -1840,7 +1829,7 @@
   color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
   padding: 2px;
-  transition: color 0.2s ease;
+  transition: none !important;
 }
 
 .panel-header-actions .code-search-clear:hover {
@@ -1855,7 +1844,7 @@
   color: #b3b3b3;
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
 }
 
 .clear-panel-btn:hover {
@@ -1926,7 +1915,7 @@
   background: linear-gradient(180deg, rgb(18, 20, 24) 0%, rgb(15, 17, 21) 100%);
   border-left: 2px solid rgba(255, 255, 255, 0.08);
   box-shadow: -4px 0 20px rgba(0, 0, 0, 0.4);
-  transition: transform 0.3s ease;
+  transition: none !important;
   z-index: 1000;
   display: flex;
   flex-direction: column;
@@ -1991,7 +1980,7 @@
   background: linear-gradient(180deg, rgba(20, 22, 28, 0.98) 0%, rgba(18, 20, 26, 0.98) 50%, rgba(15, 17, 23, 0.98) 100%);
   border-left: 2px solid rgba(255, 255, 255, 0.1);
   box-shadow: -6px 0 24px rgba(0, 0, 0, 0.5);
-  transition: transform 0.3s ease;
+  transition: none !important;
   z-index: 1000;
   display: flex;
   flex-direction: column;
@@ -2082,7 +2071,7 @@
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
   background: linear-gradient(135deg, rgba(74, 158, 255, 0.25) 0%, rgba(74, 158, 255, 0.2) 100%);
   border: 2px solid rgba(74, 158, 255, 0.5);
   color: #4a9eff;
@@ -2110,7 +2099,7 @@
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.06) 100%);
   border: 2px solid rgba(255, 255, 255, 0.2);
   color: #e5e5e5;
@@ -2156,7 +2145,7 @@
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
   text-align: left;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
@@ -2190,7 +2179,7 @@
   cursor: pointer;
   padding: 8px 0;
   margin-bottom: 12px;
-  transition: all 0.2s ease;
+  transition: none !important;
   user-select: none;
 }
 
@@ -2209,7 +2198,7 @@
 
 .prebuilt-templates-header svg {
   color: #b3b3b3;
-  transition: transform 0.2s ease;
+  transition: none !important;
 }
 
 .template-grid {
@@ -2233,7 +2222,7 @@
   border-radius: 0;
   color: #e5e5e5;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
   text-align: center;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   font-family: var(--font-family);
@@ -2251,7 +2240,7 @@
   right: 0;
   bottom: 0;
   opacity: 0.3;
-  transition: opacity 0.2s ease;
+  transition: none !important;
   z-index: 0;
 }
 
@@ -2485,7 +2474,7 @@
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
   text-align: left;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   position: relative;
@@ -2526,7 +2515,7 @@
   border-radius: 6px;
   color: #ff6b6b;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
   padding: 0;
   flex-shrink: 0;
   z-index: 10;
@@ -2584,7 +2573,7 @@
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
   text-align: left;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   font-family: var(--font-family);
@@ -2632,7 +2621,7 @@
   border-radius: 10px;
   color: #e5e5e5;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
   margin-bottom: 12px;
   text-align: left;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
@@ -2697,7 +2686,7 @@
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
   margin-bottom: 10px;
   text-align: left;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
@@ -2773,7 +2762,7 @@
   border-radius: 10px;
   color: #4a9eff;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
   box-shadow: 0 2px 8px rgba(74, 158, 255, 0.2);
   font-family: var(--font-family);
 }
@@ -2836,7 +2825,7 @@
   font-weight: 600;
   cursor: pointer;
   backdrop-filter: blur(12px);
-  transition: all 0.3s ease;
+  transition: none !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 

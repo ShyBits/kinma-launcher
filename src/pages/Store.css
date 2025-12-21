@@ -40,7 +40,7 @@
   color: #ffffff;
   font-size: 16px;
   outline: none;
-  transition: all 0.3s;
+  transition: none !important;
 }
 
 .store-search-input:focus {
@@ -64,7 +64,7 @@
   cursor: pointer;
   padding: 4px;
   border-radius: 6px;
-  transition: all 0.2s;
+  transition: none !important;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -99,7 +99,7 @@
   border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: none !important;
 }
 
 .store-search-card:hover {
@@ -189,7 +189,7 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   padding: 24px;
-  transition: all 0.2s ease;
+  transition: none !important;
 }
 
 .patch-note-card:hover {
@@ -284,7 +284,7 @@
   max-height: 600px;
   flex-shrink: 0;
   /* No delay for height resizing - instant response */
-  transition: height 0s;
+  transition: none !important;
 }
 
 .featured-banner {
@@ -308,7 +308,7 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  transition: width 0.3s ease, height 0.3s ease;
+  transition: none !important;
   flex-shrink: 0;
 }
 
@@ -316,7 +316,7 @@
   width: clamp(20px, calc(var(--banner-height, 250px) * 0.1), 48px);
   height: clamp(20px, calc(var(--banner-height, 250px) * 0.1), 48px);
   /* No transition delay for size resizing - instant response */
-  transition: width 0s, height 0s;
+  transition: none !important;
 }
 
 .featured-actions .banner-bookmark.inline.bookmarked { 
@@ -417,7 +417,7 @@
   align-items: flex-start;
   min-width: 0;
   /* No transition delay for padding resizing - instant response */
-  transition: padding 0s;
+  transition: none !important;
   box-sizing: border-box;
   overflow: visible;
   flex-shrink: 1;
@@ -431,7 +431,7 @@
   align-items: center;
   justify-content: center;
   /* No transition delay for padding resizing - instant response */
-  transition: padding 0s;
+  transition: none !important;
   min-width: 0;
   box-sizing: border-box;
   visibility: visible;
@@ -456,7 +456,7 @@
   width: fit-content;
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
   /* No transition delay for size properties - instant resizing */
-  transition: background 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, padding 0s, font-size 0s, margin-bottom 0s;
+  transition: none !important;
   line-height: 1.1;
 }
 
@@ -495,7 +495,7 @@
   gap: clamp(4px, calc(var(--banner-height, 250px) * 0.04), 20px);
   margin-bottom: clamp(4px, calc(var(--banner-height, 250px) * 0.04), 24px);
   /* No transition delay for gap/margin resizing - instant response */
-  transition: gap 0s, margin-bottom 0s;
+  transition: none !important;
 }
 
 .featured-title {
@@ -507,7 +507,7 @@
   line-height: 1.1;
   letter-spacing: -0.3px;
   /* No transition delay for font-size resizing - instant response */
-  transition: font-size 0s;
+  transition: none !important;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -521,7 +521,7 @@
   gap: clamp(4px, calc(var(--banner-height, 250px) * 0.032), 12px);
   flex-wrap: wrap;
   /* No transition delay for gap resizing - instant response */
-  transition: gap 0s;
+  transition: none !important;
 }
 
 .stat {
@@ -538,7 +538,7 @@
   border: 1px solid rgba(255, 255, 255, 0.15);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   /* No transition delay for size properties - instant resizing */
-  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, padding 0s, font-size 0s, gap 0s;
+  transition: none !important;
   line-height: 1.1;
 }
 
@@ -567,7 +567,7 @@
   flex-shrink: 0;
   opacity: 0.9;
   /* No transition delay for size resizing - instant response */
-  transition: width 0s, height 0s;
+  transition: none !important;
 }
 
 .stat.trending {
@@ -601,7 +601,7 @@
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
   font-weight: 400;
   /* No transition delay for font-size/margin resizing - instant response */
-  transition: font-size 0s, margin-bottom 0s;
+  transition: none !important;
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -615,7 +615,7 @@
   margin-bottom: clamp(4px, calc(var(--banner-height, 250px) * 0.06), 32px);
   flex-wrap: wrap;
   /* No transition delay for gap/margin resizing - instant response */
-  transition: gap 0s, margin-bottom 0s;
+  transition: none !important;
 }
 
 .tag {
@@ -629,7 +629,7 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
   /* No transition delay for size properties - instant resizing */
-  transition: background 0.2s ease, border-color 0.2s ease, padding 0s, font-size 0s;
+  transition: none !important;
   line-height: 1.1;
 }
 
@@ -643,7 +643,7 @@
   gap: clamp(6px, calc(var(--banner-height, 250px) * 0.04), 14px);
   align-items: center;
   /* No transition delay for gap resizing - instant response */
-  transition: gap 0s;
+  transition: none !important;
   flex-wrap: wrap;
 }
 
@@ -660,7 +660,7 @@
   font-weight: 700;
   cursor: pointer;
   /* No transition delay for size properties - instant resizing */
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, padding 0s, font-size 0s, gap 0s;
+  transition: none !important;
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
   letter-spacing: 0.2px;
   line-height: 1.1;
@@ -699,7 +699,7 @@
   height: clamp(9px, calc(var(--banner-height, 250px) * 0.048), 20px);
   flex-shrink: 0;
   /* No transition delay for size resizing - instant response */
-  transition: width 0s, height 0s;
+  transition: none !important;
 }
 
 .favorite-btn {
@@ -710,7 +710,7 @@
   border-radius: 50%;
   color: var(--text-primary);
   cursor: pointer;
-  transition: var(--transition);
+  transition: none !important;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -751,7 +751,7 @@
   align-items: center;
   justify-content: center;
   /* Smooth visual transitions, but no delay for size resizing */
-  transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease, width 0s, height 0s;
+  transition: none !important;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
@@ -773,7 +773,7 @@
   width: clamp(18px, calc(var(--banner-height, 250px) * 0.045), 28px);
   height: clamp(18px, calc(var(--banner-height, 250px) * 0.045), 28px);
   /* Smooth icon transitions */
-  transition: transform 0.2s ease, opacity 0.2s ease, width 0s, height 0s;
+  transition: none !important;
   opacity: 0.9;
 }
 
@@ -834,7 +834,7 @@
   background: rgba(255, 255, 255, 0.4);
   cursor: pointer;
   /* Smooth visual transitions, but no delay for size resizing */
-  transition: background 0.2s ease, transform 0.2s ease, width 0s, height 0s;
+  transition: none !important;
 }
 
 .indicator.active {
@@ -873,7 +873,7 @@
   flex-direction: column;
   gap: clamp(4px, calc(var(--banner-height, 250px) * 0.024), 12px);
   /* No delay for width/height/gap resizing - instant response */
-  transition: width 0s, height 0s, gap 0s;
+  transition: none !important;
   visibility: visible;
   opacity: 1;
   flex-shrink: 0;
@@ -898,7 +898,7 @@
   width: 100%;
   height: 100%;
   opacity: 0;
-  transition: opacity 0.5s ease-in-out;
+  transition: none !important;
 }
 
 .media-slide.active {
@@ -927,7 +927,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: none !important;
   z-index: 10;
   backdrop-filter: blur(10px);
 }
@@ -957,7 +957,7 @@
   border: none;
   background: rgba(255, 255, 255, 0.4);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
   padding: 0;
 }
 
@@ -1007,7 +1007,7 @@
   border-radius: 8px;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: none !important;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1035,7 +1035,7 @@
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: none !important;
 }
 
 .category-btn:hover {
@@ -1063,7 +1063,7 @@
   max-width: 92%;
   margin: 0 auto;
   padding: 0 20px;
-  transition: all 0.3s ease;
+  transition: none !important;
 }
 
 .games-grid.row-view {
@@ -1081,7 +1081,7 @@
   grid-auto-rows: auto;
   max-width: 100%;
   /* No transition delay for grid resizing */
-  transition: gap 0s;
+  transition: none !important;
 }
 
 .game-card {
@@ -1090,7 +1090,7 @@
   border-radius: 20px;
   overflow: hidden;
   /* No transition delay for size properties - instant resizing */
-  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), background 0.4s cubic-bezier(0.4, 0, 0.2, 1), width 0s, height 0s;
+  transition: none !important;
   cursor: pointer;
   position: relative;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
@@ -1156,7 +1156,7 @@
   justify-content: center;
   overflow: hidden;
   border-radius: 20px 0 0 20px;
-  transition: all 0.4s ease;
+  transition: none !important;
 }
 
 .games-grid.row-view .game-image {
@@ -1217,7 +1217,7 @@
   line-height: 1.3;
   flex: 1;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
-  transition: color 0.3s ease;
+  transition: none !important;
 }
 
 .games-grid.grid-view .game-title {
@@ -1279,7 +1279,7 @@
   font-size: 12px;
   font-weight: 600;
   border: 1px solid var(--border-primary);
-  transition: all 0.3s ease;
+  transition: none !important;
 }
 
 .game-tag:hover {
@@ -1310,7 +1310,7 @@
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: none !important;
   box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4);
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -1483,7 +1483,7 @@
   align-items: center;
   padding: 8px clamp(20px, calc(var(--content-width, 1090px) * 0.03), 40px);
   /* No delay for height/padding resizing - instant response */
-  transition: height 0s, padding 0s;
+  transition: none !important;
 }
 
 .taskbar-content {
@@ -1491,10 +1491,10 @@
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   width: 100%;
-  padding: 0 clamp(20px, calc(var(--content-width, 1090px) * 0.03), 40px);
+  padding: 0;
   gap: clamp(16px, calc(var(--content-width, 1090px) * 0.035), 40px);
   /* No delay for padding/gap resizing - instant response */
-  transition: padding 0s, gap 0s;
+  transition: none !important;
 }
 
 .taskbar-left {
@@ -1516,7 +1516,7 @@
   border: none;
   color: rgba(255, 255, 255, 0.6);
   cursor: pointer;
-  transition: all 0.3s;
+  transition: none !important;
   border-radius: 8px;
 }
 
@@ -1537,20 +1537,10 @@
   min-width: 200px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
   z-index: 100;
-  animation: slideDown 0.2s ease-out;
+  animation: none !important;
   overflow: hidden;
 }
 
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 
 .filter-option {
   padding: 12px 16px;
@@ -1559,7 +1549,7 @@
   color: rgba(255, 255, 255, 0.8);
   font-size: 14px;
   font-weight: 500;
-  transition: all 0.2s;
+  transition: none !important;
   border: 1px solid transparent;
   margin-bottom: 2px;
 }
@@ -1599,88 +1589,151 @@
 
 .taskbar-search-wrapper {
   position: relative;
-  width: clamp(200px, calc(var(--content-width, 1090px) * 0.25), 280px);
-  /* Always 75% of taskbar height - matches filter button height */
+  /* Start with button width, expand on hover */
+  width: calc(var(--taskbar-height, 60px) * 0.75);
   height: calc(var(--taskbar-height, 60px) * 0.75);
   display: flex;
   align-items: center;
-  /* No delay for height/width resizing - instant response */
-  transition: height 0s, width 0s;
+  justify-content: flex-end;
+  /* Only transition width for expand/collapse */
+  transition: none !important;
+  overflow: visible;
 }
 
-.taskbar-search-icon {
+.taskbar-search-wrapper.expanded {
+  width: clamp(200px, calc(var(--content-width, 1090px) * 0.25), 280px);
+}
+
+.taskbar-search-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  width: calc(var(--taskbar-height, 60px) * 0.75);
+  height: calc(var(--taskbar-height, 60px) * 0.75);
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
   position: absolute;
-  /* Scale left position proportionally with search bar height */
-  left: calc(var(--taskbar-height, 60px) * 0.75 * 0.15);
+  right: 0;
+  z-index: 10;
+  transition: none !important;
+}
+
+.taskbar-search-wrapper.expanded .taskbar-search-button {
+  position: absolute;
+  left: 14px;
+  right: auto;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  border: none;
+  background: transparent;
+  z-index: 2;
+}
+
+.taskbar-search-button:hover {
+  background: rgba(0, 0, 0, 0.6);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: var(--accent-color);
+}
+
+.taskbar-search-input-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: none;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  padding: 6px 4px 6px 14px;
+  box-sizing: border-box;
+}
+
+.taskbar-search-wrapper.expanded .taskbar-search-input-wrapper {
+  display: flex;
+}
+
+.taskbar-search-input-wrapper .taskbar-search-icon {
+  position: absolute;
+  left: 14px;
   top: 50%;
   transform: translateY(-50%);
   color: rgba(255, 255, 255, 0.4);
   pointer-events: none;
   z-index: 1;
-  /* Smart sizing: Scale icon size proportionally with search bar height (35% of search bar = 26.25% of taskbar) */
-  width: calc(var(--taskbar-height, 60px) * 0.75 * 0.35);
-  height: calc(var(--taskbar-height, 60px) * 0.75 * 0.35);
+  width: 16px;
+  height: 16px;
   min-width: 16px;
-  max-width: 20px;
+  max-width: 16px;
   min-height: 16px;
-  max-height: 20px;
-  /* No delay for width/height resizing - instant response */
-  transition: color 0.2s ease, width 0s, height 0s;
+  max-height: 16px;
 }
 
 .taskbar-search-input {
   width: 100%;
-  /* Smart padding: Scales proportionally with search bar height, clamped to reasonable values */
-  padding: 0 clamp(32px, calc(var(--taskbar-height, 60px) * 0.75 * 0.85), 40px) 0 clamp(28px, calc(var(--taskbar-height, 60px) * 0.75 * 0.7), 36px);
+  padding: 0 8px 0 28px;
   background: transparent;
   border: none;
-  /* Smart border: Scales proportionally with search bar height, clamped between 1px and 2px */
-  border-bottom: clamp(1px, calc(var(--taskbar-height, 60px) * 0.75 * 0.03), 2px) solid rgba(255, 255, 255, 0.2);
-  color: #ffffff;
-  /* Smart font size: Scales proportionally with search bar height (30% of search bar height), clamped between 13px and 15px */
+  color: rgba(255, 255, 255, 0.85);
   font-size: clamp(13px, calc(var(--taskbar-height, 60px) * 0.75 * 0.3), 15px);
   outline: none;
-  /* No delay for font-size/padding resizing - instant response */
-  transition: border-color 0.2s ease, font-size 0s, padding 0s;
   height: 100%;
   box-sizing: border-box;
-}
-
-.taskbar-search-input:focus {
-  border-bottom-color: var(--accent-color);
-}
-
-.taskbar-search-input:focus + .taskbar-search-icon,
-.taskbar-search-wrapper:focus-within .taskbar-search-icon {
-  color: var(--accent-color);
 }
 
 .taskbar-search-input::placeholder {
   color: rgba(255, 255, 255, 0.4);
 }
 
+.taskbar-search-filter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  padding: 0;
+  margin-left: 8px;
+  flex-shrink: 0;
+  z-index: 2;
+}
+
+.taskbar-search-filter:hover {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
 .taskbar-search-clear {
   position: absolute;
-  /* Scale right position proportionally with search bar height */
-  right: clamp(6px, calc(var(--taskbar-height, 60px) * 0.75 * 0.15), 10px);
+  right: 42px;
   top: 50%;
   transform: translateY(-50%);
   background: transparent;
   border: none;
   color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
-  /* Scale padding proportionally with search bar height */
-  padding: clamp(4px, calc(var(--taskbar-height, 60px) * 0.75 * 0.1), 6px);
-  /* Scale border-radius proportionally with search bar height */
-  border-radius: clamp(4px, calc(var(--taskbar-height, 60px) * 0.75 * 0.1), 6px);
-  /* Scale icon size proportionally with search bar height - match search icon */
-  width: clamp(16px, calc(var(--taskbar-height, 60px) * 0.75 * 0.35), 20px);
-  height: clamp(16px, calc(var(--taskbar-height, 60px) * 0.75 * 0.35), 20px);
-  /* No delay for size resizing - instant response */
-  transition: background 0.2s ease, color 0.2s ease, width 0s, height 0s, padding 0s, border-radius 0s;
+  padding: 4px;
+  border-radius: 4px;
+  width: 16px;
+  height: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
+  z-index: 2;
 }
 
 .taskbar-search-clear:hover {
@@ -1702,7 +1755,7 @@
   color: var(--text-secondary);
   cursor: pointer;
   /* No delay for height/width resizing - instant response */
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease, height 0s, width 0s;
+  transition: none !important;
 }
 
 .taskbar-btn svg {
@@ -1929,7 +1982,7 @@
   display: flex;
   flex-direction: column;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: none !important;
 }
 
 .discover-card:hover {
@@ -2009,7 +2062,7 @@
   gap: clamp(12px, calc(var(--content-width, 1090px) * 0.015), calc(var(--content-width, 1090px) * 0.025));
   justify-content: start;
   /* No transition delay for grid resizing */
-  transition: gap 0s;
+  transition: none !important;
 }
 
 .featured-older-grid {
@@ -2041,7 +2094,7 @@
   flex-direction: row;
   align-items: stretch;
   /* No delay for resizing - instant response */
-  transition: width 0s, max-width 0s, height 0s;
+  transition: none !important;
   /* Always show expanded width with info panel - no hover needed */
   width: clamp(198px, calc(var(--content-width, 1090px) * 0.22), calc(var(--content-width, 1090px) * 0.4));
   max-width: clamp(198px, calc(var(--content-width, 1090px) * 0.22), calc(var(--content-width, 1090px) * 0.4));
@@ -2063,7 +2116,7 @@
   margin: 0;
   flex-shrink: 0;
   /* No delay for width resizing - instant response */
-  transition: width 0s, min-width 0s;
+  transition: none !important;
 }
 
 .featured-below-card .banner-bookmark {
@@ -2075,7 +2128,7 @@
   width: clamp(58px, calc((var(--content-width, 1090px) * 0.22) * 0.3), 67px);
   height: clamp(58px, calc((var(--content-width, 1090px) * 0.22) * 0.3), 67px);
   /* No delay for size/position resizing - instant response */
-  transition: width 0s, height 0s, opacity 0.2s ease, color 0.2s ease;
+  transition: none !important;
   opacity: 0.9;
   z-index: 10;
 }
@@ -2102,7 +2155,7 @@
   align-items: flex-start;
   justify-content: center;
   opacity: 0.9;
-  transition: opacity 120ms ease, transform 120ms ease, color 120ms ease;
+  transition: none !important;
   z-index: 10;
   cursor: pointer;
   padding: 0;
@@ -2141,7 +2194,7 @@
   height: 100%;
   object-fit: cover;
   /* No delay for image resizing - instant response */
-  transition: width 0s, height 0s;
+  transition: none !important;
 }
 
 .banner-rating {
@@ -2201,7 +2254,7 @@
   opacity: 1;
   gap: 0;
   /* No delay for width/padding resizing - instant response */
-  transition: width 0s, padding 0s, background 0.3s ease;
+  transition: none !important;
 }
 
 .card-info-header {
@@ -2303,7 +2356,7 @@
   height: clamp(70px, calc((var(--content-width, 1090px) * 0.22) * 0.35), 90px);
   z-index: 10;
   cursor: help;
-  transition: all 0.2s ease;
+  transition: none !important;
   box-shadow: none;
   overflow: visible;
 }
@@ -2533,7 +2586,7 @@
   border-left: none;
   border-radius: 0;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
   flex-shrink: 0;
   position: relative;
 }
@@ -2556,7 +2609,7 @@
   color: rgba(255, 255, 255, 0.7) !important;
   stroke: rgba(255, 255, 255, 0.7) !important;
   fill: none !important;
-  transition: color 0.2s ease, stroke 0.2s ease, fill 0.2s ease;
+  transition: none !important;
 }
 
 .card-info-cart:hover svg {
@@ -2589,7 +2642,7 @@
   /* Scale font size based on card width - smaller when card is small */
   font-size: clamp(11px, calc((var(--content-width, 1090px) * 0.12 + 88px) * 0.095), 14px);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
   letter-spacing: 0.5px;
   text-transform: uppercase;
   width: 100%;
@@ -2697,16 +2750,7 @@
   align-items: center;
   justify-content: center;
   z-index: 10000;
-  animation: fadeIn 0.2s ease;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  animation: none !important;
 }
 
 .purchase-modal-content {
@@ -2718,20 +2762,8 @@
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: none !important;
 }
-
-@keyframes slideUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
 .purchase-modal-header {
   display: flex;
   align-items: center;
@@ -2756,7 +2788,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.2s ease;
+  transition: none !important;
 }
 
 .purchase-modal-close:hover {
@@ -2878,7 +2910,7 @@
   border-radius: clamp(6px, calc(var(--content-width, 1090px) * 0.008), 8px);
   color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
   font-size: clamp(12px, calc(var(--content-width, 1090px) * 0.015), 14px);
   font-weight: 500;
 }
@@ -2910,7 +2942,7 @@
   font-size: clamp(13px, calc(var(--content-width, 1090px) * 0.016), 16px);
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
 }
 
 .purchase-cancel-btn {

@@ -27,7 +27,7 @@
   justify-content: center;
   background: rgba(0, 0, 0, 0.3);
   cursor: pointer;
-  transition: opacity 0.2s ease;
+  transition: none !important;
   z-index: 5;
 }
 
@@ -48,7 +48,7 @@
   background: linear-gradient(to top, rgba(0, 0, 0, 0.9), rgba(0, 0, 0, 0.5), transparent);
   padding: 12px;
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: none !important;
   pointer-events: none;
 }
 
@@ -67,7 +67,7 @@
   background: rgba(255, 255, 255, 0.3);
   border-radius: 2px;
   position: relative;
-  transition: height 0.2s ease;
+  transition: none !important;
 }
 
 .video-controls:hover .video-progress-bar {
@@ -78,7 +78,7 @@
   height: 100%;
   background: var(--accent-primary);
   border-radius: 2px;
-  transition: width 0.1s ease;
+  transition: none !important;
 }
 
 .video-progress-handle {
@@ -91,7 +91,7 @@
   border-radius: 50%;
   box-shadow: 0 0 8px rgba(74, 158, 255, 0.6);
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition: none !important;
 }
 
 .video-controls:hover .video-progress-handle {
@@ -127,7 +127,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: none !important;
   border-radius: 4px;
 }
 
@@ -159,7 +159,7 @@
   border-radius: 50%;
   background: #ffffff;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: none !important;
 }
 
 .volume-slider::-webkit-slider-thumb:hover {
@@ -173,7 +173,7 @@
   background: #ffffff;
   cursor: pointer;
   border: none;
-  transition: all 0.2s ease;
+  transition: none !important;
 }
 
 .volume-slider::-moz-range-thumb:hover {

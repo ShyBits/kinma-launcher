@@ -447,32 +447,33 @@ const Game = () => {
   }, [gameId]);
 
   // Load custom games from user-specific storage
-  const [customGames, setCustomGames] = useState(() => {
-    try {
-      return getUserData('customGames', []);
-    } catch (e) {
-      console.error('Error loading custom games:', e);
-      return [];
-    }
-  });
+  const [customGames, setCustomGames] = useState([]);
 
   // Listen for custom game updates and reload on mount
   useEffect(() => {
-    const loadCustomGames = () => {
+    const loadCustomGames = async () => {
       try {
-        const userGames = getUserData('customGames', []);
-        setCustomGames(userGames);
+        const userGames = await getUserData('customGames', []);
+        // Ensure it's always an array
+        const gamesArray = Array.isArray(userGames) ? userGames : [];
+        console.log('Loaded/Reloaded customGames:', gamesArray);
+        setCustomGames(gamesArray);
       } catch (e) {
         console.error('Error loading custom games:', e);
+        setCustomGames([]);
       }
     };
+    
+    // Load games on mount
+    loadCustomGames();
     
     const handleCustomGameUpdate = () => {
       loadCustomGames();
     };
     
-    const handleStorageChange = (e) => {
-      if (e.key === getUserScopedKey('customGames')) {
+    const handleStorageChange = async (e) => {
+      const scopedKey = await getUserScopedKey('customGames');
+      if (e.key === scopedKey) {
         loadCustomGames();
       }
     };
@@ -498,10 +499,16 @@ const Game = () => {
   // Build custom games data - recalculate when customGames changes
   const customGamesDataMemo = useMemo(() => {
     const data = {};
-    customGames.forEach(game => {
+    // Ensure customGames is always an array
+    const gamesArray = Array.isArray(customGames) ? customGames : [];
+    gamesArray.forEach(game => {
       console.log('Processing custom game:', game);
       const ff = game.fullFormData || {};
-      data[game.gameId] = {
+      // Use gameId or id as the key, and also store under both for compatibility
+      const gameIdKey = game.gameId || game.id;
+      if (!gameIdKey) return; // Skip games without an ID
+      
+      const gameData = {
         name: game.name || 'Untitled Game',
         icon: game.icon || game.name?.charAt(0).toUpperCase() || '?',
         banner: game.banner || "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&h=600&fit=crop",
@@ -529,6 +536,12 @@ const Game = () => {
         logoPositionCustom: ff.logoPositionCustom || { x: 50, y: 50 },
         titlePosition: ff.titlePosition || { x: 50, y: 50 }
       };
+      
+      // Store under both gameId and id for compatibility
+      data[gameIdKey] = gameData;
+      if (game.gameId && game.id && game.gameId !== game.id) {
+        data[game.id] = gameData;
+      }
     });
     return data;
   }, [customGames]);
@@ -636,12 +649,6 @@ const Game = () => {
     }
     };
   }, [customGamesDataMemo]);
-  
-  useEffect(() => {
-    console.log('Current game from gamesData:', gamesData[gameId]);
-    console.log('gameId:', gameId);
-    console.log('gamesData:', gamesData);
-  }, [gameId, gamesData]);
 
   // Helper function to get image URL
   const getImageUrl = (url) => {
@@ -660,22 +667,83 @@ const Game = () => {
     return url.startsWith('/') ? url : `/${url}`;
   };
 
-  const game = gamesData[gameId] || {
-    name: 'Game',
-    icon: '?',
-    banner: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&h=600&fit=crop",
-    rating: 4.0,
-    playerCount: '0',
-    currentPlaying: '0',
-    trending: '0%',
-    description: 'Your game',
-    tags: [],
-    playtime: '0h',
-    lastPlayed: 'Never',
-    size: '0 GB',
-    developer: 'Kinma',
-    releaseDate: 'Unknown'
-  };
+  // Try to find game by gameId, also check if it's in customGames directly
+  const game = useMemo(() => {
+    // Try to find game in gamesData first
+    let foundGame = gamesData[gameId];
+    
+    // If not found, try to find it directly in customGames
+    if (!foundGame && Array.isArray(customGames)) {
+      const customGame = customGames.find(g => {
+        const gId = String(g.gameId || g.id || '');
+        return gId === String(gameId);
+      });
+      
+      if (customGame) {
+        const ff = customGame.fullFormData || {};
+        foundGame = {
+          name: customGame.name || 'Untitled Game',
+          icon: customGame.icon || customGame.name?.charAt(0).toUpperCase() || '?',
+          banner: customGame.banner || "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&h=600&fit=crop",
+          logo: customGame.logo,
+          title: customGame.title,
+          card: customGame.card,
+          screenshots: customGame.screenshots || [],
+          rating: customGame.rating || 0,
+          playerCount: customGame.playerCount || '0',
+          currentPlaying: customGame.currentPlaying || '0',
+          trending: customGame.trending || '0%',
+          description: customGame.description || ff.description || 'No description available.',
+          tags: customGame.tags || [],
+          playtime: customGame.playtime || '0h',
+          lastPlayed: customGame.lastPlayed || 'Never',
+          size: customGame.size || '0 GB',
+          developer: customGame.developer || ff.developer || 'Unknown',
+          releaseDate: customGame.releaseDate || ff.releaseDate || 'Unknown',
+          bannerHeight: customGame.bannerHeight || ff.bannerHeight || 60,
+          bannerPosition: ff.bannerPosition || { x: 50, y: 50 },
+          bannerZoom: ff.bannerZoom || 1,
+          cardPosition: ff.cardPosition || { x: 50, y: 50 },
+          cardZoom: ff.cardZoom || 1,
+          logoPositionCustom: ff.logoPositionCustom || { x: 50, y: 50 },
+          titlePosition: ff.titlePosition || { x: 50, y: 50 }
+        };
+      }
+    }
+    
+    // Fallback to default if still not found
+    if (!foundGame) {
+      foundGame = {
+        name: 'Game',
+        icon: '?',
+        banner: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1200&h=600&fit=crop",
+        rating: 4.0,
+        playerCount: '0',
+        currentPlaying: '0',
+        trending: '0%',
+        description: 'Your game',
+        tags: [],
+        playtime: '0h',
+        lastPlayed: 'Never',
+        size: '0 GB',
+        developer: 'Kinma',
+        releaseDate: 'Unknown'
+      };
+    }
+    
+    return foundGame;
+  }, [gameId, gamesData, customGames]);
+
+  useEffect(() => {
+    console.log('=== Game Component Debug ===');
+    console.log('gameId from URL:', gameId);
+    console.log('customGames:', customGames);
+    console.log('customGamesDataMemo:', customGamesDataMemo);
+    console.log('gamesData:', gamesData);
+    console.log('Current game from gamesData:', gamesData[gameId]);
+    console.log('Final game object:', game);
+    console.log('===========================');
+  }, [gameId, gamesData, customGames, customGamesDataMemo, game]);
 
   // Reload state when gameId changes
   useEffect(() => {
@@ -2743,7 +2811,7 @@ const Game = () => {
                                 strokeWidth={isHovered ? 2 : 1}
                                 opacity={isHovered ? 1 : 0.8}
                                 style={{ 
-                                  transition: 'r 0.15s ease, stroke-width 0.15s ease, opacity 0.15s ease',
+                                  transition: 'none',
                                   shapeRendering: 'geometricPrecision'
                                 }}
                               />
@@ -3172,7 +3240,7 @@ const Game = () => {
                                   strokeWidth={isHovered ? 2 : 1}
                                   opacity={isHovered ? 1 : 0.8}
                                   style={{ 
-                                    transition: 'r 0.15s ease, stroke-width 0.15s ease, opacity 0.15s ease',
+                                    transition: 'none',
                                     shapeRendering: 'geometricPrecision'
                                   }}
                                 />

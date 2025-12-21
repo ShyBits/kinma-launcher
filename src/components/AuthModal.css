@@ -58,7 +58,7 @@
     font-weight: 500;
     font-family: inherit;
     cursor: pointer;
-    transition: var(--transition);
+    transition: none !important;
     border-bottom: 2px solid transparent;
     position: relative;
 }
@@ -165,7 +165,7 @@
     padding: 0;
     background: var(--bg-secondary);
     color: var(--text-secondary);
-    transition: var(--transition);
+    transition: none !important;
     flex-shrink: 0;
 }
 
@@ -208,7 +208,7 @@
     font-size: 12px;
     font-weight: 500;
     font-family: inherit;
-    transition: var(--transition);
+    transition: none !important;
     white-space: nowrap;
     flex-shrink: 0;
     height: 44px;
@@ -277,7 +277,7 @@
     border: 1px solid var(--border-primary);
     cursor: pointer;
     color: var(--text-primary);
-    transition: var(--transition);
+    transition: none !important;
     font-size: 14px;
     font-weight: 500;
     font-family: inherit;
@@ -386,7 +386,7 @@
     background: var(--bg-primary);
     color: var(--text-primary);
     outline: none;
-    transition: var(--transition);
+    transition: none !important;
     font-size: 14px;
     font-family: inherit;
 }
@@ -425,23 +425,12 @@
 }
 
 .auth-field {
-    animation: fadeIn 0.2s ease-out;
+    animation: none !important;
 }
 
 /* Ensure consistent field spacing */
 .auth-field:not(:last-child) {
     margin-bottom: 0;
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(-4px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
 }
 
 .auth-checkbox {
@@ -455,7 +444,7 @@
     font-family: inherit;
     cursor: pointer;
     padding: 10px 0;
-    transition: color 0.2s ease;
+    transition: none !important;
     user-select: none;
 }
 
@@ -476,7 +465,7 @@
     -moz-appearance: none;
     flex-shrink: 0;
     margin-top: 0;
-    transition: all 0.2s ease;
+    transition: none !important;
     position: relative;
     box-shadow: none;
 }
@@ -531,7 +520,7 @@
     font-size: 14px;
     font-weight: 500;
     font-family: inherit;
-    transition: var(--transition);
+    transition: none !important;
     box-shadow: var(--shadow-sm);
     width: 100%;
     height: 44px;
@@ -559,7 +548,7 @@
     font-size: 12px;
     font-weight: 400;
     font-family: inherit;
-    transition: var(--transition);
+    transition: none !important;
     width: 100%;
     margin: 0;
     height: 40px;
@@ -588,7 +577,7 @@
     font-size: 13px;
     font-weight: 500;
     font-family: inherit;
-    transition: var(--transition);
+    transition: none !important;
     width: 100%;
 }
 
@@ -674,7 +663,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    transition: all 0.2s ease;
+    transition: none !important;
     margin: 0;
     box-shadow: none;
     position: relative;
@@ -712,7 +701,7 @@
     font-weight: 600;
     line-height: 1;
     flex-shrink: 0;
-    transition: background-color 0.2s ease, color 0.2s ease;
+    transition: none !important;
 }
 
 .auth-optional-toggle:hover > span:first-child {
@@ -731,7 +720,7 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
-    animation: slideDown 0.2s ease-out;
+    animation: none !important;
     position: relative;
     z-index: 0;
 }
@@ -741,20 +730,8 @@
     flex-direction: column;
     gap: 16px;
     margin-top: 16px;
-    animation: slideDown 0.2s ease-out;
+    animation: none !important;
 }
-
-@keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-8px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
 .auth-field-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -777,7 +754,7 @@
     background: var(--bg-primary);
     color: var(--text-primary);
     outline: none;
-    transition: var(--transition);
+    transition: none !important;
     font-size: 14px;
     font-family: inherit;
 }
@@ -852,7 +829,7 @@
     border-radius: 0 0 var(--border-radius) var(--border-radius);
     padding: 20px;
     margin-top: 0;
-    animation: slideDown 0.2s ease-out;
+    animation: none !important;
 }
 
 .auth-custom-gender-container .auth-field-input {
@@ -863,7 +840,7 @@
     background: var(--bg-primary);
     color: var(--text-primary);
     outline: none;
-    transition: var(--transition);
+    transition: none !important;
     font-size: 14px;
     font-family: inherit;
     margin: 0;
@@ -952,7 +929,7 @@
     font-weight: 500;
     font-family: inherit;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: none !important;
     position: relative;
     z-index: 1;
 }
@@ -976,7 +953,7 @@
     font-weight: 500;
     padding: 4px 8px;
     text-decoration: none;
-    transition: color 0.2s ease;
+    transition: none !important;
     pointer-events: auto;
     position: relative;
     z-index: 10;

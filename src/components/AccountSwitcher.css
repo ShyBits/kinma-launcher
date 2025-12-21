@@ -73,7 +73,7 @@
     border: 2px solid rgba(59, 130, 246, 0.2);
     border-top-color: var(--accent-primary, #3b82f6);
     border-radius: 50%;
-    animation: spin 0.8s linear infinite;
+    animation: none !important;
 }
 
 .account-switcher-loading p {
@@ -101,7 +101,7 @@
     gap: 8px;
     width: var(--card-size, 100px);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: none !important;
     padding: 0;
     background: transparent;
     border: none;
@@ -143,7 +143,7 @@
     font-size: var(--card-font-size, 36px);
     font-weight: 500;
     position: relative;
-    transition: all 0.2s ease;
+    transition: none !important;
     overflow: visible;
 }
 
@@ -212,7 +212,7 @@
     color: #ffffff;
     cursor: pointer;
     opacity: 0;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: none !important;
     padding: 0;
     font-family: inherit;
     z-index: 10;
@@ -255,16 +255,7 @@
     align-items: center;
     justify-content: center;
     z-index: 20000;
-    animation: accountSwitcherConfirmFadeIn 0.2s ease;
-}
-
-@keyframes accountSwitcherConfirmFadeIn {
-    from {
-        opacity: 0;
-    }
-    to {
-        opacity: 1;
-    }
+    animation: none !important;
 }
 
 .account-switcher-confirm-modal {
@@ -274,19 +265,8 @@
     width: 90%;
     max-width: 480px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-    animation: accountSwitcherConfirmSlideIn 0.2s ease;
+    animation: none !important;
     overflow: hidden;
-}
-
-@keyframes accountSwitcherConfirmSlideIn {
-    from {
-        opacity: 0;
-        transform: translateY(-20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
 }
 
 .account-switcher-confirm-header {
@@ -332,7 +312,7 @@
     font-size: 14px;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: none !important;
     border: 1px solid transparent;
     font-family: inherit;
 }
@@ -361,7 +341,7 @@
 
 .account-switcher-card-avatar.confirming-avatar {
     opacity: 1;
-    transition: all 0.2s ease;
+    transition: none !important;
     position: relative;
     background: rgba(59, 130, 246, 0.15) !important;
     backdrop-filter: none;
@@ -454,7 +434,7 @@
 .account-switcher-confirm-text-no {
     display: none;
     font-weight: 600;
-    transition: all 0.2s ease;
+    transition: none !important;
 }
 
 .account-switcher-card.confirming:has(.account-switcher-confirm-btn-yes:hover) .account-switcher-confirm-text-yes {
@@ -482,7 +462,7 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: none !important;
     border: 1.5px solid transparent;
     padding: 0;
     font-family: inherit;
@@ -523,7 +503,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    transition: color 0.2s ease;
+    transition: none !important;
 }
 
 .account-switcher-card:hover:not(.disabled):not(.processing) .account-switcher-card-name {
@@ -546,7 +526,7 @@
     justify-content: center;
     color: var(--text-secondary, #a0a3a8);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: none !important;
     padding: 0;
     font-family: inherit;
     flex-direction: column;
@@ -565,15 +545,8 @@
 }
 
 .spinning {
-    animation: spin 1s linear infinite;
+    animation: none !important;
 }
-
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
-}
-
 
 .account-switcher-body::-webkit-scrollbar {
     width: 5px;
@@ -619,7 +592,7 @@ body.account-switcher-loading-active .title-bar {
     border-radius: 50%;
     position: relative;
     /* Keep the circle static; only the arc (::before) rotates */
-    animation: none;
+    animation: none !important;
 }
 
 .account-switcher-loading-circle::before {
@@ -638,7 +611,7 @@ body.account-switcher-loading-active .title-bar {
     box-shadow: 0 0 20px rgba(74, 158, 255, 0.6),
                 0 0 40px rgba(74, 158, 255, 0.4),
                 0 0 60px rgba(74, 158, 255, 0.3);
-    animation: accountSwitcherSpin 2.5s linear infinite;
+    animation: none !important;
     pointer-events: none;
 }
 
@@ -652,7 +625,7 @@ body.account-switcher-loading-active .title-bar {
     align-items: center;
     justify-content: center;
     /* Do not rotate name/avatar */
-    animation: none;
+    animation: none !important;
     pointer-events: none;
 }
 
@@ -688,64 +661,4 @@ body.account-switcher-loading-active .title-bar {
     letter-spacing: -0.02em;
     line-height: 1.2;
     text-align: center;
-}
-
-@keyframes fadeInScale {
-    from {
-        opacity: 0;
-        transform: translateY(20px) scale(0.85);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
-
-@keyframes fadeInUp {
-    from {
-        opacity: 0;
-        transform: translateY(16px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
-    to {
-        opacity: 1;
-    }
-}
-
-@keyframes pulseGlow {
-    0%, 100% {
-        opacity: 0;
-        transform: scale(0.95);
-    }
-    50% {
-        opacity: 0.6;
-        transform: scale(1.05);
-    }
-}
-
-@keyframes accountSwitcherCounterRotate {
-    0% {
-        transform: rotate(0deg);
-    }
-    100% {
-        transform: rotate(-360deg);
-    }
-}
-
-@keyframes accountSwitcherSpin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
 }
