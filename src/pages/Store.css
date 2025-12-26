@@ -8,6 +8,26 @@
   padding: 0;
   position: relative;
   z-index: 1;
+  /* Thin scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.store::-webkit-scrollbar {
+  width: 4px;
+}
+
+.store::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.store::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+
+.store::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 /* Search Section */
@@ -1105,6 +1125,7 @@
 .games-grid.grid-view .game-card {
   height: auto;
   flex-direction: column;
+  overflow: visible;
 }
 
 /* Different card sizes for varied row layouts */
@@ -1187,19 +1208,24 @@
   flex-direction: column;
   gap: 16px;
   flex: 1;
-  overflow: hidden;
+  overflow: visible;
   position: relative;
+  min-height: 0;
 }
 
 .games-grid.row-view .game-info {
   justify-content: space-between;
   padding: 20px 24px;
+  overflow: visible;
+  min-height: 0;
 }
 
 .games-grid.grid-view .game-info {
   justify-content: flex-start;
   padding: 16px 20px;
   gap: 12px;
+  overflow: visible;
+  min-height: 0;
 }
 
 .game-header {
@@ -1477,7 +1503,7 @@
   /* Uses a more gradual scaling curve for better visual balance */
   --taskbar-height: clamp(50px, calc(50px + (var(--content-width, 1090px) - 1020px) * 0.04), 70px);
   height: var(--taskbar-height);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(8, 9, 12, 0.85);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
@@ -1696,10 +1722,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  min-height: 28px;
+  width: calc(var(--taskbar-height, 60px) * 0.75);
+  height: calc(var(--taskbar-height, 60px) * 0.75);
+  min-width: calc(var(--taskbar-height, 60px) * 0.75);
+  min-height: calc(var(--taskbar-height, 60px) * 0.75);
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 50%;
@@ -1709,6 +1735,7 @@
   margin-left: 8px;
   flex-shrink: 0;
   z-index: 2;
+  box-sizing: border-box;
 }
 
 .taskbar-search-filter:hover {
@@ -2045,6 +2072,21 @@
   padding: 12px 40px 20px 40px;
 }
 
+.category-section-header {
+  margin-bottom: clamp(16px, calc(var(--content-width, 1090px) * 0.02), 24px);
+  padding: 0;
+}
+
+.category-title {
+  font-size: clamp(20px, calc(var(--content-width, 1090px) * 0.025), 28px);
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+  padding: 0;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
 .new-games-row {
   display: flex;
   /* Scale gap proportionally with content width - grows with larger windows */
@@ -2052,6 +2094,32 @@
   overflow-x: auto;
   padding-bottom: 8px;
   margin-bottom: 20px;
+  /* Thin scrollbar */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  cursor: grab;
+  user-select: none;
+}
+
+.new-games-row:active {
+  cursor: grabbing;
+}
+
+.new-games-row::-webkit-scrollbar {
+  height: 4px;
+}
+
+.new-games-row::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.new-games-row::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+
+.new-games-row::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .featured-below-grid {
@@ -2085,10 +2153,11 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0;
   border-bottom-right-radius: clamp(8px, calc(var(--content-width, 1090px) * 0.01), 12px);
-  overflow: hidden;
+  overflow: visible;
   position: relative;
   /* Scale height proportionally with content width - grows with larger windows */
-  height: clamp(170px, calc(var(--content-width, 1090px) * 0.18), calc(var(--content-width, 1090px) * 0.33));
+  min-height: clamp(170px, calc(var(--content-width, 1090px) * 0.18), calc(var(--content-width, 1090px) * 0.33));
+  height: auto;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
   display: flex;
   flex-direction: row;
@@ -2241,8 +2310,9 @@
   /* Always show info panel - no hover needed */
   flex: 0 0 clamp(70px, calc(var(--content-width, 1090px) * 0.1), calc(var(--content-width, 1090px) * 0.18));
   width: clamp(70px, calc(var(--content-width, 1090px) * 0.1), calc(var(--content-width, 1090px) * 0.18));
-  height: 100%;
-  overflow: hidden;
+  min-height: 100%;
+  height: auto;
+  overflow: visible;
   /* Use extracted average color from banner as background - darkened */
   background: var(--banner-color, rgba(15, 17, 21, 0.98));
   border-left: 1px solid rgba(255, 255, 255, 0.1);

@@ -458,3 +458,32 @@
     height: 28px;
   }
 }
+
+@media (max-width: 480px) {
+  .title-bar-content {
+    padding: 0;
+  }
+  
+  .app-logo {
+    width: 18px;
+    height: 18px;
+    font-size: 9px;
+  }
+  
+  .title-text {
+    font-size: 11px;
+  }
+  
+  .subtitle-text {
+    font-size: 7px;
+  }
+  
+  .title-decoration {
+    width: 100px;
+  }
+  
+  .title-bar-button {
+    width: 28px;
+    height: 28px;
+  }
+}

@@ -1353,3 +1353,35 @@ svg[data-pause="true"] {
         width: 220px;
     }
 }
+
+.add-category-btn:active {
+    transform: scale(0.95);
+}
+
+.add-category-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.add-category-btn:disabled:hover {
+    background: transparent;
+    transform: none;
+}
+
+.add-category-confirm:hover:not(:disabled) {
+    color: var(--accent-primary, #00c9ff);
+    background: rgba(0, 201, 255, 0.15);
+}
+
+.add-category-cancel:hover {
+    color: rgba(255, 255, 255, 0.9);
+    background: rgba(255, 68, 68, 0.15);
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .sidebar {
+        width: 220px;
+    }
+}

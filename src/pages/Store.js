@@ -39,6 +39,123 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
       localStorage.setItem('storeActiveFilter', activeFilter);
     } catch (_) {}
   }, [activeFilter]);
+
+  // Refs for drag-to-scroll functionality
+  const newGamesRowRef = useRef(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStateRef = useRef({ 
+    startX: 0, 
+    startY: 0,
+    scrollLeft: 0, 
+    hasMoved: false, 
+    startCard: null,
+    isActive: false,
+    isMouseDown: false
+  });
+
+  // Drag-to-scroll handlers
+  const handleMouseDown = (e) => {
+    // Only handle left mouse button
+    if (e.button !== undefined && e.button !== 0) return;
+    
+    // Don't start drag if clicking on interactive elements
+    if (e.target.closest('button') || e.target.closest('a') || e.target.closest('.banner-bookmark')) {
+      return;
+    }
+
+    const container = newGamesRowRef.current;
+    if (!container) return;
+
+    dragStateRef.current.startX = e.pageX;
+    dragStateRef.current.startY = e.pageY;
+    dragStateRef.current.scrollLeft = container.scrollLeft;
+    dragStateRef.current.hasMoved = false;
+    dragStateRef.current.isActive = false;
+    dragStateRef.current.isMouseDown = true;
+    dragStateRef.current.startCard = e.target.closest('.featured-below-card');
+  };
+
+  // Global mouse move and up handlers
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      // Only process if mouse is down on our container
+      if (!dragStateRef.current.isMouseDown || !newGamesRowRef.current) return;
+      
+      const container = newGamesRowRef.current;
+      const deltaX = Math.abs(e.pageX - dragStateRef.current.startX);
+      const deltaY = Math.abs(e.pageY - dragStateRef.current.startY);
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+      
+      // Only activate dragging if mouse moved more than 10px (threshold)
+      if (distance > 10 && !dragStateRef.current.isActive) {
+        dragStateRef.current.isActive = true;
+        setIsDragging(true);
+        container.style.cursor = 'grabbing';
+        container.style.userSelect = 'none';
+        
+        // Prevent card click if we're dragging
+        if (dragStateRef.current.startCard) {
+          dragStateRef.current.startCard.style.pointerEvents = 'none';
+        }
+      }
+      
+      // Only scroll if dragging is active
+      if (dragStateRef.current.isActive) {
+        const x = e.pageX - container.offsetLeft;
+        const walk = (x - (dragStateRef.current.startX - container.offsetLeft)) * 1; // 1:1 scroll speed
+        
+        e.preventDefault();
+        container.scrollLeft = dragStateRef.current.scrollLeft - walk;
+        dragStateRef.current.hasMoved = true;
+      }
+    };
+
+    const handleMouseUp = (e) => {
+      // Only process if mouse was down on our container
+      if (!dragStateRef.current.isMouseDown) return;
+      
+      const wasDragging = dragStateRef.current.isActive;
+      const startCard = dragStateRef.current.startCard;
+      
+      // Reset all drag state FIRST
+      dragStateRef.current.isMouseDown = false;
+      dragStateRef.current.isActive = false;
+      dragStateRef.current.hasMoved = false;
+      dragStateRef.current.startCard = null;
+      setIsDragging(false);
+      
+      // Reset container styles
+      if (newGamesRowRef.current) {
+        newGamesRowRef.current.style.cursor = 'grab';
+        newGamesRowRef.current.style.userSelect = '';
+      }
+      
+      // Re-enable pointer events on card
+      if (startCard) {
+        if (wasDragging) {
+          // Prevent click if we dragged
+          e.preventDefault();
+          e.stopPropagation();
+          // Re-enable pointer events immediately
+          startCard.style.pointerEvents = '';
+        } else {
+          // Not dragging, allow normal click - don't prevent default
+          startCard.style.pointerEvents = '';
+        }
+      }
+    };
+
+    // Always add listeners - they check isMouseDown internally
+    document.addEventListener('mousemove', handleMouseMove, { passive: false });
+    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('mouseleave', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mouseleave', handleMouseUp);
+    };
+  }, []); // Empty dependency array - we use refs for state
   
   // Media slideshow state
   const [currentMediaIndex, setCurrentMediaIndex] = useState(0);
@@ -486,13 +603,13 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
     const load = async () => {
       try {
         // Get all games from all users for the Store (shared marketplace)
-        const allGames = getAllUsersData('customGames');
+        const allGames = await getAllUsersData('customGames');
         
         // Filter to only show published games
-        const publishedGames = allGames.filter(game => {
+        const publishedGames = Array.isArray(allGames) ? allGames.filter(game => {
           const status = game.status || game.fullFormData?.status || 'draft';
           return status === 'public' || status === 'published';
-        });
+        }) : [];
         
         // Remove duplicates based on gameId (keep first occurrence)
         const uniqueGamesMap = new Map();
@@ -525,8 +642,8 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
         setCustomGames(existingGames);
         
         // Load current user's games to check ownership
-        const myGames = getUserData('customGames', []);
-        setMyCustomGames(myGames);
+        const myGames = await getUserData('customGames', []);
+        setMyCustomGames(Array.isArray(myGames) ? myGames : []);
       } catch (_) {
         setCustomGames([]);
         setMyCustomGames([]);
@@ -1259,8 +1376,10 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
           onMouseEnter={() => setIsBannerHovered(true)}
           onMouseLeave={() => setIsBannerHovered(false)}
           onClick={() => {
-            if (safeFeaturedGame.id && safeFeaturedGame.id !== 'none') {
-              navigate(`/store/game/${safeFeaturedGame.id}`);
+            // Use original gameId or id if available, otherwise use normalized id
+            const gameId = safeFeaturedGame.original?.gameId || safeFeaturedGame.original?.id || safeFeaturedGame.id;
+            if (gameId && gameId !== 'none') {
+              navigate(`/store/game/${gameId}`);
             }
           }}
           style={{ 
@@ -1614,16 +1733,6 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                     <X size={14} />
                   </button>
                 )}
-                  <button 
-                    className="taskbar-search-filter"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      // TODO: Open filter menu
-                    }}
-                    title="Filter"
-                  >
-                    <SlidersHorizontal size={16} />
-                  </button>
                 </div>
               </div>
             </div>
@@ -1633,17 +1742,43 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
         {customGames && customGames.length > 0 && (
           <div className="featured-below">
             {/* New games - horizontal scroll */}
-            <div className="new-games-row">
-              {getFilteredGames(customGames.map((g, i) => normalizeGame(g, i))).slice(0, 10).map((g) => (
+            {(() => {
+              const allGames = customGames.map((g, i) => normalizeGame(g, i));
+              const newGames = allGames.slice(0, 10);
+              const trendingGames = allGames.filter(g => {
+                const stats = getGameStats(g);
+                return stats.trending.startsWith('+');
+              });
+              const freeGames = allGames.filter(g => getPriceValue(g) === 0);
+              const bookmarkedGamesList = allGames.filter(g => bookmarkedGames.has(g.id));
+              const remainingGames = allGames.slice(10);
+
+              return (
+                <>
+                  {/* New Releases */}
+                  {newGames.length > 0 && (
+                    <>
+                      <div className="category-section-header">
+                        <h2 className="category-title">New Releases</h2>
+                      </div>
+                      <div 
+                        className="new-games-row"
+                        ref={newGamesRowRef}
+                        onMouseDown={handleMouseDown}
+                        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+                      >
+                        {newGames.map((g) => (
                 <div 
                   key={`new-${g.id}`} 
                   className="featured-below-card"
                   onClick={() => {
-                    if (g.id) {
-                      navigate(`/store/game/${g.id}`);
+                    // Use original gameId or id if available, otherwise use normalized id
+                    const gameId = g.original?.gameId || g.original?.id || g.id;
+                    if (gameId) {
+                      navigate(`/store/game/${gameId}`);
                     }
                   }}
-                  style={{ cursor: g.id ? 'pointer' : 'default' }}
+                  style={{ cursor: (g.original?.gameId || g.original?.id || g.id) ? 'pointer' : 'default' }}
                 >
                   <div className="featured-below-banner">
                     {g.banner ? (
@@ -1763,17 +1898,22 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
             </div>
 
             {/* Older games - alternating grid */}
+            <div className="category-section-header">
+              <h2 className="category-title">All Games</h2>
+            </div>
             <div className="featured-older-grid">
               {getFilteredGames(customGames.map((g, i) => normalizeGame(g, i))).slice(10).map((g) => (
                 <div 
                   key={g.id} 
                   className="featured-below-card"
                   onClick={() => {
-                    if (g.id) {
-                      navigate(`/store/game/${g.id}`);
+                    // Use original gameId or id if available, otherwise use normalized id
+                    const gameId = g.original?.gameId || g.original?.id || g.id;
+                    if (gameId) {
+                      navigate(`/store/game/${gameId}`);
                     }
                   }}
-                  style={{ cursor: g.id ? 'pointer' : 'default' }}
+                  style={{ cursor: (g.original?.gameId || g.original?.id || g.id) ? 'pointer' : 'default' }}
                 >
                   <div className="featured-below-banner">
                     {g.banner ? (
@@ -1902,8 +2042,13 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
       </div>

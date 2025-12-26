@@ -299,8 +299,30 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
           // User is not logged in (ghost mode) - open auth window
           console.log('⚠️ User is not logged in (ghost mode) - opening auth window');
           const email = user.email || user.username || '';
-          const authResult = await api?.openAuthWindow?.(email);
-          if (!authResult || !authResult.success) {
+          
+          if (!api || !api.openAuthWindow) {
+            console.error('❌ Electron API not available or openAuthWindow not found');
+            // Fallback: navigate to auth
+            if (window.location) {
+              window.location.hash = email 
+                ? `/auth?addAccount=true&email=${encodeURIComponent(email)}`
+                : '/auth?addAccount=true';
+            }
+            return;
+          }
+          
+          try {
+            const authResult = await api.openAuthWindow(email);
+            if (!authResult || !authResult.success) {
+              // Fallback: navigate to auth
+              if (window.location) {
+                window.location.hash = email 
+                  ? `/auth?addAccount=true&email=${encodeURIComponent(email)}`
+                  : '/auth?addAccount=true';
+              }
+            }
+          } catch (error) {
+            console.error('❌ Error opening auth window:', error);
             // Fallback: navigate to auth
             if (window.location) {
               window.location.hash = email 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ShoppingCart, Plus, Minus, ShoppingBag, Eye, EyeOff, Grid, List, ArrowLeft, Crown, TrendingUp, TrendingDown, Zap, Clock, Star, Users, Flame, ArrowRight, Sparkles, BarChart3, DollarSign, TrendingUp as TrendingUpIcon, PieChart, Target, Award, Activity, ArrowUpRight, ArrowDownRight, FileText, CheckCircle2, UserPlus, Search, X, ChevronLeft, RotateCw, RotateCcw, Maximize2, Minimize2, GitCompare, Flag, CheckSquare, Square } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, ShoppingBag, Eye, EyeOff, Grid, List, ArrowLeft, Crown, TrendingUp, TrendingDown, Zap, Clock, Star, Users, Flame, ArrowRight, Sparkles, BarChart3, DollarSign, TrendingUp as TrendingUpIcon, PieChart, Target, Award, Activity, ArrowUpRight, ArrowDownRight, FileText, CheckCircle2, UserPlus, Search, X, ChevronLeft, RotateCw, RotateCcw, Maximize2, Minimize2, GitCompare, Flag, CheckSquare, Square, SlidersHorizontal } from 'lucide-react';
 import { getUserData, saveUserData, getAllUsersData } from '../utils/UserDataManager';
 import Item3DView from '../components/Item3DView';
 import './Market.css';
@@ -90,11 +90,19 @@ const Market = () => {
   const [selectedGame, setSelectedGame] = useState(null);
   const [selectedTab, setSelectedTab] = useState('items');
   const [sortBy, setSortBy] = useState('price-low');
-  const [rarityFilter, setRarityFilter] = useState('all');
+  const [rarityFilter, setRarityFilter] = useState(new Set(['all'])); // Multiple choice
   const [viewMode, setViewMode] = useState('grid');
   const [itemSearch, setItemSearch] = useState('');
-  const [priceFilter, setPriceFilter] = useState('all');
+  const [priceFilter, setPriceFilter] = useState(new Set(['all'])); // Multiple choice
+  const [selectedFilters, setSelectedFilters] = useState({
+    rarity: new Set(['all']),
+    price: new Set(['all']),
+    sort: 'price-low'
+  });
   const [watchedItems, setWatchedItems] = useState(new Set());
+  const [isSearchMode, setIsSearchMode] = useState(false);
+  const searchInputRef = useRef(null);
+  const searchWrapperRef = useRef(null);
   const [showSellModal, setShowSellModal] = useState(false);
   const [showQuickBuyModal, setShowQuickBuyModal] = useState(false);
   const [showItemDetailModal, setShowItemDetailModal] = useState(false);
@@ -200,14 +208,18 @@ const Market = () => {
   const [marketView, setMarketView] = useState('browse'); // browse, petitions, featured, trending, favorites, stats
   const [customGames, setCustomGames] = useState([]);
   const [watchedGames, setWatchedGames] = useState(new Set());
+  const [currentMarketItems, setCurrentMarketItems] = useState([]);
   const [expandedCards, setExpandedCards] = useState(new Set());
-  const [petitions, setPetitions] = useState(() => {
-    try {
-      return getUserData('marketPetitions', {});
-    } catch (e) {
-      return {};
-    }
-  });
+  
+  // Virtual Scrolling State for Market Cards
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 20 }); // Start with first 20 items
+  const gamesGridRef = useRef(null);
+  const gamesGridContainerRef = useRef(null);
+  const INITIAL_LOAD_COUNT = 20; // Load first 20 items initially
+  const MAX_VISIBLE_ITEMS = 30; // Maximum items to keep in memory
+  const ITEMS_PER_LOAD = 10; // Load 10 more items when scrolling
+  const scrollThrottleRef = useRef(null);
+  const [petitions, setPetitions] = useState({});
   const [showCreatePetitionForm, setShowCreatePetitionForm] = useState(false);
   const [petitionSearchQuery, setPetitionSearchQuery] = useState('');
   const [selectedPetitionGame, setSelectedPetitionGame] = useState(null);
@@ -281,10 +293,9 @@ const Market = () => {
     }
     
     // Filter out items that are already listed in the marketplace
-    if (selectedGame) {
+    if (selectedGame && Array.isArray(currentMarketItems)) {
       const gameId = selectedGame.id || selectedGame.gameId;
       if (gameId) {
-        const currentMarketItems = getUserData(`marketItems_${gameId}`, []);
         const listedItemIds = new Set(
           currentMarketItems
             .filter(mi => mi.status === 'active')
@@ -299,7 +310,7 @@ const Market = () => {
     }
     
     return filtered;
-  }, [allInventoryItems, inventorySearch, inventoryGameFilter, inventoryRarityFilter, selectedGame, marketItemsRefresh]);
+  }, [allInventoryItems, inventorySearch, inventoryGameFilter, inventoryRarityFilter, selectedGame, marketItemsRefresh, currentMarketItems]);
   
   // Refresh inventory on storage changes
   useEffect(() => {
@@ -327,13 +338,14 @@ const Market = () => {
 
   // Handle banner collapsing on scroll
   useEffect(() => {
-    const itemsGrid = itemsGridRef.current;
-    if (!itemsGrid || !selectedGame) return;
+    // Use market-content-area as scroll container
+    const scrollContainer = document.querySelector('.market-content-area');
+    if (!scrollContainer || !selectedGame) return;
 
     let lastScrollTop = 0;
 
     const handleScroll = () => {
-      const scrollTop = itemsGrid.scrollTop;
+      const scrollTop = scrollContainer.scrollTop;
       const initialHeight = 300;
       const minHeight = 60; // Minimum height for back button visibility
       
@@ -348,10 +360,10 @@ const Market = () => {
       lastScrollTop = scrollTop;
     };
 
-    itemsGrid.addEventListener('scroll', handleScroll, { passive: true });
+    scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
     
     return () => {
-      itemsGrid.removeEventListener('scroll', handleScroll);
+      scrollContainer.removeEventListener('scroll', handleScroll);
     };
   }, [selectedGame]);
 
@@ -478,20 +490,21 @@ const Market = () => {
   }, [windowWidth, responsiveSidebarWidth]);
   
   // Investments data loaded from account-separated storage
-  const [investments] = useState(() => {
-    try {
-      return getUserData('marketInvestments', {});
-    } catch (e) {
-      return {};
-    }
-  });
+  const [investments, setInvestments] = useState({});
 
   // Load all games with marketplace enabled from all users (for Market browse view)
   useEffect(() => {
     const loadCustomGames = async () => {
       try {
         // Get all games from all users for the Market (shared marketplace)
-        const allGames = getAllUsersData('customGames');
+        const allGames = await getAllUsersData('customGames');
+        
+        // Ensure allGames is an array
+        if (!Array.isArray(allGames)) {
+          console.warn('getAllUsersData did not return an array, using empty array');
+          setCustomGames([]);
+          return;
+        }
         
         // Filter to only show published games with marketplace enabled
         const marketGames = allGames.filter(game => {
@@ -806,6 +819,111 @@ const Market = () => {
     return sorted;
   }, [gamesWithMarketsRaw]);
 
+  // Get current games list based on marketView (must be after gamesWithMarkets, trendingGames, topMarketsGames)
+  const currentGamesList = useMemo(() => {
+    if (marketView === 'trending') return trendingGames;
+    if (marketView === 'featured') return topMarketsGames;
+    return gamesWithMarkets;
+  }, [marketView, trendingGames, topMarketsGames, gamesWithMarkets]);
+  
+  // Reset visible range when marketView changes
+  useEffect(() => {
+    setVisibleRange({ start: 0, end: Math.min(INITIAL_LOAD_COUNT, currentGamesList.length) });
+  }, [marketView, currentGamesList.length]);
+
+  // Virtual Scrolling: Handle scroll events to load/unload items
+  useEffect(() => {
+    // Use market-content-area as scroll container
+    const scrollContainer = document.querySelector('.market-content-area');
+    const grid = gamesGridRef.current;
+    if (!scrollContainer || !grid || currentGamesList.length === 0) return;
+    
+    const handleScroll = () => {
+      if (scrollThrottleRef.current) return;
+      
+      scrollThrottleRef.current = requestAnimationFrame(() => {
+        const scrollTop = scrollContainer.scrollTop;
+        const containerHeight = scrollContainer.clientHeight;
+        
+        // Get actual card dimensions from the grid
+        const gridComputedStyle = window.getComputedStyle(grid);
+        const gap = parseFloat(gridComputedStyle.gap) || 16;
+        const paddingTop = parseFloat(gridComputedStyle.paddingTop) || 24;
+        
+        // Estimate card height based on aspect ratio (2/3) and width
+        // Card width is approximately clamp(150px, calc(var(--content-width, 1020px) * 0.12), 200px)
+        const contentWidth = scrollContainer.clientWidth - (parseFloat(gridComputedStyle.paddingLeft) || 32) * 2;
+        const minCardWidth = Math.max(150, Math.min(200, contentWidth * 0.12));
+        const itemsPerRow = Math.floor(contentWidth / (minCardWidth + gap)) || 5;
+        const cardHeight = minCardWidth * 1.5; // aspect-ratio 2/3 means height = width * 1.5
+        const rowHeight = cardHeight + gap;
+        
+        // Get the offset of the grid container from the top of the scroll container
+        const gridContainer = gamesGridContainerRef.current;
+        if (!gridContainer) return;
+        const gridOffsetTop = gridContainer.getBoundingClientRect().top - scrollContainer.getBoundingClientRect().top + scrollContainer.scrollTop;
+        
+        // Calculate which rows are visible (with buffer)
+        const bufferRows = 2; // Load 2 rows before and after
+        const relativeScrollTop = scrollTop - gridOffsetTop;
+        const startRow = Math.max(0, Math.floor((relativeScrollTop - paddingTop) / rowHeight) - bufferRows);
+        const endRow = Math.min(
+          Math.ceil(currentGamesList.length / itemsPerRow),
+          Math.ceil((relativeScrollTop + containerHeight - paddingTop) / rowHeight) + bufferRows
+        );
+        
+        const newStart = Math.max(0, startRow * itemsPerRow);
+        const newEnd = Math.min(currentGamesList.length, endRow * itemsPerRow);
+        
+        // Only update if range changed significantly (to avoid too many re-renders)
+        setVisibleRange(prev => {
+          const rangeDiff = Math.abs(prev.start - newStart) + Math.abs(prev.end - newEnd);
+          if (rangeDiff > ITEMS_PER_LOAD || newStart < prev.start || newEnd > prev.end) {
+            // Limit the range to MAX_VISIBLE_ITEMS
+            const rangeSize = newEnd - newStart;
+            if (rangeSize > MAX_VISIBLE_ITEMS) {
+              // If scrolling down, keep items at the end
+              if (scrollTop > (prev.start / itemsPerRow) * rowHeight) {
+                return { start: Math.max(0, newEnd - MAX_VISIBLE_ITEMS), end: newEnd };
+              } else {
+                // If scrolling up, keep items at the start
+                return { start: newStart, end: Math.min(currentGamesList.length, newStart + MAX_VISIBLE_ITEMS) };
+              }
+            }
+            return { start: newStart, end: newEnd };
+          }
+          return prev;
+        });
+        
+        scrollThrottleRef.current = null;
+      });
+    };
+    
+    scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
+    
+    // Initial calculation
+    handleScroll();
+    
+    // Also recalculate on resize
+    const handleResize = () => {
+      handleScroll();
+    };
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      scrollContainer.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleResize);
+      if (scrollThrottleRef.current) {
+        cancelAnimationFrame(scrollThrottleRef.current);
+      }
+    };
+  }, [currentGamesList.length, marketView]);
+  
+  // Get visible games slice
+  const visibleGames = useMemo(() => {
+    return currentGamesList.slice(visibleRange.start, visibleRange.end);
+  }, [currentGamesList, visibleRange]);
+
   // Auto-select game based on URL parameter
   useEffect(() => {
     if (!gameId) {
@@ -821,20 +939,64 @@ const Market = () => {
   }, [gameId, allGamesData]);
 
   // Load market items from account-separated storage
-  const marketItems = React.useMemo(() => {
-    if (!selectedGame) return [];
+  const [marketItems, setMarketItems] = useState([]);
+  
+  // Load market items for selected game
+  useEffect(() => {
+    const loadMarketItems = async () => {
+      if (!selectedGame) {
+        setMarketItems([]);
+        return;
+      }
+      
+      try {
+        const gameId = selectedGame.id || selectedGame.gameId;
+        if (!gameId) {
+          setMarketItems([]);
+          return;
+        }
+        
+        const items = await getUserData(`marketItems_${gameId}`, []);
+        setMarketItems(Array.isArray(items) ? items : []);
+      } catch (error) {
+        console.error('Error loading market items:', error);
+        setMarketItems([]);
+      }
+    };
     
-    try {
-      return getUserData(`marketItems_${selectedGame.id}`, []);
-    } catch (_) {
-      return [];
-    }
+    loadMarketItems();
   }, [selectedGame, marketItemsRefresh]);
 
+  const [marketTransactions, setMarketTransactions] = useState([]);
+  
+  // Load market data (investments, transactions, petitions)
+  useEffect(() => {
+    const loadMarketData = async () => {
+      try {
+        const [investmentsData, transactionsData, petitionsData] = await Promise.all([
+          getUserData('marketInvestments', {}),
+          getUserData('marketTransactions', []),
+          getUserData('marketPetitions', {})
+        ]);
+        
+        setInvestments(typeof investmentsData === 'object' && investmentsData !== null ? investmentsData : {});
+        setMarketTransactions(Array.isArray(transactionsData) ? transactionsData : []);
+        setPetitions(typeof petitionsData === 'object' && petitionsData !== null ? petitionsData : {});
+      } catch (error) {
+        console.error('Error loading market data:', error);
+        setInvestments({});
+        setMarketTransactions([]);
+        setPetitions({});
+      }
+    };
+    
+    loadMarketData();
+  }, [marketItemsRefresh]);
+  
   // Calculate market statistics from account-separated storage
   const marketStats = React.useMemo(() => {
     try {
-      const transactions = getUserData('marketTransactions', []);
+      const transactions = Array.isArray(marketTransactions) ? marketTransactions : [];
       const investmentKeys = Object.keys(investments);
       const totalTraded = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
       const totalProfit = transactions.reduce((sum, t) => sum + (t.profit || 0), 0);
@@ -842,7 +1004,7 @@ const Market = () => {
       const investmentReturns = investmentKeys.reduce((sum, key) => sum + (investments[key]?.returns || 0), 0);
       const avgReturn = totalInvested > 0 ? (investmentReturns / totalInvested * 100) : 0;
       const netWorth = totalTraded + investmentReturns;
-      const bestTrade = Math.max(...transactions.map(t => t.profitPercent || 0), 0);
+      const bestTrade = transactions.length > 0 ? Math.max(...transactions.map(t => t.profitPercent || 0), 0) : 0;
       
       return {
         totalProfit,
@@ -874,7 +1036,7 @@ const Market = () => {
         bestTrade: 0
       };
     }
-  }, [investments]);
+  }, [investments, marketTransactions]);
 
   // Handler functions
   const handleTabChange = (tab) => {
@@ -1506,25 +1668,26 @@ const Market = () => {
 
   // Filter and sort items - must be called before any early returns
   const filteredItems = useMemo(() => {
+    if (!Array.isArray(marketItems)) {
+      return [];
+    }
+    
     return marketItems.filter(item => {
-      // Rarity filter
-      const rarityMatch = rarityFilter === 'all' || item.rarity.toLowerCase() === rarityFilter.toLowerCase();
+      // Rarity filter (multiple choice)
+      const rarityMatch = rarityFilter.has('all') || rarityFilter.has(item.rarity.toLowerCase());
       
       // Search filter
       const searchMatch = !itemSearch || item.name.toLowerCase().includes(itemSearch.toLowerCase()) || 
                           (item.seller && item.seller.toLowerCase().includes(itemSearch.toLowerCase()));
       
-      // Price filter
+      // Price filter (multiple choice)
       let priceMatch = true;
-      if (priceFilter !== 'all') {
+      if (!priceFilter.has('all')) {
         const price = item.price || 0;
-        switch (priceFilter) {
-          case 'under-10': priceMatch = price < 10; break;
-          case '10-50': priceMatch = price >= 10 && price <= 50; break;
-          case '50-100': priceMatch = price > 50 && price <= 100; break;
-          case 'over-100': priceMatch = price > 100; break;
-          default: priceMatch = true;
-        }
+        priceMatch = (priceFilter.has('under-10') && price < 10) ||
+                     (priceFilter.has('10-50') && price >= 10 && price <= 50) ||
+                     (priceFilter.has('50-100') && price > 50 && price <= 100) ||
+                     (priceFilter.has('over-100') && price > 100);
       }
       
       return rarityMatch && searchMatch && priceMatch;
@@ -1552,38 +1715,56 @@ const Market = () => {
         <div className="market-main-container">
         {/* Main Content Area */}
         <div className="marketplace-content">
-          {/* Live Activity Ticker - Always at top (except browse) */}
-          {marketView !== 'browse' && (
-            <div 
-              className="marketplace-ticker"
-              style={{ '--content-width': `${contentWidth}px` }}
-            >
-              <div className="ticker-label">
-                <Zap size={14} />
-                <span>Live Activity</span>
+          {/* Live Activity Ticker - Always at top in all views */}
+          <div 
+            className="marketplace-ticker"
+            style={{ '--content-width': `${contentWidth}px` }}
+          >
+            <div className="ticker-label">
+              <span className="live-status-text active">Live</span>
             </div>
-              <div className="ticker-content">
+            <div className="ticker-content">
+              <div className="ticker-content-wrapper">
                 <div className="ticker-item">
                   <span className="ticker-user">Player123</span>
                   <span className="ticker-action">bought</span>
                   <span className="ticker-item-name">Legendary Sword</span>
                   <span className="ticker-price">for $45.99</span>
-            </div>
+                </div>
                 <div className="ticker-item">
                   <span className="ticker-user">TraderPro</span>
                   <span className="ticker-action">listed</span>
                   <span className="ticker-item-name">Rare Armor Set</span>
                   <span className="ticker-price">at $89.50</span>
-            </div>
+                </div>
                 <div className="ticker-item">
                   <span className="ticker-user">Collector2024</span>
                   <span className="ticker-action">sold</span>
                   <span className="ticker-item-name">Epic Shield</span>
                   <span className="ticker-price">for $120.00</span>
+                </div>
+                {/* Duplicate for seamless loop */}
+                <div className="ticker-item">
+                  <span className="ticker-user">Player123</span>
+                  <span className="ticker-action">bought</span>
+                  <span className="ticker-item-name">Legendary Sword</span>
+                  <span className="ticker-price">for $45.99</span>
+                </div>
+                <div className="ticker-item">
+                  <span className="ticker-user">TraderPro</span>
+                  <span className="ticker-action">listed</span>
+                  <span className="ticker-item-name">Rare Armor Set</span>
+                  <span className="ticker-price">at $89.50</span>
+                </div>
+                <div className="ticker-item">
+                  <span className="ticker-user">Collector2024</span>
+                  <span className="ticker-action">sold</span>
+                  <span className="ticker-item-name">Epic Shield</span>
+                  <span className="ticker-price">for $120.00</span>
+                </div>
+              </div>
             </div>
           </div>
-            </div>
-          )}
 
           {/* Stats View */}
           {marketView === 'stats' && (
@@ -2277,38 +2458,7 @@ const Market = () => {
                         </div>
                       </div>
 
-                      {/* Live Activity Ticker - Browse view */}
-                      {marketView === 'browse' && (
-                        <div 
-                          className="marketplace-ticker"
-                          style={{ '--content-width': `${contentWidth}px` }}
-                        >
-                          <div className="ticker-label">
-                            <Zap size={14} />
-                            <span>Live Activity</span>
-                          </div>
-                          <div className="ticker-content">
-                            <div className="ticker-item">
-                              <span className="ticker-user">Player123</span>
-                              <span className="ticker-action">bought</span>
-                              <span className="ticker-item-name">Legendary Sword</span>
-                              <span className="ticker-price">for $45.99</span>
-                            </div>
-                            <div className="ticker-item">
-                              <span className="ticker-user">TraderPro</span>
-                              <span className="ticker-action">listed</span>
-                              <span className="ticker-item-name">Rare Armor Set</span>
-                              <span className="ticker-price">at $89.50</span>
-                            </div>
-                            <div className="ticker-item">
-                              <span className="ticker-user">Collector2024</span>
-                              <span className="ticker-action">sold</span>
-                              <span className="ticker-item-name">Epic Shield</span>
-                              <span className="ticker-price">for $120.00</span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
+
                     </>
                   )}
 
@@ -2348,19 +2498,49 @@ const Market = () => {
                     </div>
                   )}
 
-                  {/* Games Grid */}
-                  <div className="games-selection-grid">
-                    {(marketView === 'trending' ? trendingGames : 
-                      marketView === 'featured' ? topMarketsGames : 
-                      gamesWithMarkets).map(game => {
-                      const rankClass = game.marketRank <= 3 ? `rank-${game.marketRank}` : '';
-                      const isWatched = watchedGames.has(game.id);
+                  {/* Games Grid with Virtual Scrolling */}
+                  <div 
+                    ref={gamesGridContainerRef}
+                    className="games-selection-grid-container"
+                    style={{ 
+                      overflow: 'visible',
+                      position: 'relative'
+                    }}
+                  >
+                    {/* Top Spacer for items before visible range */}
+                    {visibleRange.start > 0 && (() => {
+                      // Calculate spacer height based on actual card dimensions
+                      const contentWidth = typeof window !== 'undefined' ? window.innerWidth - 260 : 1020;
+                      const minCardWidth = Math.max(150, Math.min(200, contentWidth * 0.12));
+                      const gap = Math.max(16, Math.min(32, contentWidth * 0.024));
+                      const itemsPerRow = Math.floor((contentWidth - 64) / (minCardWidth + gap)) || 5;
+                      const cardHeight = minCardWidth * 1.5;
+                      const rowHeight = cardHeight + gap;
+                      const rowsBefore = Math.ceil(visibleRange.start / itemsPerRow);
                       return (
-                        <div
-                          key={game.id}
-                          className={`game-select-card ${rankClass}`}
-                          onClick={() => navigate(`/game/${game.id}/market`)}
-            >
+                        <div 
+                          className="virtual-scroll-spacer"
+                          style={{ 
+                            height: `${rowsBefore * rowHeight}px`,
+                            gridColumn: '1 / -1'
+                          }}
+                        />
+                      );
+                    })()}
+                    
+                    <div 
+                      ref={gamesGridRef}
+                      className="games-selection-grid"
+                    >
+                      {visibleGames.map((game, index) => {
+                        const rankClass = game.marketRank <= 3 ? `rank-${game.marketRank}` : '';
+                        const isWatched = watchedGames.has(game.id);
+                        return (
+                          <div
+                            key={game.id}
+                            className={`game-select-card ${rankClass}`}
+                            onClick={() => navigate(`/game/${game.id}/market`)}
+                          >
               {/* Banner Section */}
               <div className="game-select-banner">
                 <button 
@@ -2413,18 +2593,121 @@ const Market = () => {
                 </div>
             </div>
           );
-                    })}
-          </div>
+                      })}
+                    </div>
+                    
+                    {/* Bottom Spacer for items after visible range */}
+                    {visibleRange.end < currentGamesList.length && (() => {
+                      // Calculate spacer height based on actual card dimensions
+                      const contentWidth = typeof window !== 'undefined' ? window.innerWidth - 260 : 1020;
+                      const minCardWidth = Math.max(150, Math.min(200, contentWidth * 0.12));
+                      const gap = Math.max(16, Math.min(32, contentWidth * 0.024));
+                      const itemsPerRow = Math.floor((contentWidth - 64) / (minCardWidth + gap)) || 5;
+                      const cardHeight = minCardWidth * 1.5;
+                      const rowHeight = cardHeight + gap;
+                      const itemsAfter = currentGamesList.length - visibleRange.end;
+                      const rowsAfter = Math.ceil(itemsAfter / itemsPerRow);
+                      return (
+                        <div 
+                          className="virtual-scroll-spacer"
+                          style={{ 
+                            height: `${rowsAfter * rowHeight}px`,
+                            gridColumn: '1 / -1'
+                          }}
+                        />
+                      );
+                    })()}
+                  </div>
                 </>
               )}
             </>
           )}
         </div>
 
-        {/* Right Sidebar - Works throughout market menu */}
+        {/* Bottom Navigation Container - Search Button, Island, Close Button */}
+        <div className="market-bottom-nav-container">
+          {/* Search Button - Left of Island */}
+          {!isSearchMode && (
+            <button 
+              className="market-search-trigger-button"
+              onClick={() => {
+                setIsSearchMode(true);
+                setTimeout(() => {
+                  if (searchInputRef.current) {
+                    searchInputRef.current.focus();
+                    searchInputRef.current.select();
+                  }
+                }, 50);
+              }}
+            >
+              <Search size={18} />
+            </button>
+          )}
+          
+          {/* Bottom Navigation Island / Search Bar */}
+          <div className={`market-bottom-nav-island ${isSearchMode ? 'search-mode' : ''}`}>
+            {!isSearchMode ? (
+              <div className="market-bottom-nav-content">
+                <button 
+                  className={`market-bottom-nav-item market-bottom-nav-main ${marketView === 'browse' ? 'active' : ''}`}
+                  onClick={() => setMarketView('browse')}
+                >
+                  <ShoppingBag size={17} />
+                  <span>Browse</span>
+                </button>
+                <button 
+                  className={`market-bottom-nav-item ${marketView === 'favorites' ? 'active' : ''}`}
+                  onClick={() => setMarketView('favorites')}
+                >
+                  <Eye size={17} />
+                  <span>Watchlist</span>
+                </button>
+                <button 
+                  className={`market-bottom-nav-item ${marketView === 'stats' ? 'active' : ''}`}
+                  onClick={() => setMarketView('stats')}
+                >
+                  <BarChart3 size={17} />
+                  <span>Analytics</span>
+                </button>
+                <button 
+                  className={`market-bottom-nav-item ${marketView === 'petitions' ? 'active' : ''}`}
+                  onClick={() => setMarketView('petitions')}
+                >
+                  <FileText size={17} />
+                  <span>Petitions</span>
+                </button>
+              </div>
+            ) : (
+              <div className="market-search-island-content">
+                <Search size={16} className="market-search-island-icon" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Search items..."
+                  value={itemSearch}
+                  onChange={(e) => setItemSearch(e.target.value)}
+                  className="market-search-island-input"
+                />
+                <button
+                  className="market-search-island-clear"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsSearchMode(false);
+                    setItemSearch('');
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Sidebar - Hidden */}
         <div 
           className="market-sidebar-right"
           style={{ 
+            display: 'none',
             '--window-width': windowWidth,
             '--sidebar-scale': Math.max(0.8, Math.min(1.2, windowWidth / 1120))
           }}
@@ -2982,7 +3265,7 @@ const Market = () => {
                         <div className="filters-bar-right">
                           <div className="items-count">
                             {sortedItems.length} {sortedItems.length === 1 ? 'item' : 'items'}
-                            {itemSearch || rarityFilter !== 'all' || priceFilter !== 'all' ? (
+                            {itemSearch || !rarityFilter.has('all') || !priceFilter.has('all') ? (
                               <span className="items-count-filtered"> (filtered)</span>
                             ) : null}
                           </div>
@@ -3242,6 +3525,8 @@ const Market = () => {
               </div>
             </div>
             )}
+            
+            
         {/* Market Stats Bar */}
         <div className="market-stats-bar">
           <div className="stats-wrapper">
@@ -3346,7 +3631,7 @@ const Market = () => {
             </button>
             <div className="items-count">
               {sortedItems.length} {sortedItems.length === 1 ? 'item' : 'items'}
-              {itemSearch || rarityFilter !== 'all' || priceFilter !== 'all' ? (
+              {itemSearch || !rarityFilter.has('all') || !priceFilter.has('all') ? (
                 <span className="items-count-filtered"> (filtered)</span>
               ) : null}
             </div>
@@ -3452,15 +3737,101 @@ const Market = () => {
         )}
         </div>
 
-        {/* Sell Item Button */}
-        <div className="sell-button-wrapper">
-          <button className="sell-item-btn" onClick={handleSellItem}>
-            <Plus size={18} />
-            <span>Sell Item</span>
-          </button>
-        </div>
           </div>
         </div>
+        
+        {/* Bottom Navigation Container - Search Button, Island, Close Button - Also show in item view */}
+        <div className="market-bottom-nav-container">
+          {/* Search Button - Left of Island */}
+          {!isSearchMode && (
+            <button 
+              className="market-search-trigger-button"
+              onClick={() => {
+                setIsSearchMode(true);
+                setTimeout(() => {
+                  if (searchInputRef.current) {
+                    searchInputRef.current.focus();
+                    searchInputRef.current.select();
+                  }
+                }, 50);
+              }}
+            >
+              <Search size={18} />
+            </button>
+          )}
+          
+          {/* Bottom Navigation Island / Search Bar */}
+          <div className={`market-bottom-nav-island ${isSearchMode ? 'search-mode' : ''}`}>
+            {!isSearchMode ? (
+              <div className="market-bottom-nav-content">
+                <button 
+                  className={`market-bottom-nav-item market-bottom-nav-main ${marketView === 'browse' ? 'active' : ''}`}
+                  onClick={() => {
+                    setSelectedGame(null);
+                    setMarketView('browse');
+                    navigate('/market');
+                  }}
+                >
+                  <Search size={17} />
+                  <span>Browse</span>
+                </button>
+                <button 
+                  className={`market-bottom-nav-item ${marketView === 'favorites' ? 'active' : ''}`}
+                  onClick={() => setMarketView('favorites')}
+                >
+                  <Eye size={17} />
+                  <span>Watchlist</span>
+                </button>
+                <button 
+                  className={`market-bottom-nav-item ${marketView === 'stats' ? 'active' : ''}`}
+                  onClick={() => setMarketView('stats')}
+                >
+                  <BarChart3 size={17} />
+                  <span>Analytics</span>
+                </button>
+                <button 
+                  className={`market-bottom-nav-item ${marketView === 'petitions' ? 'active' : ''}`}
+                  onClick={() => setMarketView('petitions')}
+                >
+                  <FileText size={17} />
+                  <span>Petitions</span>
+                </button>
+              </div>
+            ) : (
+              <div className="market-search-island-content">
+                <Search size={16} className="market-search-island-icon" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Search items..."
+                  value={itemSearch}
+                  onChange={(e) => setItemSearch(e.target.value)}
+                  className="market-search-island-input"
+                />
+                <button
+                  className="market-search-island-clear"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsSearchMode(false);
+                    setItemSearch('');
+                  }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* Floating Sell Item Button - Right Side */}
+        <button 
+          className="market-sell-item-floating-btn"
+          onClick={handleSellItem}
+          title="Sell Item"
+        >
+          <Plus size={20} />
+          <span className="market-sell-item-floating-btn-text">Sell Items</span>
+        </button>
         </div>
       )}
         </div>
@@ -3897,86 +4268,96 @@ const Market = () => {
 
             <div className="sell-modal-footer">
               <button onClick={() => setSellStep(1)}>Back</button>
-              <button className="confirm-btn" onClick={() => {
+              <button className="confirm-btn" onClick={async () => {
                 if (!selectedGame) return;
                 
                 const gameId = selectedGame.id || selectedGame.gameId;
                 if (!gameId) return;
                 
-                // Get current market items
-                const currentMarketItems = getUserData(`marketItems_${gameId}`, []);
-                
-                // Check for duplicate listings (items already listed)
-                const listedItemIds = new Set(
-                  currentMarketItems
-                    .filter(mi => mi.status === 'active')
-                    .map(mi => `${mi.gameId || gameId}_${mi.originalItemId || mi.id}`)
-                );
-                
-                // Filter out items that are already listed
-                const itemsToList = selectedItems.filter(item => {
-                  const itemKey = `${item.gameId || gameId}_${item.id}`;
-                  return !listedItemIds.has(itemKey);
-                });
-                
-                if (itemsToList.length === 0) {
-                  alert('All selected items are already listed in the marketplace!');
-                  return;
-                }
-                
-                if (itemsToList.length < selectedItems.length) {
-                  const skipped = selectedItems.length - itemsToList.length;
-                  alert(`${skipped} item(s) were skipped because they are already listed.`);
-                }
-                
-                // Create new market listings
-                const timestamp = Date.now();
-                const newListings = itemsToList.map(item => {
-                  const price = itemPrices[item.id] !== undefined 
-                    ? parseFloat(itemPrices[item.id]) || 0 
-                    : (item.marketPrice || 0);
+                try {
+                  // Get current market items
+                  const marketItems = await getUserData(`marketItems_${gameId}`, []);
+                  const currentMarketItemsArray = Array.isArray(marketItems) ? marketItems : [];
                   
-                  return {
-                    id: `${item.gameId || gameId}_${item.id}_${timestamp}_${Math.random().toString(36).substr(2, 9)}`,
-                    originalItemId: item.id,
-                    gameId: item.gameId || gameId,
-                    name: item.name || 'Unnamed Item',
-                    description: item.description || '',
-                    imageUrl: item.imageUrl || null,
-                    image: item.image || '📦',
-                    rarity: item.rarity || 'common',
-                    type: item.type || 'Item',
-                    category: item.category || 'Item',
-                    price: price,
-                    seller: getUserData('username', 'Unknown'),
-                    listedAt: timestamp,
-                    status: 'active'
-                  };
-                });
-                
-                // Add new listings to market
-                const updatedMarketItems = [...currentMarketItems, ...newListings];
-                saveUserData(`marketItems_${gameId}`, updatedMarketItems);
-                
-                // Remove items from inventory (only items that were actually listed)
-                itemsToList.forEach(item => {
-                  const itemGameId = item.gameId || gameId;
-                  const inventory = getUserData(`inventory_${itemGameId}`, []);
-                  const updatedInventory = inventory.filter(invItem => 
-                    !(invItem.id === item.id && invItem.gameId === itemGameId)
+                  // Check for duplicate listings (items already listed)
+                  const listedItemIds = new Set(
+                    currentMarketItemsArray
+                      .filter(mi => mi.status === 'active')
+                      .map(mi => `${mi.gameId || gameId}_${mi.originalItemId || mi.id}`)
                   );
-                  saveUserData(`inventory_${itemGameId}`, updatedInventory);
-                });
-                
-                // Refresh inventory and market items
-                setInventoryRefresh(prev => prev + 1);
-                setMarketItemsRefresh(prev => prev + 1);
-                
-                // Close modal and reset
-                setShowSellModal(false);
-                setSellStep(1);
-                setSelectedItems([]);
-                setItemPrices({});
+                  
+                  // Filter out items that are already listed
+                  const itemsToList = selectedItems.filter(item => {
+                    const itemKey = `${item.gameId || gameId}_${item.id}`;
+                    return !listedItemIds.has(itemKey);
+                  });
+                  
+                  if (itemsToList.length === 0) {
+                    alert('All selected items are already listed in the marketplace!');
+                    return;
+                  }
+                  
+                  if (itemsToList.length < selectedItems.length) {
+                    const skipped = selectedItems.length - itemsToList.length;
+                    alert(`${skipped} item(s) were skipped because they are already listed.`);
+                  }
+                  
+                  // Get username
+                  const username = await getUserData('username', 'Unknown');
+                  
+                  // Create new market listings
+                  const timestamp = Date.now();
+                  const newListings = itemsToList.map(item => {
+                    const price = itemPrices[item.id] !== undefined 
+                      ? parseFloat(itemPrices[item.id]) || 0 
+                      : (item.marketPrice || 0);
+                    
+                    return {
+                      id: `${item.gameId || gameId}_${item.id}_${timestamp}_${Math.random().toString(36).substr(2, 9)}`,
+                      originalItemId: item.id,
+                      gameId: item.gameId || gameId,
+                      name: item.name || 'Unnamed Item',
+                      description: item.description || '',
+                      imageUrl: item.imageUrl || null,
+                      image: item.image || '📦',
+                      rarity: item.rarity || 'common',
+                      type: item.type || 'Item',
+                      category: item.category || 'Item',
+                      price: price,
+                      seller: username,
+                      listedAt: timestamp,
+                      status: 'active'
+                    };
+                  });
+                  
+                  // Add new listings to market
+                  const updatedMarketItems = [...currentMarketItemsArray, ...newListings];
+                  await saveUserData(`marketItems_${gameId}`, updatedMarketItems);
+                  
+                  // Remove items from inventory (only items that were actually listed)
+                  for (const item of itemsToList) {
+                    const itemGameId = item.gameId || gameId;
+                    const inventory = await getUserData(`inventory_${itemGameId}`, []);
+                    const inventoryArray = Array.isArray(inventory) ? inventory : [];
+                    const updatedInventory = inventoryArray.filter(invItem => 
+                      !(invItem.id === item.id && invItem.gameId === itemGameId)
+                    );
+                    await saveUserData(`inventory_${itemGameId}`, updatedInventory);
+                  }
+                  
+                  // Refresh inventory and market items
+                  setInventoryRefresh(prev => prev + 1);
+                  setMarketItemsRefresh(prev => prev + 1);
+                  
+                  // Close modal and reset
+                  setShowSellModal(false);
+                  setSellStep(1);
+                  setSelectedItems([]);
+                  setItemPrices({});
+                } catch (error) {
+                  console.error('Error listing items:', error);
+                  alert('An error occurred while listing items. Please try again.');
+                }
               }}>
                 Confirm & List ({selectedItems.length} items)
               </button>

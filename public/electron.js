@@ -2738,11 +2738,7 @@ ipcMain.handle('open-pop-out-window', (event, route) => {
     // Generate unique ID for this window
     const windowId = `popout-${++popOutWindowCounter}-${Date.now()}`;
     
-    // Assign next window number
-    windowNumberCounter++;
-    const windowNumber = windowNumberCounter;
-    
-    // Clean up destroyed windows
+    // Clean up destroyed windows first
     for (const [id, window] of popOutWindows.entries()) {
       if (window.isDestroyed()) {
         popOutWindows.delete(id);
@@ -2790,11 +2786,10 @@ ipcMain.handle('open-pop-out-window', (event, route) => {
     // Store window reference with unique ID
     popOutWindow.windowId = windowId;
     popOutWindow.route = route;
-    popOutWindow.windowNumber = windowNumber;
     popOutWindows.set(windowId, popOutWindow);
     
-    // Notify all windows about their window numbers
-    broadcastWindowNumbers();
+    // Renumber all windows sequentially (this will assign the correct number to the new window)
+    renumberWindows();
     
     // Build URL with route
     const startUrl = isDev 
@@ -2873,7 +2868,8 @@ ipcMain.handle('open-pop-out-window', (event, route) => {
     // Clean up when pop-out window closes
     popOutWindow.on('closed', () => {
       popOutWindows.delete(windowId);
-      // Window numbers don't change when a window closes, so no need to broadcast
+      // Renumber all remaining windows sequentially
+      renumberWindows();
     });
     
     if (isDev) {
@@ -2886,6 +2882,34 @@ ipcMain.handle('open-pop-out-window', (event, route) => {
     return { success: false, error: error.message };
   }
 });
+
+// Renumber all windows sequentially (1, 2, 3, ...)
+function renumberWindows() {
+  let currentNumber = 1;
+  
+  // Main window is always number 1
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.windowNumber = 1;
+    currentNumber = 2;
+  }
+  
+  // Renumber all pop-out windows sequentially
+  for (const [id, window] of popOutWindows.entries()) {
+    if (window && !window.isDestroyed()) {
+      window.windowNumber = currentNumber;
+      currentNumber++;
+    } else {
+      // Remove destroyed windows
+      popOutWindows.delete(id);
+    }
+  }
+  
+  // Update counter to match the highest window number
+  windowNumberCounter = currentNumber - 1;
+  
+  // Broadcast updated numbers
+  broadcastWindowNumbers();
+}
 
 // Get window number for a specific window
 function getWindowNumber(webContents) {
@@ -2962,6 +2986,8 @@ ipcMain.handle('close-pop-out-window', (event, routeOrId) => {
         window.close();
       }
       popOutWindows.delete(routeOrId);
+      // Renumber all remaining windows sequentially
+      renumberWindows();
       return { success: true };
     }
     // Try to find by route (for backward compatibility)
@@ -2969,6 +2995,8 @@ ipcMain.handle('close-pop-out-window', (event, routeOrId) => {
       if (window.route === routeOrId && !window.isDestroyed()) {
         window.close();
         popOutWindows.delete(id);
+        // Renumber all remaining windows sequentially
+        renumberWindows();
         return { success: true };
       }
     }

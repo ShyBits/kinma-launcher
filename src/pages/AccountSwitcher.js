@@ -151,9 +151,26 @@ const AccountSwitcherPage = ({ navigate }) => {
             
             // Open auth window with email/username pre-filled
             // IMPORTANT: Don't close account switcher here - let openAuthWindow handle it
-            const authResult = await api?.openAuthWindow?.(email);
-            if (!authResult || !authResult.success) {
-              console.error('Failed to open auth window, using fallback');
+            if (!api || !api.openAuthWindow) {
+              console.error('❌ Electron API not available or openAuthWindow not found');
+              // Fallback: navigate to auth with email in URL
+              window.location.hash = email 
+                ? `/auth?addAccount=true&email=${encodeURIComponent(email)}`
+                : '/auth?addAccount=true';
+              return;
+            }
+            
+            try {
+              const authResult = await api.openAuthWindow(email);
+              if (!authResult || !authResult.success) {
+                console.error('Failed to open auth window, using fallback');
+                // Fallback: navigate to auth with email in URL
+                window.location.hash = email 
+                  ? `/auth?addAccount=true&email=${encodeURIComponent(email)}`
+                  : '/auth?addAccount=true';
+              }
+            } catch (error) {
+              console.error('❌ Error opening auth window:', error);
               // Fallback: navigate to auth with email in URL
               window.location.hash = email 
                 ? `/auth?addAccount=true&email=${encodeURIComponent(email)}`
@@ -349,20 +366,27 @@ const AccountSwitcherPage = ({ navigate }) => {
       onSwitchAccount={switchHandler}
       onAddAccount={async () => {
         const api = window.electronAPI || window.electron;
+        if (!api || !api.openAuthWindow) {
+          console.error('❌ Electron API not available or openAuthWindow not found');
+          // Fallback: navigate to auth route
+          if (window.location) {
+            window.location.hash = '/auth?addAccount=true';
+          }
+          return;
+        }
+        
         try {
           console.log('➕ Add account button clicked - opening auth window');
           
           // Open auth window with empty email (new account)
           // Note: openAuthWindow will close the account switcher window automatically
-          const result = await api?.openAuthWindow?.('');
+          const result = await api.openAuthWindow('');
           
           if (!result || !result.success) {
             console.error('❌ Failed to open auth window, result:', result);
-            // Fallback: try again or show error
-            console.log('⚠️ Retrying auth window open...');
-            const retryResult = await api?.openAuthWindow?.('');
-            if (!retryResult || !retryResult.success) {
-              console.error('❌ Retry also failed - auth window may not be available');
+            // Fallback: navigate to auth route
+            if (window.location) {
+              window.location.hash = '/auth?addAccount=true';
             }
           } else {
             console.log('✅ Auth window opened successfully');
@@ -370,14 +394,9 @@ const AccountSwitcherPage = ({ navigate }) => {
           }
         } catch (error) {
           console.error('❌ Error opening auth window:', error);
-          // Try one more time as fallback
-          try {
-            const retryResult = await api?.openAuthWindow?.('');
-            if (!retryResult || !retryResult.success) {
-              console.error('❌ Fallback retry also failed');
-            }
-          } catch (retryError) {
-            console.error('❌ Fallback retry error:', retryError);
+          // Fallback: navigate to auth route
+          if (window.location) {
+            window.location.hash = '/auth?addAccount=true';
           }
         }
       }}
