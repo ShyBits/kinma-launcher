@@ -960,19 +960,37 @@ const TopNavigation = ({
   };
 
   // Load cart items from database when user changes or on mount
-  useEffect(() => {
-    const loadCartItems = async () => {
-      const userId = await getCurrentUserId();
-      if (!userId) {
-        setCartItems([]);
-        return;
-      }
+  const loadCartItems = useCallback(async () => {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      setCartItems([]);
+      return;
+    }
 
-      try {
-        const api = window.electronAPI;
-        if (api?.dbGetCartItems) {
+    try {
+      // ALWAYS check localStorage first (most reliable)
+      const stored = localStorage.getItem(`cartItems_${userId}`);
+      console.log('📦 Loading from localStorage:', stored);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          console.log('✅ Parsed cart items from localStorage:', parsed);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setCartItems(parsed);
+            return; // Use localStorage data, don't check DB
+          }
+        } catch (e) {
+          console.error('❌ Error parsing localStorage cart:', e);
+        }
+      }
+      
+      // Fallback to database if localStorage is empty
+      const api = window.electronAPI;
+      if (api?.dbGetCartItems) {
+        try {
           const result = await api.dbGetCartItems(userId);
-          if (result && result.success && Array.isArray(result.items)) {
+          console.log('📦 Cart result from DB:', result);
+          if (result && result.success && Array.isArray(result.items) && result.items.length > 0) {
             // Ensure all items are plain serializable objects
             const serializableItems = result.items.map(item => ({
               id: String(item.id || Date.now()),
@@ -982,28 +1000,50 @@ const TopNavigation = ({
               itemData: item.itemData && typeof item.itemData === 'object' ? item.itemData : {}
             }));
             setCartItems(serializableItems);
-          } else {
-            setCartItems([]);
+            // Sync to localStorage
+            localStorage.setItem(`cartItems_${userId}`, JSON.stringify(serializableItems));
+            return;
           }
-        } else {
-          // Fallback to localStorage if database API not available
-          const stored = localStorage.getItem(`cartItems_${userId}`);
-          if (stored) {
-            try {
-              setCartItems(JSON.parse(stored));
-            } catch {
-              setCartItems([]);
-            }
-          }
+        } catch (err) {
+          console.error('❌ Error getting cart from DB:', err);
         }
-      } catch (error) {
-        console.error('Error loading cart items:', error);
-        setCartItems([]);
       }
+      
+      // If both failed, set empty cart
+      console.log('⚠️ No cart items found');
+      setCartItems([]);
+    } catch (error) {
+      console.error('Error loading cart items:', error);
+      setCartItems([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCartItems();
+  }, [authUser?.id, loadCartItems]); // Reload when user changes
+
+  // Listen for cart update events from Market page
+  useEffect(() => {
+    const handleCartUpdate = async (event) => {
+      console.log('🔄 Cart update event received in TopNavigation', event.detail);
+      // Reload cart items from storage
+      await loadCartItems();
     };
 
-    loadCartItems();
-  }, [authUser?.id]); // Reload when user changes
+    const handleOpenCartMenu = () => {
+      console.log('🛒 Opening cart menu from event');
+      setShowBalanceMenu(true);
+      setBalanceMenuTab('cart');
+      setShowCheckoutMenu(false);
+    };
+
+    window.addEventListener('cart-updated', handleCartUpdate);
+    window.addEventListener('open-cart-menu', handleOpenCartMenu);
+    return () => {
+      window.removeEventListener('cart-updated', handleCartUpdate);
+      window.removeEventListener('open-cart-menu', handleOpenCartMenu);
+    };
+  }, [loadCartItems]);
 
   // Save cart items to database whenever they change
   useEffect(() => {
@@ -1712,6 +1752,12 @@ const TopNavigation = ({
                     setShowProfileMenu((v) => !v);
                   }}
                 >
+                  <div className="nav-profile-info">
+                    <span className="nav-user-name">{userName}</span>
+                    {!isGameStudio && (
+                      <span className="nav-balance-inline">${userBalance.toFixed(2)}</span>
+                    )}
+                  </div>
                   <div className="nav-profile-avatar">
                     {authUser?.avatar && !avatarError ? (
                       <img 
@@ -1723,12 +1769,6 @@ const TopNavigation = ({
                       <span className="nav-profile-avatar-initials">
                         {getInitials(authUser)}
                       </span>
-                    )}
-                  </div>
-                  <div className="nav-profile-info">
-                    <span className="nav-user-name">{userName}</span>
-                    {!isGameStudio && (
-                      <span className="nav-balance-inline">${userBalance.toFixed(2)}</span>
                     )}
                   </div>
                 </button>
@@ -1812,6 +1852,46 @@ const TopNavigation = ({
         ) : (
           /* Regular navigation - Right side items */
           <>
+            {/* Add Funds Button */}
+            {authUser && (
+              <div style={{ position: 'relative' }}>
+                <button
+                  className={`nav-item nav-icon-button ${showBalanceMenu && balanceMenuTab === 'add-funds' ? 'active' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowBalanceMenu(true);
+                    setBalanceMenuTab('add-funds');
+                    setShowCheckoutMenu(false);
+                    setShowNotificationDropdown(false);
+                  }}
+                  title="Add Funds"
+                >
+                  <DollarSign size={20} />
+                </button>
+              </div>
+            )}
+
+            {/* Cart Button */}
+            {authUser && (
+              <div style={{ position: 'relative' }}>
+                <button
+                  className={`nav-item nav-icon-button ${showBalanceMenu && balanceMenuTab === 'cart' ? 'active' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowBalanceMenu(true);
+                    setBalanceMenuTab('cart');
+                    setShowCheckoutMenu(false);
+                    setShowNotificationDropdown(false);
+                  }}
+                  title="Cart"
+                >
+                  <ShoppingCart size={20} />
+                  {cartItems.length > 0 && (
+                    <span className="notification-badge">{cartItems.length}</span>
+                  )}
+                </button>
+              </div>
+            )}
             
             {/* Notification Button */}
             {authUser && (
@@ -1969,6 +2049,10 @@ const TopNavigation = ({
                     setShowProfileMenu((v) => !v);
                   }}
                 >
+                  <div className="nav-profile-info">
+                    <span className="nav-user-name">{userName}</span>
+                    <span className="nav-balance-inline">${userBalance.toFixed(2)}</span>
+                  </div>
                   <div className="nav-profile-avatar">
                     {authUser?.avatar && !avatarError ? (
                       <img 
@@ -1981,10 +2065,6 @@ const TopNavigation = ({
                         {getInitials(authUser)}
                       </span>
                     )}
-                  </div>
-                  <div className="nav-profile-info">
-                    <span className="nav-user-name">{userName}</span>
-                    <span className="nav-balance-inline">${userBalance.toFixed(2)}</span>
                   </div>
                 </button>
                 
@@ -2150,90 +2230,199 @@ const TopNavigation = ({
                       <div className="balance-cart-section">
                         {cartItems.length > 0 ? (
                           <>
+                            <div className="balance-cart-header">
+                              <h3 className="balance-cart-title">Cart</h3>
+                              <div className="balance-cart-count">{cartItems.length}</div>
+                            </div>
                             <div className="balance-cart-items-scrollable">
-                              <h3>Items in Cart</h3>
-                              {(() => {
-                                // Group items by amount
-                                const groupedItems = cartItems.reduce((acc, item) => {
-                                  const key = item.amount.toFixed(2);
-                                  if (!acc[key]) {
-                                    acc[key] = { amount: item.amount, count: 0, ids: [] };
+                              {cartItems.map((cartItem, index) => {
+                                // Format price with compact format
+                                const formatPriceCompact = (price) => {
+                                  const num = parseFloat(price);
+                                  if (isNaN(num)) return '0.00';
+                                  
+                                  if (num >= 1000000000) {
+                                    return (num / 1000000000).toFixed(2) + 'b';
+                                  } else if (num >= 1000000) {
+                                    return (num / 1000000).toFixed(2) + 'm';
+                                  } else if (num >= 1000) {
+                                    return (num / 1000).toFixed(2) + 'k';
+                                  } else {
+                                    return num.toFixed(2);
                                   }
-                                  acc[key].count++;
-                                  acc[key].ids.push(item.id);
-                                  return acc;
-                                }, {});
+                                };
                                 
-                                return Object.values(groupedItems).map((group, index) => (
-                                  <div key={index} className="balance-cart-item">
-                                    <span className="balance-cart-item-amount">
-                                      ${group.amount.toFixed(2)}
-                                      {group.count > 1 && <span className="balance-cart-item-multiplier"> ×{group.count}</span>}
-                                    </span>
+                                // Display market items with details
+                                if (cartItem.itemType === 'market_item' && cartItem.itemData) {
+                                  const itemData = cartItem.itemData;
+                                  return (
+                                    <div key={cartItem.id || index} className="balance-cart-item-receipt market-item">
+                                      <div className="balance-cart-item-image">
+                                        {itemData.imageUrl ? (
+                                          <img src={itemData.imageUrl} alt={itemData.name || 'Item'} />
+                                        ) : itemData.image ? (
+                                          <div className="balance-cart-item-icon">{itemData.image}</div>
+                                        ) : (
+                                          <div className="balance-cart-item-icon">📦</div>
+                                        )}
+                                      </div>
+                                      <div className="balance-cart-item-details">
+                                        <div className="balance-cart-item-name">{itemData.name || 'Market Item'}</div>
+                                        {itemData.gameName && (
+                                          <div className="balance-cart-item-game">{itemData.gameName}</div>
+                                        )}
+                                      </div>
+                                      <div className="balance-cart-item-price">${formatPriceCompact(cartItem.amount)}</div>
+                                      <button 
+                                        className="balance-cart-item-remove"
+                                        onClick={async () => {
+                                          const userId = await getCurrentUserId();
+                                          const updatedCart = cartItems.filter(i => i.id !== cartItem.id);
+                                          setCartItems(updatedCart);
+                                          
+                                          // Save to localStorage immediately
+                                          if (userId) {
+                                            localStorage.setItem(`cartItems_${userId}`, JSON.stringify(updatedCart));
+                                            
+                                            // Also save to database
+                                            const api = window.electronAPI;
+                                            if (api?.dbSaveCartItems) {
+                                              try {
+                                                await api.dbSaveCartItems(userId, updatedCart);
+                                              } catch (err) {
+                                                console.error('Error saving cart to DB after remove:', err);
+                                              }
+                                            }
+                                            
+                                            // Dispatch event to notify other components
+                                            window.dispatchEvent(new CustomEvent('cart-updated', { detail: { items: updatedCart } }));
+                                          }
+                                        }}
+                                        title="Remove"
+                                      >
+                                        <X size={14} />
+                                      </button>
+                                    </div>
+                                  );
+                                }
+                                
+                                // Display funds items (grouped by amount)
+                                return (
+                                  <div key={cartItem.id || index} className="balance-cart-item-receipt">
+                                    <div className="balance-cart-item-image">
+                                      <div className="balance-cart-item-icon">💰</div>
+                                    </div>
+                                    <div className="balance-cart-item-details">
+                                      <div className="balance-cart-item-name">Funds</div>
+                                    </div>
+                                    <div className="balance-cart-item-price">${formatPriceCompact(cartItem.amount)}</div>
                                     <button 
                                       className="balance-cart-item-remove"
-                                      onClick={() => {
-                                        setCartItems(prev => prev.filter(i => !group.ids.includes(i.id)));
+                                      onClick={async () => {
+                                        const userId = await getCurrentUserId();
+                                        const updatedCart = cartItems.filter(i => i.id !== cartItem.id);
+                                        setCartItems(updatedCart);
+                                        
+                                        // Save to localStorage immediately
+                                        if (userId) {
+                                          localStorage.setItem(`cartItems_${userId}`, JSON.stringify(updatedCart));
+                                          
+                                          // Also save to database
+                                          const api = window.electronAPI;
+                                          if (api?.dbSaveCartItems) {
+                                            try {
+                                              await api.dbSaveCartItems(userId, updatedCart);
+                                            } catch (err) {
+                                              console.error('Error saving cart to DB after remove:', err);
+                                            }
+                                          }
+                                          
+                                          // Dispatch event to notify other components
+                                          window.dispatchEvent(new CustomEvent('cart-updated', { detail: { items: updatedCart } }));
+                                        }
                                       }}
                                       title="Remove"
                                     >
                                       <X size={14} />
                                     </button>
                                   </div>
-                                ));
-                              })()}
+                                );
+                              })}
                             </div>
-                            <div className="balance-cart-total">
-                              <span>Total:</span>
-                              <span className="balance-cart-total-amount">
-                                ${cartItems.reduce((sum, item) => sum + item.amount, 0).toFixed(2)}
-                              </span>
-                            </div>
-                            <div className="balance-cart-actions">
-                              <button 
-                                className="balance-cart-cancel-btn" 
-                                onClick={() => {
-                                  setBalanceMenuTab('add-funds');
-                                }}
-                                title="Back"
-                              >
-                                <X size={16} />
-                              </button>
-                              <button 
-                                className="balance-cart-checkout-btn" 
-                                onClick={async () => {
-                                  if (cartItems.length > 0) {
+                            <div className="balance-cart-footer">
+                              <div className="balance-cart-total">
+                                <span className="balance-cart-total-label">Total</span>
+                                <span className="balance-cart-total-amount">
+                                  ${(() => {
                                     const total = cartItems.reduce((sum, item) => sum + item.amount, 0);
-                                    console.log('Processing checkout for $' + total.toFixed(2));
-                                    
-                                    // Clear cart from database
-                                    const userId = await getCurrentUserId();
-                                    if (userId) {
-                                      try {
-                                        const api = window.electronAPI;
-                                        if (api?.dbClearCart) {
-                                          await api.dbClearCart(userId);
-                                        }
-                                      } catch (error) {
-                                        console.error('Error clearing cart:', error);
+                                    const formatPriceCompact = (price) => {
+                                      const num = parseFloat(price);
+                                      if (isNaN(num)) return '0.00';
+                                      
+                                      if (num >= 1000000000) {
+                                        return (num / 1000000000).toFixed(2) + 'b';
+                                      } else if (num >= 1000000) {
+                                        return (num / 1000000).toFixed(2) + 'm';
+                                      } else if (num >= 1000) {
+                                        return (num / 1000).toFixed(2) + 'k';
+                                      } else {
+                                        return num.toFixed(2);
                                       }
+                                    };
+                                    return formatPriceCompact(total);
+                                  })()}
+                                </span>
+                              </div>
+                              <div className="balance-cart-actions">
+                                <button 
+                                  className="balance-cart-cancel-btn" 
+                                  onClick={() => {
+                                    setBalanceMenuTab('add-funds');
+                                  }}
+                                  title="Back"
+                                >
+                                  <X size={18} />
+                                </button>
+                                <button 
+                                  className="balance-cart-checkout-btn" 
+                                  onClick={async () => {
+                                    if (cartItems.length > 0) {
+                                      const total = cartItems.reduce((sum, item) => sum + item.amount, 0);
+                                      console.log('Processing checkout for $' + total.toFixed(2));
+                                      
+                                      // Clear cart from database
+                                      const userId = await getCurrentUserId();
+                                      if (userId) {
+                                        try {
+                                          const api = window.electronAPI;
+                                          if (api?.dbClearCart) {
+                                            await api.dbClearCart(userId);
+                                          }
+                                        } catch (error) {
+                                          console.error('Error clearing cart:', error);
+                                        }
+                                      }
+                                      
+                                      setCartItems([]);
+                                      setShowBalanceMenu(false);
+                                      setShowCheckoutMenu(false);
                                     }
-                                    
-                                    setCartItems([]);
-                                    setShowBalanceMenu(false);
-                                    setShowCheckoutMenu(false);
-                                  }
-                                }}
-                                title="Complete Purchase"
-                              >
-                                <CreditCard size={16} />
-                              </button>
+                                  }}
+                                  title="Complete Purchase"
+                                >
+                                  <CreditCard size={18} />
+                                  <span>Checkout</span>
+                                </button>
+                              </div>
                             </div>
                           </>
                         ) : (
                           <div className="balance-cart-empty">
-                            <ShoppingCart size={32} />
-                            <p>Your cart is empty</p>
+                            <div className="balance-cart-empty-icon">
+                              <ShoppingCart size={48} />
+                            </div>
+                            <h3 className="balance-cart-empty-title">Your cart is empty</h3>
+                            <p className="balance-cart-empty-text">Add items from the marketplace to get started</p>
                           </div>
                         )}
                       </div>

@@ -162,8 +162,8 @@ const AccountSwitcherPage = ({ navigate }) => {
             
             try {
               const authResult = await api.openAuthWindow(email);
-              if (!authResult || !authResult.success) {
-                console.error('Failed to open auth window, using fallback');
+            if (!authResult || !authResult.success) {
+              console.error('Failed to open auth window, using fallback');
                 // Fallback: navigate to auth with email in URL
                 window.location.hash = email 
                   ? `/auth?addAccount=true&email=${encodeURIComponent(email)}`

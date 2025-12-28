@@ -1,14 +1,132 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, Bell, X, Plus, Clock, AlertCircle, Info } from 'lucide-react';
+import { getUserData } from '../utils/UserDataManager';
 import './GameStudio.css';
 
 const StudioCalendar = ({ navigate }) => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [filterType, setFilterType] = useState('all'); // all, error, note, calendar
   const [showNewEventModal, setShowNewEventModal] = useState(false);
+  const [games, setGames] = useState([]);
+
+  // Load games from storage
+  useEffect(() => {
+    const loadGames = async () => {
+      try {
+        const customGames = await getUserData('customGames', []);
+        setGames(Array.isArray(customGames) ? customGames : []);
+      } catch (error) {
+        console.error('Error loading games:', error);
+        setGames([]);
+      }
+    };
+    
+    loadGames();
+    
+    // Listen for game updates
+    const handleGameUpdate = () => {
+      loadGames();
+    };
+    
+    window.addEventListener('customGameUpdate', handleGameUpdate);
+    return () => window.removeEventListener('customGameUpdate', handleGameUpdate);
+  }, []);
+
+  // Helper function to parse date string to YYYY-MM-DD format
+  const formatDateString = (dateInput) => {
+    if (!dateInput) return null;
+    
+    try {
+      // Try parsing as date string
+      const date = new Date(dateInput);
+      if (isNaN(date.getTime())) return null;
+      
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    } catch (error) {
+      return null;
+    }
+  };
+
+  // Helper function to get image URL
+  const getImageUrl = (url) => {
+    if (!url) return '';
+    // If it's already a valid URL (http/https/data), return as is
+    if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+      return url;
+    }
+    // Handle file:// URLs - browsers block these, so return empty or placeholder
+    if (url.startsWith('file://')) {
+      // In Electron, we might need to use a different approach
+      // For now, return empty to let the browser show no image
+      console.warn('file:// URL blocked by browser:', url);
+      return '';
+    }
+    // Otherwise, treat as a relative path
+    return url.startsWith('/') ? url : `/${url}`;
+  };
+
+  // Extract game events from games
+  const gameEvents = useMemo(() => {
+    const events = [];
+    let eventIdCounter = 1000; // Start from 1000 to avoid conflicts with sample data
+    
+    games.forEach((game) => {
+      const gameName = game.name || game.gameName || 'Unnamed Game';
+      // Check multiple possible locations for game cover
+      const gameCoverRaw = game.card || game.cardImage || game.banner || game.bannerImage || 
+                          (game.fullFormData && (game.fullFormData.cardImage || game.fullFormData.bannerImage)) || null;
+      const gameCover = gameCoverRaw ? getImageUrl(gameCoverRaw) : null;
+      
+      // Release date event
+      if (game.releaseDate) {
+        const releaseDate = formatDateString(game.releaseDate);
+        if (releaseDate) {
+          events.push({
+            id: eventIdCounter++,
+            type: 'game-release',
+            title: `${gameName} - Release`,
+            description: `Release date for ${gameName}`,
+            date: releaseDate,
+            time: '00:00', // Default time if not specified
+            color: '#10b981', // Green for releases
+            gameId: game.gameId || game.id,
+            gameName: gameName,
+            gameCover: gameCover,
+            isGameEvent: true
+          });
+        }
+      }
+      
+      // Scheduled update event
+      if (game.scheduledUpdateDate) {
+        const updateDate = formatDateString(game.scheduledUpdateDate);
+        if (updateDate) {
+          const updateTitle = game.scheduledUpdateTitle || `Update for ${gameName}`;
+          events.push({
+            id: eventIdCounter++,
+            type: 'game-update',
+            title: `${gameName} - Update`,
+            description: updateTitle,
+            date: updateDate,
+            time: '00:00', // Default time if not specified
+            color: '#3b82f6', // Blue for updates
+            gameId: game.gameId || game.id,
+            gameName: gameName,
+            gameCover: gameCover,
+            isGameEvent: true
+          });
+        }
+      }
+    });
+    
+    return events;
+  }, [games]);
 
   // Sample activity data - errors, notes, calendar notifications
-  const activities = [
+  const sampleActivities = [
     {
       id: 1,
       type: 'error',
@@ -62,13 +180,23 @@ const StudioCalendar = ({ navigate }) => {
     }
   ];
 
+  // Combine sample activities with game events
+  const activities = useMemo(() => {
+    return [...sampleActivities, ...gameEvents];
+  }, [gameEvents]);
+
   const getEventsForDate = (date) => {
     const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     let filtered = activities.filter(a => a.date === dateStr);
     
     // Apply filter
     if (filterType !== 'all') {
-      filtered = filtered.filter(a => a.type === filterType);
+      if (filterType === 'calendar') {
+        // Include both 'calendar' type and game events
+        filtered = filtered.filter(a => a.type === 'calendar' || a.type === 'game-release' || a.type === 'game-update');
+      } else {
+        filtered = filtered.filter(a => a.type === filterType);
+      }
     }
     
     return filtered;
@@ -77,6 +205,10 @@ const StudioCalendar = ({ navigate }) => {
   const getFilteredActivities = () => {
     if (filterType === 'all') {
       return activities;
+    }
+    if (filterType === 'calendar') {
+      // Include both 'calendar' type and game events
+      return activities.filter(a => a.type === 'calendar' || a.type === 'game-release' || a.type === 'game-update');
     }
     return activities.filter(a => a.type === filterType);
   };
@@ -193,15 +325,35 @@ const StudioCalendar = ({ navigate }) => {
                         {events.length > 0 && (
                           <div className="calendar-day-events">
                             {events.slice(0, 2).map((event) => (
-                              <div 
-                                key={event.id} 
-                                className="calendar-event-bar"
-                                style={{ backgroundColor: event.color }}
-                                title={`${event.time} - ${event.title}`}
-                              >
-                                <span className="event-time-short">{event.time}</span>
-                                <span className="event-title-short">{event.title}</span>
-                              </div>
+                              event.isGameEvent && event.gameCover ? (
+                                <div 
+                                  key={event.id} 
+                                  className="calendar-event-game-cover"
+                                  title={`${event.time} - ${event.title}: ${event.description}`}
+                                >
+                                  <img 
+                                    src={event.gameCover} 
+                                    alt={event.gameName}
+                                    className="calendar-game-cover-img"
+                                    onError={(e) => {
+                                      e.target.style.display = 'none';
+                                    }}
+                                  />
+                                  <div className="calendar-game-cover-overlay">
+                                    <span className="event-time-short">{event.time}</span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div 
+                                  key={event.id} 
+                                  className="calendar-event-bar"
+                                  style={{ backgroundColor: event.color }}
+                                  title={`${event.time} - ${event.title}`}
+                                >
+                                  <span className="event-time-short">{event.time}</span>
+                                  <span className="event-title-short">{event.title}</span>
+                                </div>
+                              )
                             ))}
                             {events.length > 2 && (
                               <div className="calendar-event-more">+{events.length - 2} more</div>
@@ -259,20 +411,51 @@ const StudioCalendar = ({ navigate }) => {
                       case 'calendar':
                         IconComponent = Bell;
                         break;
+                      case 'game-release':
+                        IconComponent = Calendar;
+                        break;
+                      case 'game-update':
+                        IconComponent = Bell;
+                        break;
                       default:
                         IconComponent = Calendar;
                     }
                     
                     return (
-                      <div key={event.id} className="calendar-event-item outlook-event">
-                        <div className="event-time">{event.time}</div>
-                        <div className="event-content">
-                          <div className="event-title-row">
-                            <IconComponent size={16} style={{ color: event.color }} />
-                            <div className="event-title">{event.title}</div>
-                          </div>
-                          <div className="event-description">{event.description}</div>
-                        </div>
+                      <div key={event.id} className={`calendar-event-item outlook-event ${event.isGameEvent ? 'game-event' : ''}`}>
+                        {event.isGameEvent && event.gameCover ? (
+                          <>
+                            <div className="event-game-cover-wrapper">
+                              <img 
+                                src={event.gameCover} 
+                                alt={event.gameName}
+                                className="event-game-cover"
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                }}
+                              />
+                            </div>
+                            <div className="event-time">{event.time}</div>
+                            <div className="event-content">
+                              <div className="event-title-row">
+                                <IconComponent size={16} style={{ color: event.color }} />
+                                <div className="event-title">{event.title}</div>
+                              </div>
+                              <div className="event-description">{event.description}</div>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="event-time">{event.time}</div>
+                            <div className="event-content">
+                              <div className="event-title-row">
+                                <IconComponent size={16} style={{ color: event.color }} />
+                                <div className="event-title">{event.title}</div>
+                              </div>
+                              <div className="event-description">{event.description}</div>
+                            </div>
+                          </>
+                        )}
                       </div>
                     );
                   })

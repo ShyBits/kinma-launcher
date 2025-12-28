@@ -4,7 +4,7 @@ import {
   Upload, Plus, Edit, Trash2, Package, Play, X, Box,
   FileText, Image, Settings, ChevronLeft, ChevronRight, Check, X as XIcon, Edit2,
   Download, MessageSquare, ShoppingCart, Calendar, ChevronUp, ChevronDown,
-  Star, Users, TrendingUp, Lock, Unlock, RefreshCw
+  Star, Users, TrendingUp, TrendingDown, Lock, Unlock, RefreshCw
 } from 'lucide-react';
 import './GameStudio.css';
 import './Game.css';
@@ -56,9 +56,9 @@ const GameStudio = ({ navigate }) => {
   }, [navigate]);
   
   // Helper function to load user-specific custom games
-  const loadCustomGames = () => {
+  const loadCustomGames = async () => {
     try {
-      const customGames = getUserData('customGames', []);
+      const customGames = await getUserData('customGames', []);
       
       // Ensure customGames is always an array
       if (!Array.isArray(customGames)) {
@@ -75,7 +75,10 @@ const GameStudio = ({ navigate }) => {
         downloads: game.downloads || 0,
         revenue: `$${((game.downloads || 0) * 2.5).toFixed(2)}`,
         banner: game.banner || (game.banner?.startsWith('file://') || game.banner?.startsWith('data:') ? game.banner : '/public/images/games/pathline-banner.jpg'),
-        lastUpdated: game.lastUpdated || 'just now',
+        lastUpdated: game.lastUpdated || new Date().toISOString(),
+        lastUpdateTitle: game.lastUpdateTitle || null,
+        scheduledUpdateDate: game.scheduledUpdateDate || null,
+        scheduledUpdateTitle: game.scheduledUpdateTitle || null,
         gameId: game.gameId // Store reference to the actual game
       }));
       
@@ -87,27 +90,36 @@ const GameStudio = ({ navigate }) => {
   };
 
   // Load custom games from user-specific storage on mount
-  const [games, setGames] = useState(() => loadCustomGames());
+  const [games, setGames] = useState([]);
 
   // Listen for custom game updates to reload the games list
   useEffect(() => {
-    const handleCustomGameUpdate = () => {
-      setGames(loadCustomGames());
+    const loadGames = async () => {
+      const loadedGames = await loadCustomGames();
+      setGames(loadedGames);
     };
     
-    const handleStorageChange = (e) => {
-      if (e.key === getUserScopedKey('customGames')) {
-        setGames(loadCustomGames());
+    const handleCustomGameUpdate = async () => {
+      const loadedGames = await loadCustomGames();
+      setGames(loadedGames);
+    };
+    
+    const handleStorageChange = async (e) => {
+      const scopedKey = await getUserScopedKey('customGames');
+      if (e.key === scopedKey) {
+        const loadedGames = await loadCustomGames();
+        setGames(loadedGames);
       }
     };
     
     // Listen for user changes
-    const handleUserChange = () => {
-      setGames(loadCustomGames());
+    const handleUserChange = async () => {
+      const loadedGames = await loadCustomGames();
+      setGames(loadedGames);
     };
     
     // Load on mount
-    loadCustomGames();
+    loadGames();
     
     window.addEventListener('customGameUpdate', handleCustomGameUpdate);
     window.addEventListener('storage', handleStorageChange);
@@ -179,6 +191,10 @@ const GameStudio = ({ navigate }) => {
   const [previewView, setPreviewView] = useState('game'); // 'game', 'community', 'market', 'store'
   const [isModalMinimized, setIsModalMinimized] = useState(false);
   const [editingGameId, setEditingGameId] = useState(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingGame, setEditingGame] = useState(null);
+  const [editFormData, setEditFormData] = useState({});
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   
   // Image URL cache to prevent flickering on re-renders
   const imageUrlCache = useRef(new Map());
@@ -959,125 +975,160 @@ const GameStudio = ({ navigate }) => {
 
   const handleEditGame = async (gameId) => {
     const game = games.find(g => g.id === gameId);
-    if (game) {
-      setEditingGameId(gameId);
-      setUploadModalOpen(true);
-      setShowCreateMenu(false);
-      setCurrentStep(1);
-      setContentSection('description');
-      setPreviewView('game');
+    if (!game) return;
+    
+    setEditingGame(game);
+    
+    // Try to load from metadata.json first (most reliable)
+    let metadata = null;
+    if (window.electronAPI && window.electronAPI.getGameMetadata) {
+      try {
+        const metaResult = await window.electronAPI.getGameMetadata(game.gameId);
+        if (metaResult.success) {
+          metadata = metaResult.metadata;
+        }
+      } catch (error) {
+        console.warn('Could not load metadata from JSON:', error);
+      }
+    }
+    
+    // Fallback to localStorage if metadata.json not available
+    let fd = null;
+    if (!metadata) {
+      const customGames = await getUserData('customGames', []);
+      const customGamesArray = Array.isArray(customGames) ? customGames : [];
+      const customGame = customGamesArray.find(g => g.gameId === game.gameId);
       
-      // Try to load from metadata.json first (most reliable)
-      let metadata = null;
-      if (window.electronAPI && window.electronAPI.getGameMetadata) {
+      if (customGame && customGame.fullFormData) {
+        fd = customGame.fullFormData;
+      }
+    } else {
+      fd = {
+        gameName: metadata.gameName,
+        developer: metadata.developer,
+        version: metadata.version,
+        genre: metadata.genre,
+        ageRating: metadata.ageRating,
+        description: metadata.description,
+        price: metadata.price,
+        discountPercent: metadata.discountPercent || '',
+        promoReason: metadata.promoReason || '',
+        releaseDate: metadata.releaseDate,
+        tags: metadata.tags,
+        requirements: metadata.requirements,
+        status: metadata.status || game.status || 'public',
+        lastUpdateTitle: metadata.lastUpdateTitle || null,
+        scheduledUpdateDate: metadata.scheduledUpdateDate || null,
+        scheduledUpdateTitle: metadata.scheduledUpdateTitle || null,
+      };
+    }
+    
+    // Set edit form data
+    setEditFormData({
+      gameName: fd?.gameName || metadata?.gameName || game.name || '',
+      developer: fd?.developer || metadata?.developer || 'Your Studio',
+      version: fd?.version || metadata?.version || game.version || '1.0.0',
+      genre: fd?.genre || metadata?.genre || 'Action',
+      ageRating: fd?.ageRating || metadata?.ageRating || '12+',
+      description: fd?.description || metadata?.description || '',
+      price: fd?.price || metadata?.price || '0.00',
+      discountPercent: fd?.discountPercent || metadata?.discountPercent || '',
+      promoReason: fd?.promoReason || metadata?.promoReason || '',
+      releaseDate: fd?.releaseDate || metadata?.releaseDate || '',
+      tags: fd?.tags || metadata?.tags || '',
+      requirements: fd?.requirements || metadata?.requirements || '',
+      status: fd?.status || metadata?.status || game.status || 'public',
+      lastUpdateTitle: fd?.lastUpdateTitle || metadata?.lastUpdateTitle || null,
+      scheduledUpdateDate: fd?.scheduledUpdateDate || metadata?.scheduledUpdateDate || null,
+      scheduledUpdateTitle: fd?.scheduledUpdateTitle || metadata?.scheduledUpdateTitle || null,
+    });
+    
+    setEditModalOpen(true);
+  };
+  
+  const handleSaveEdit = async () => {
+    if (!editingGame) return;
+    
+    try {
+      const customGames = await getUserData('customGames', []);
+      const customGamesArray = Array.isArray(customGames) ? customGames : [];
+      const gameIndex = customGamesArray.findIndex(g => g.gameId === editingGame.gameId);
+      
+      if (gameIndex === -1) {
+        alert('Game not found!');
+        return;
+      }
+      
+      // Update the game in localStorage
+      const updatedGame = {
+        ...customGamesArray[gameIndex],
+        name: editFormData.gameName,
+        version: editFormData.version,
+        status: editFormData.status,
+        lastUpdated: new Date().toISOString(),
+        lastUpdateTitle: editFormData.lastUpdateTitle || null,
+        scheduledUpdateDate: editFormData.scheduledUpdateDate || null,
+        scheduledUpdateTitle: editFormData.scheduledUpdateTitle || null,
+        fullFormData: {
+          ...(customGamesArray[gameIndex].fullFormData || {}),
+          ...editFormData,
+        }
+      };
+      
+      customGamesArray[gameIndex] = updatedGame;
+      await saveUserData('customGames', customGamesArray);
+      
+      // Update metadata.json if available
+      if (window.electronAPI && window.electronAPI.updateGameMetadata) {
         try {
-          const metaResult = await window.electronAPI.getGameMetadata(game.gameId);
-          if (metaResult.success) {
-            metadata = metaResult.metadata;
-            console.log('Loaded metadata from JSON:', metadata);
-          }
+          await window.electronAPI.updateGameMetadata(editingGame.gameId, {
+            gameName: editFormData.gameName,
+            developer: editFormData.developer,
+            version: editFormData.version,
+            genre: editFormData.genre,
+            ageRating: editFormData.ageRating,
+            description: editFormData.description,
+            price: editFormData.price,
+            discountPercent: editFormData.discountPercent,
+            promoReason: editFormData.promoReason,
+            releaseDate: editFormData.releaseDate,
+            tags: editFormData.tags,
+            requirements: editFormData.requirements,
+            status: editFormData.status,
+            lastUpdateTitle: editFormData.lastUpdateTitle,
+            scheduledUpdateDate: editFormData.scheduledUpdateDate,
+            scheduledUpdateTitle: editFormData.scheduledUpdateTitle,
+          });
         } catch (error) {
-          console.warn('Could not load metadata from JSON:', error);
+          console.warn('Could not update metadata.json:', error);
         }
       }
       
-      // Fallback to localStorage if metadata.json not available
-      let fd = null;
-      if (!metadata) {
-        const customGames = getUserData('customGames', []);
-        const customGamesArray = Array.isArray(customGames) ? customGames : [];
-        const customGame = customGamesArray.find(g => g.gameId === game.gameId);
-        
-        if (customGame && customGame.fullFormData) {
-          fd = customGame.fullFormData;
-        }
-      } else {
-        // Use metadata.json data, but convert it to formData format
-        fd = {
-          gameName: metadata.gameName,
-          developer: metadata.developer,
-          version: metadata.version,
-          genre: metadata.genre,
-          ageRating: metadata.ageRating,
-          description: metadata.description,
-          price: metadata.price,
-          discountPercent: metadata.discountPercent || '',
-          promoReason: metadata.promoReason || '',
-          releaseDate: metadata.releaseDate,
-          tags: metadata.tags,
-          requirements: metadata.requirements,
-          bannerImage: metadata.bannerImage,
-          cardImage: metadata.cardImage,
-          gameLogo: metadata.gameLogo,
-          titleImage: metadata.titleImage,
-          titleImageSize: metadata.titleImageSize,
-          screenshots: metadata.screenshots || [],
-          gameExecutable: metadata.gameExecutable, // This will be the filename or path
-          gameFileSize: metadata.gameFileSize,
-          logoSize: metadata.logoSize,
-          logoPosition: metadata.logoPosition,
-          bannerHeight: metadata.bannerHeight,
-          bannerPosition: metadata.bannerPosition,
-          logoPositionCustom: metadata.logoPositionCustom,
-          titlePosition: metadata.titlePosition,
-          cardPosition: metadata.cardPosition,
-          marketEnabled: metadata.marketEnabled
-        };
-      }
+      // Update the games list
+      setGames(games.map(game => 
+        game.id === editingGame.id 
+          ? { 
+              ...game, 
+              name: editFormData.gameName, 
+              version: editFormData.version,
+              status: editFormData.status,
+              lastUpdated: new Date().toISOString(),
+              lastUpdateTitle: editFormData.lastUpdateTitle,
+              scheduledUpdateDate: editFormData.scheduledUpdateDate,
+              scheduledUpdateTitle: editFormData.scheduledUpdateTitle,
+            }
+          : game
+      ));
       
-      // Convert file:// URLs to data URLs for all images
-      const bannerImageUrl = await convertFileToDataUrl(fd?.bannerImage || metadata?.bannerImage || game.banner);
-      const cardImageUrl = await convertFileToDataUrl(fd?.cardImage || metadata?.cardImage);
-      const gameLogoUrl = await convertFileToDataUrl(fd?.gameLogo || metadata?.gameLogo || game.banner);
-      const titleImageUrl = await convertFileToDataUrl(fd?.titleImage || metadata?.titleImage || game.banner);
+      // Trigger update event
+      window.dispatchEvent(new CustomEvent('customGameUpdate'));
       
-      // Convert screenshots array
-      const screenshotsArray = fd?.screenshots || metadata?.screenshots || [];
-      const convertedScreenshots = await Promise.all(
-        screenshotsArray.map(screenshot => convertFileToDataUrl(screenshot))
-      );
-      const validScreenshots = convertedScreenshots.filter(s => s !== null);
-      
-      // Set form data with loaded values or defaults
-      setFormData({
-        gameName: fd?.gameName || metadata?.gameName || game.name || '',
-        developer: fd?.developer || metadata?.developer || 'Your Studio',
-        version: fd?.version || metadata?.version || game.version || '1.0.0',
-        genre: fd?.genre || metadata?.genre || 'Action',
-        ageRating: fd?.ageRating || metadata?.ageRating || '12+',
-        description: fd?.description || metadata?.description || '',
-        price: fd?.price || metadata?.price || '0.00',
-        discountPercent: fd?.discountPercent || metadata?.discountPercent || '',
-        promoReason: fd?.promoReason || metadata?.promoReason || '',
-        releaseDate: fd?.releaseDate || metadata?.releaseDate || new Date().toISOString().split('T')[0],
-        tags: fd?.tags || metadata?.tags || '',
-        requirements: fd?.requirements || metadata?.requirements || 'Windows 10',
-        bannerImage: bannerImageUrl || game.banner,
-        cardImage: cardImageUrl || null,
-        gameLogo: gameLogoUrl || game.banner,
-        titleImage: titleImageUrl || game.banner,
-        titleImageSize: fd?.titleImageSize || metadata?.titleImageSize || 100,
-        bannerZoom: fd?.bannerZoom || metadata?.bannerZoom || 1,
-        cardZoom: fd?.cardZoom || metadata?.cardZoom || 1,
-        bannerOffset: fd?.bannerOffset || metadata?.bannerOffset || { x: 0, y: 0 },
-        cardOffset: fd?.cardOffset || metadata?.cardOffset || { x: 0, y: 0 },
-        screenshots: validScreenshots.length > 0 ? validScreenshots : [],
-        // For executable: if we have a filename, create a File-like object reference
-        // Note: We can't load the actual file in browser context, but we can indicate it exists
-        gameExecutable: fd?.gameExecutable || metadata?.gameExecutable ? 
-          (typeof fd?.gameExecutable === 'object' ? fd.gameExecutable : 
-           typeof metadata?.gameExecutable === 'object' ? metadata.gameExecutable :
-           { name: fd?.gameExecutable || metadata?.gameExecutable, exists: true }) : null,
-        gameFileSize: fd?.gameFileSize || metadata?.gameFileSize || 0,
-        logoSize: fd?.logoSize || metadata?.logoSize || 120,
-        logoPosition: fd?.logoPosition || metadata?.logoPosition || 'left',
-        bannerHeight: fd?.bannerHeight || metadata?.bannerHeight || 60,
-        bannerPosition: fd?.bannerPosition || metadata?.bannerPosition || { x: 50, y: 50 },
-        logoPositionCustom: fd?.logoPositionCustom || metadata?.logoPositionCustom || { x: 50, y: 50 },
-        titlePosition: fd?.titlePosition || metadata?.titlePosition || { x: 50, y: 50 },
-        cardPosition: fd?.cardPosition || metadata?.cardPosition || { x: 50, y: 50 },
-        marketEnabled: fd?.marketEnabled !== false && metadata?.marketEnabled !== false,
-      });
+      setEditModalOpen(false);
+      setEditingGame(null);
+      alert('Game updated successfully!');
+    } catch (error) {
+      console.error('Error saving game:', error);
+      alert('Failed to save game. Please try again.');
     }
   };
 
@@ -1191,349 +1242,275 @@ const GameStudio = ({ navigate }) => {
     };
   }, []);
 
+  // Sort games by downloads for ranking (highest first)
+  const sortedGames = [...games].sort((a, b) => (b.downloads || 0) - (a.downloads || 0));
+  
+  // Get rank class for styling
+  const getRankClass = (index) => {
+    if (index === 0) return 'rank-1';
+    if (index === 1) return 'rank-2';
+    if (index === 2) return 'rank-3';
+    return 'rank-default';
+  };
+
   return (
     <div className="game-studio-page">
-      <div className="game-studio-container">
-        {/* Floating New Game Button */}
-        <div className="floating-new-game-btn">
-          <button 
-            className="upload-game-btn" 
-            onClick={() => setShowCreateMenu(!showCreateMenu)}
-          >
-            <Plus size={20} />
-            <span>New Game</span>
-          </button>
-          
-          {showCreateMenu && (
-            <div className="game-studio-create-menu">
+      <div className="game-studio-layout">
+        {/* Left Sidebar - Rankings */}
+        <div className={`game-studio-sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
+          <div className="game-studio-sidebar-content">
+            <div className="studio-sidebar-header">
+            <h2>Game Rankings</h2>
+            <p>Sorted by downloads</p>
+          </div>
+          <div className="studio-rankings-list">
+            {sortedGames.length === 0 ? (
+              <div className="studio-ranking-empty">
+                No games published yet
+              </div>
+            ) : (
+              sortedGames.map((game, index) => {
+                const rank = index + 1;
+                const revenueValue = parseFloat(game.revenue.replace('$', '').replace(',', '')) || 0;
+                const playerChange = Math.floor(Math.random() * 20) - 10; // Placeholder - can be calculated from actual data
+                const isTrendingUp = playerChange >= 0;
+                
+                return (
+                  <div
+                    key={game.id}
+                    className={`studio-ranking-item ${getRankClass(index)}`}
+                    onClick={() => {
+                      // Scroll to game in main view or highlight it
+                      const gameCard = document.querySelector(`[data-game-id="${game.id}"]`);
+                      if (gameCard) {
+                        gameCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        gameCard.style.outline = '2px solid var(--accent-primary)';
+                        setTimeout(() => {
+                          gameCard.style.outline = '';
+                        }, 2000);
+                      }
+                    }}
+                  >
+                    <div className="ranking-number-wrapper">
+                      <div className="ranking-number">{rank}</div>
+                      <div className="ranking-trend-icon">
+                        {isTrendingUp ? (
+                          <TrendingUp color={isTrendingUp ? '#22c55e' : '#ef4444'} />
+                        ) : (
+                          <TrendingDown color="#ef4444" />
+                        )}
+                      </div>
+                    </div>
+                    <div className="ranking-cover">
+                      <img 
+                        src={game.banner || '/public/images/games/pathline-banner.jpg'} 
+                        alt={game.name}
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                    <div className="ranking-content">
+                      <div className="ranking-name">{game.name}</div>
+                      <div className="ranking-meta">
+                        <div className="ranking-meta-row">
+                          <span className="ranking-label">Players</span>
+                          <span className="ranking-value">{game.downloads?.toLocaleString() || '0'}</span>
+                        </div>
+                        <div className="ranking-meta-row">
+                          <span className="ranking-label">Revenue</span>
+                          <span className="ranking-value">{game.revenue}</span>
+                        </div>
+                        <div className="ranking-meta-row">
+                          <span className="ranking-label">Trend</span>
+                          <span className={`ranking-value ranking-trend ${isTrendingUp ? 'positive' : 'negative'}`}>
+                            {isTrendingUp ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                            {isTrendingUp ? '+' : ''}{playerChange}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          </div>
+        </div>
+
+        {/* Sidebar Toggle Bar - Absolute positioned, outside sidebar */}
+        <div 
+          className={`sidebar-toggle-bar ${sidebarOpen ? 'open' : 'closed'}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            setSidebarOpen(!sidebarOpen);
+          }}
+        >
+          {!sidebarOpen && (
+            <span className="sidebar-toggle-text">RANKINGS</span>
+          )}
+          {sidebarOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+        </div>
+
+        {/* Main Content Area - Games Grid */}
+        <div className={`game-studio-main-wrapper ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
+          <div className="game-studio-container">
+            {/* Floating New Game Button */}
+            <div className="floating-new-game-btn">
               <button 
-                className="game-studio-menu-item" 
-                onClick={handleUploadGame}
+                className="upload-game-btn" 
+                onClick={() => setShowCreateMenu(!showCreateMenu)}
               >
-                <Plus size={18} />
+                <Plus size={20} />
                 <span>New Game</span>
               </button>
-              <button 
-                className="game-studio-menu-item"
-                onClick={() => {
-                  setShowCreateMenu(false);
-                  // Future: Template or other options
-                }}
-                disabled
-                style={{ opacity: 0.5, cursor: 'not-allowed' }}
-              >
-                <FileText size={18} />
-                <span>From Template</span>
-              </button>
-              <button 
-                className="game-studio-menu-item"
-                onClick={() => {
-                  setShowCreateMenu(false);
-                  // Future: Import option
-                }}
-                disabled
-                style={{ opacity: 0.5, cursor: 'not-allowed' }}
-              >
-                <Download size={18} />
-                <span>Import Game</span>
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="game-studio-stats">
-          <div className="studio-stat-card">
-            <Box size={24} />
-            <div>
-              <span className="stat-value">{games.length}</span>
-              <span className="stat-label">Published Games</span>
-            </div>
-          </div>
-          <div className="studio-stat-card">
-            <Play size={24} />
-            <div>
-              <span className="stat-value">{games.reduce((sum, g) => sum + g.downloads, 0).toLocaleString()}</span>
-              <span className="stat-label">Total Downloads</span>
-            </div>
-          </div>
-          <div className="studio-stat-card">
-            <Settings size={24} />
-            <div>
-              <span className="stat-value">{games.reduce((sum, g) => parseFloat(g.revenue.replace('$', '').replace(',', '')), 0).toFixed(2)}</span>
-              <span className="stat-label">Total Revenue</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="studio-chart-section">
-          <div className="chart-header">
-            <div>
-              <h3>Player Growth</h3>
-              <p>Total active players over time</p>
-            </div>
-            <div className="chart-filters">
-              <button 
-                className={`chart-filter-btn ${timeFilter === '1D' ? 'active' : ''}`}
-                onClick={() => setTimeFilter('1D')}
-              >
-                1D
-              </button>
-              <button 
-                className={`chart-filter-btn ${timeFilter === '1W' ? 'active' : ''}`}
-                onClick={() => setTimeFilter('1W')}
-              >
-                1W
-              </button>
-              <button 
-                className={`chart-filter-btn ${timeFilter === '1M' ? 'active' : ''}`}
-                onClick={() => setTimeFilter('1M')}
-              >
-                1M
-              </button>
-              <button 
-                className={`chart-filter-btn ${timeFilter === '1Y' ? 'active' : ''}`}
-                onClick={() => setTimeFilter('1Y')}
-              >
-                1Y
-              </button>
-            </div>
-          </div>
-          <div className="chart-container">
-            <div className="chart">
-              <div className="chart-y-axis">
-                {(() => {
-                  const maxPlayers = Math.max(...playerStats.map(s => s.players));
-                  const maxValue = Math.ceil(maxPlayers / 500) * 500;
-                  const values = [];
-                  for (let i = 0; i <= 5; i++) {
-                    values.push(Math.round((maxValue * i) / 5));
-                  }
-                  return values.map((val, i) => (
-                    <div key={i} className="y-axis-label">{val.toLocaleString()}</div>
-                  ));
-                })()}
-              </div>
-              <div className="chart-content">
-                <svg className="chart-svg" viewBox="0 0 1000 280" preserveAspectRatio="none">
-                  <defs>
-                    <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" stopColor="white" stopOpacity="0.15" />
-                      <stop offset="100%" stopColor="white" stopOpacity="0.02" />
-                    </linearGradient>
-                  </defs>
-                  {(() => {
-                    const maxPlayers = Math.max(...playerStats.map(s => s.players));
-                    const maxValue = Math.ceil(maxPlayers / 500) * 500;
-                    
-                    return (
-                      <>
-                        {/* Grid lines */}
-                        <line x1="0" y1="56" x2="1000" y2="56" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-                        <line x1="0" y1="112" x2="1000" y2="112" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-                        <line x1="0" y1="168" x2="1000" y2="168" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-                        <line x1="0" y1="224" x2="1000" y2="224" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-                        
-                        {/* Area fill */}
-                        <path 
-                          d={(() => {
-                            const points = playerStats.map((stat, i) => {
-                              const x = (i * 1000) / (playerStats.length - 1);
-                              const y = 280 - (stat.players / maxValue) * 280;
-                              return `${x},${y}`;
-                            });
-                            return `M 0,280 ${points.map(p => `L ${p}`).join(' ')} L 1000,280 Z`;
-                          })()}
-                          fill="url(#areaGradient)"
-                        />
-                        
-                        {/* Line */}
-                        <polyline
-                          points={playerStats.map((stat, i) => {
-                            const x = (i * 1000) / (playerStats.length - 1);
-                            const y = 280 - (stat.players / maxValue) * 280;
-                            return `${x},${y}`;
-                          }).join(' ')}
-                          fill="none"
-                          stroke="white"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          opacity="0.9"
-                        />
-                        
-                        {/* Invisible hover zones */}
-                        {playerStats.map((stat, i) => {
-                          const x = (i * 1000) / (playerStats.length - 1);
-                          const width = i === playerStats.length - 1 ? 1000 - x : 1000 / (playerStats.length - 1);
-                          return (
-                            <rect
-                              key={i}
-                              x={i === 0 ? 0 : x - width / 2}
-                              y="0"
-                              width={i === 0 || i === playerStats.length - 1 ? width : width}
-                              height="280"
-                              fill="transparent"
-                              onMouseEnter={() => setHoveredIndex(i)}
-                              onMouseLeave={() => setHoveredIndex(null)}
-                            />
-                          );
-                        })}
-                      </>
-                    );
-                  })()}
-                </svg>
-                
-                <div className="chart-x-axis">
-                  {playerStats.map((stat, index) => (
-                    <div key={index} className="x-axis-label">{stat.label || stat.month}</div>
-                  ))}
+              
+              {showCreateMenu && (
+                <div className="game-studio-create-menu">
+                  <button 
+                    className="game-studio-menu-item" 
+                    onClick={handleUploadGame}
+                  >
+                    <Plus size={18} />
+                    <span>New Game</span>
+                  </button>
+                  <button 
+                    className="game-studio-menu-item"
+                    onClick={() => {
+                      setShowCreateMenu(false);
+                      // Future: Template or other options
+                    }}
+                    disabled
+                    style={{ opacity: 0.5, cursor: 'not-allowed' }}
+                  >
+                    <FileText size={18} />
+                    <span>From Template</span>
+                  </button>
+                  <button 
+                    className="game-studio-menu-item"
+                    onClick={() => {
+                      setShowCreateMenu(false);
+                      // Future: Import option
+                    }}
+                    disabled
+                    style={{ opacity: 0.5, cursor: 'not-allowed' }}
+                  >
+                    <Download size={18} />
+                    <span>Import Game</span>
+                  </button>
                 </div>
-                
-                {/* Hover tooltip */}
-                {hoveredIndex !== null && (() => {
-                  const maxPlayers = Math.max(...playerStats.map(s => s.players));
-                  const maxValue = Math.ceil(maxPlayers / 500) * 500;
-                  return (
+              )}
+            </div>
+
+            {/* Games Grid */}
+            <div className="game-studio-games">
+              <div className="studio-games-grid">
+                {games.length === 0 ? (
+                  <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '60px 20px', color: 'var(--text-secondary)' }}>
+                    <p style={{ fontSize: '16px', marginBottom: '8px' }}>No games published yet</p>
+                    <p style={{ fontSize: '14px' }}>Click "New Game" to get started</p>
+                  </div>
+                ) : (
+                  games.map((game) => (
                     <div 
-                      className="chart-tooltip"
-                      style={{
-                        left: `${(hoveredIndex * 100) / (playerStats.length - 1)}%`,
-                        bottom: `${((playerStats[hoveredIndex].players / maxValue) * 280)}px`
-                      }}
+                      key={game.id} 
+                      className="studio-game-card"
+                      data-status={game.status}
+                      data-game-id={game.id}
                     >
-                      {playerStats[hoveredIndex].players.toLocaleString()}
+                      <div className="studio-game-banner">
+                        <img src={game.banner} alt={game.name} onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.nextSibling.style.display = 'block';
+                        }} />
+                        <div className="studio-banner-placeholder" style={{display: 'none'}}>
+                          <div className="placeholder-icon">🎨</div>
+                        </div>
+                        <div className="studio-game-overlay">
+                          <button className="studio-action-btn update" onClick={() => handleUpdateBuild(game.id)} title="Update Build">
+                            <RefreshCw size={16} />
+                          </button>
+                          <button className="studio-action-btn" onClick={() => handleEditGame(game.id)} title="Edit Game">
+                            <Edit size={16} />
+                          </button>
+                          <button className="studio-action-btn delete" onClick={() => handleDeleteGame(game.id)}>
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="studio-game-info">
+                        <div className="studio-game-header">
+                          <h3>{game.name}</h3>
+                          <p className="studio-game-version">Version {game.version}</p>
+                        </div>
+                        <div className="studio-game-stats">
+                          <div className="studio-stat-row">
+                            <span className="studio-stat-label">Downloads</span>
+                            <span className="studio-stat-value">{game.downloads?.toLocaleString() || '0'}</span>
+                          </div>
+                          <div className="studio-stat-row">
+                            <span className="studio-stat-label">Revenue</span>
+                            <span className="studio-stat-value">{game.revenue}</span>
+                          </div>
+                        </div>
+                        <div className="studio-game-schedule">
+                          <div className="studio-schedule-item">
+                            <div className="studio-schedule-label">Last Update</div>
+                            <div className="studio-schedule-content">
+                              <div className="studio-schedule-date">
+                                {(() => {
+                                  const date = new Date(game.lastUpdated);
+                                  if (isNaN(date.getTime())) return 'Unknown';
+                                  const now = new Date();
+                                  const diffMs = now - date;
+                                  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                                  
+                                  if (diffDays === 0) return 'Today';
+                                  if (diffDays === 1) return 'Yesterday';
+                                  if (diffDays < 7) return `${diffDays} days ago`;
+                                  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
+                                })()}
+                              </div>
+                              {game.lastUpdateTitle && (
+                                <div className="studio-schedule-title">{game.lastUpdateTitle}</div>
+                              )}
+                            </div>
+                          </div>
+                          {game.scheduledUpdateDate && (
+                            <div className="studio-schedule-item">
+                              <div className="studio-schedule-label">Next Update</div>
+                              <div className="studio-schedule-content">
+                                <div className="studio-schedule-date">
+                                  {(() => {
+                                    const date = new Date(game.scheduledUpdateDate);
+                                    if (isNaN(date.getTime())) return 'Invalid date';
+                                    const now = new Date();
+                                    const diffMs = date - now;
+                                    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                                    
+                                    if (diffDays < 0) return 'Overdue';
+                                    if (diffDays === 0) return 'Today';
+                                    if (diffDays === 1) return 'Tomorrow';
+                                    if (diffDays < 7) return `In ${diffDays} days`;
+                                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined });
+                                  })()}
+                                </div>
+                                {game.scheduledUpdateTitle && (
+                                  <div className="studio-schedule-title">{game.scheduledUpdateTitle}</div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  );
-                })()}
+                  ))
+                )}
               </div>
             </div>
           </div>
         </div>
-
-        <div className="game-studio-games">
-          <div className="studio-games-grid">
-            {games.map((game) => (
-              <div 
-                key={game.id} 
-                className="studio-game-card"
-                data-status={game.status}
-              >
-                <div className="studio-game-banner">
-                  <img src={game.banner} alt={game.name} onError={(e) => {
-                    e.target.style.display = 'none';
-                    e.target.nextSibling.style.display = 'block';
-                  }} />
-                  <div className="studio-banner-placeholder" style={{display: 'none'}}>
-                    <div className="placeholder-icon">🎨</div>
-                  </div>
-                  <div className="studio-game-overlay">
-                    <button className="studio-action-btn update" onClick={() => handleUpdateBuild(game.id)} title="Update Build">
-                      <RefreshCw size={16} />
-                    </button>
-                    <button className="studio-action-btn" onClick={() => handleEditGame(game.id)}>
-                      <Edit size={16} />
-                    </button>
-                    <button className="studio-action-btn delete" onClick={() => handleDeleteGame(game.id)}>
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </div>
-                <div className="studio-game-info">
-                  <div className="studio-game-header">
-                    <h3>{game.name}</h3>
-                  </div>
-                  <p className="studio-game-version">Version {game.version}</p>
-                  <div className="studio-game-metrics">
-                    <div className="studio-metric-item">
-                      <div className="studio-metric-icon">
-                        <Play size={16} />
-                      </div>
-                      <div className="studio-metric-info">
-                        <span className="studio-metric-value">{game.downloads.toLocaleString()}</span>
-                        <span className="studio-metric-label">downloads</span>
-                      </div>
-                    </div>
-                    <div className="studio-metric-item">
-                      <div className="studio-metric-icon">
-                        <Settings size={16} />
-                      </div>
-                      <div className="studio-metric-info">
-                        <span className="studio-metric-value">{game.revenue}</span>
-                        <span className="studio-metric-label">revenue</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="studio-game-footer">
-                    <span className="studio-update-info">Updated {game.lastUpdated}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Analytics Sections */}
-        <div id="performance-dashboard" style={{ marginTop: '60px', padding: '32px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
-          <h2 style={{ marginBottom: '16px', color: 'var(--text-primary)' }}>Performance Dashboard</h2>
-          <p style={{ color: 'var(--text-secondary)' }}>Monitor your game's performance metrics and KPIs.</p>
-        </div>
-
-        <div id="player-statistics" style={{ marginTop: '40px', padding: '32px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
-          <h2 style={{ marginBottom: '16px', color: 'var(--text-primary)' }}>Player Statistics</h2>
-          <p style={{ color: 'var(--text-secondary)' }}>Track player demographics and behavior patterns.</p>
-        </div>
-
-        <div id="engagement-metrics" style={{ marginTop: '40px', padding: '32px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
-          <h2 style={{ marginBottom: '16px', color: 'var(--text-primary)' }}>Engagement Metrics</h2>
-          <p style={{ color: 'var(--text-secondary)' }}>Measure user engagement and retention rates.</p>
-        </div>
-
-        <div id="revenue-analytics" style={{ marginTop: '40px', padding: '32px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
-          <h2 style={{ marginBottom: '16px', color: 'var(--text-primary)' }}>Revenue Analytics</h2>
-          <p style={{ color: 'var(--text-secondary)' }}>Analyze revenue streams and monetization strategies.</p>
-        </div>
-
-        {/* Content Sections */}
-        <div id="all-content" style={{ marginTop: '60px', padding: '32px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
-          <h2 style={{ marginBottom: '16px', color: 'var(--text-primary)' }}>All Content</h2>
-          <p style={{ color: 'var(--text-secondary)' }}>View and manage all your published content.</p>
-        </div>
-
-        <div id="assets" style={{ marginTop: '40px', padding: '32px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
-          <h2 style={{ marginBottom: '16px', color: 'var(--text-primary)' }}>Assets</h2>
-          <p style={{ color: 'var(--text-secondary)' }}>Manage game assets, images, and files.</p>
-        </div>
-
-        <div id="add-content" style={{ marginTop: '40px', padding: '32px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
-          <h2 style={{ marginBottom: '16px', color: 'var(--text-primary)' }}>Add New Content</h2>
-          <p style={{ color: 'var(--text-secondary)' }}>Upload and publish new content for your games.</p>
-        </div>
-
-        <div id="content-settings" style={{ marginTop: '40px', padding: '32px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
-          <h2 style={{ marginBottom: '16px', color: 'var(--text-primary)' }}>Content Settings</h2>
-          <p style={{ color: 'var(--text-secondary)' }}>Configure content management preferences.</p>
-        </div>
-
-        {/* Reports Sections */}
-        <div id="sales-reports" style={{ marginTop: '60px', padding: '32px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
-          <h2 style={{ marginBottom: '16px', color: 'var(--text-primary)' }}>Sales Reports</h2>
-          <p style={{ color: 'var(--text-secondary)' }}>View detailed sales and revenue reports.</p>
-        </div>
-
-        <div id="analytics-reports" style={{ marginTop: '40px', padding: '32px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
-          <h2 style={{ marginBottom: '16px', color: 'var(--text-primary)' }}>Analytics Reports</h2>
-          <p style={{ color: 'var(--text-secondary)' }}>Generate comprehensive analytics reports.</p>
-        </div>
-
-        <div id="user-reports" style={{ marginTop: '40px', padding: '32px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
-          <h2 style={{ marginBottom: '16px', color: 'var(--text-primary)' }}>User Reports</h2>
-          <p style={{ color: 'var(--text-secondary)' }}>Analyze user activity and behavior reports.</p>
-        </div>
-
-        <div id="content-reports" style={{ marginTop: '40px', padding: '32px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '16px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
-          <h2 style={{ marginBottom: '16px', color: 'var(--text-primary)' }}>Content Reports</h2>
-          <p style={{ color: 'var(--text-secondary)' }}>Track content performance and engagement.</p>
-        </div>
+      </div>
 
         {/* Upload Modal */}
         {uploadModalOpen && (
@@ -3650,7 +3627,209 @@ const GameStudio = ({ navigate }) => {
             </div>
           </div>
         )}
-      </div>
+
+        {/* Edit Game Modal */}
+        {editModalOpen && editingGame && (
+          <div className="edit-modal-overlay" onClick={() => setEditModalOpen(false)}>
+            <div className="edit-modal" onClick={(e) => e.stopPropagation()}>
+              <div className="edit-modal-header">
+                <h3>Edit Game: {editingGame.name}</h3>
+                <button className="edit-modal-close" onClick={() => setEditModalOpen(false)}>
+                  <X size={20} />
+                </button>
+              </div>
+              
+              <div className="edit-modal-content">
+                <div className="edit-form-grid">
+                  <div className="edit-section">
+                    <label className="edit-label">Game Name *</label>
+                    <input 
+                      type="text" 
+                      className="edit-input" 
+                      placeholder="Enter game name" 
+                      value={editFormData.gameName || ''}
+                      onChange={(e) => setEditFormData({...editFormData, gameName: e.target.value})}
+                    />
+                  </div>
+                  
+                  <div className="edit-section">
+                    <label className="edit-label">Developer / Publisher *</label>
+                    <input 
+                      type="text" 
+                      className="edit-input" 
+                      placeholder="Enter developer or publisher name" 
+                      value={editFormData.developer || ''}
+                      onChange={(e) => setEditFormData({...editFormData, developer: e.target.value})}
+                    />
+                  </div>
+                  
+                  <div className="edit-section">
+                    <label className="edit-label">Version *</label>
+                    <input 
+                      type="text" 
+                      className="edit-input" 
+                      placeholder="e.g. 1.0.0"
+                      value={editFormData.version || ''}
+                      onChange={(e) => setEditFormData({...editFormData, version: e.target.value})}
+                    />
+                  </div>
+                  
+                  <div className="edit-section">
+                    <label className="edit-label">Genre *</label>
+                    <select 
+                      className="edit-input"
+                      value={editFormData.genre || ''}
+                      onChange={(e) => setEditFormData({...editFormData, genre: e.target.value})}
+                    >
+                      <option value="">Select genre</option>
+                      <option value="action">Action</option>
+                      <option value="adventure">Adventure</option>
+                      <option value="rpg">RPG</option>
+                      <option value="strategy">Strategy</option>
+                      <option value="simulation">Simulation</option>
+                      <option value="sports">Sports</option>
+                      <option value="racing">Racing</option>
+                      <option value="puzzle">Puzzle</option>
+                      <option value="indie">Indie</option>
+                      <option value="casual">Casual</option>
+                      <option value="horror">Horror</option>
+                      <option value="multiplayer">Multiplayer</option>
+                    </select>
+                  </div>
+                  
+                  <div className="edit-section">
+                    <label className="edit-label">Age Rating</label>
+                    <select 
+                      className="edit-input"
+                      value={editFormData.ageRating || ''}
+                      onChange={(e) => setEditFormData({...editFormData, ageRating: e.target.value})}
+                    >
+                      <option value="">Select rating</option>
+                      <option value="everyone">Everyone</option>
+                      <option value="teen">Teen</option>
+                      <option value="mature">Mature</option>
+                      <option value="adults-only">Adults Only</option>
+                    </select>
+                  </div>
+                  
+                  <div className="edit-section">
+                    <label className="edit-label">Status *</label>
+                    <select 
+                      className="edit-input"
+                      value={editFormData.status || 'public'}
+                      onChange={(e) => setEditFormData({...editFormData, status: e.target.value})}
+                    >
+                      <option value="public">Public</option>
+                      <option value="private">Private</option>
+                      <option value="beta">Beta</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="edit-section">
+                  <label className="edit-label">Game Description *</label>
+                  <textarea 
+                    className="edit-textarea" 
+                    placeholder="Describe your game, its features, and what makes it special" 
+                    rows={4}
+                    value={editFormData.description || ''}
+                    onChange={(e) => setEditFormData({...editFormData, description: e.target.value})}
+                  />
+                </div>
+                
+                <div className="edit-form-grid">
+                  <div className="edit-section">
+                    <label className="edit-label">Price</label>
+                    <input 
+                      type="number" 
+                      className="edit-input" 
+                      placeholder="0.00" 
+                      step="0.01" 
+                      min="0"
+                      value={editFormData.price || ''}
+                      onChange={(e) => setEditFormData({...editFormData, price: e.target.value})}
+                    />
+                  </div>
+                  
+                  <div className="edit-section">
+                    <label className="edit-label">Release Date</label>
+                    <input 
+                      type="date" 
+                      className="edit-input" 
+                      value={editFormData.releaseDate || ''}
+                      onChange={(e) => setEditFormData({...editFormData, releaseDate: e.target.value})}
+                    />
+                  </div>
+                </div>
+                
+                <div className="edit-section">
+                  <label className="edit-label">Tags</label>
+                  <input 
+                    type="text" 
+                    className="edit-input" 
+                    placeholder="Enter tags separated by commas (e.g. action, multiplayer, indie)"
+                    value={editFormData.tags || ''}
+                    onChange={(e) => setEditFormData({...editFormData, tags: e.target.value})}
+                  />
+                </div>
+                
+                <div className="edit-section">
+                  <label className="edit-label">System Requirements</label>
+                  <textarea 
+                    className="edit-textarea" 
+                    placeholder="Minimum and recommended system requirements" 
+                    rows={3}
+                    value={editFormData.requirements || ''}
+                    onChange={(e) => setEditFormData({...editFormData, requirements: e.target.value})}
+                  />
+                </div>
+                
+                <div className="edit-section">
+                  <label className="edit-label">Last Update Title</label>
+                  <input 
+                    type="text" 
+                    className="edit-input" 
+                    placeholder="e.g. Bug fixes and performance improvements"
+                    value={editFormData.lastUpdateTitle || ''}
+                    onChange={(e) => setEditFormData({...editFormData, lastUpdateTitle: e.target.value})}
+                  />
+                </div>
+                
+                <div className="edit-form-grid">
+                  <div className="edit-section">
+                    <label className="edit-label">Scheduled Update Date</label>
+                    <input 
+                      type="datetime-local" 
+                      className="edit-input" 
+                      value={editFormData.scheduledUpdateDate ? new Date(editFormData.scheduledUpdateDate).toISOString().slice(0, 16) : ''}
+                      onChange={(e) => setEditFormData({...editFormData, scheduledUpdateDate: e.target.value ? new Date(e.target.value).toISOString() : null})}
+                    />
+                  </div>
+                  
+                  <div className="edit-section">
+                    <label className="edit-label">Scheduled Update Title</label>
+                    <input 
+                      type="text" 
+                      className="edit-input" 
+                      placeholder="e.g. New features and content"
+                      value={editFormData.scheduledUpdateTitle || ''}
+                      onChange={(e) => setEditFormData({...editFormData, scheduledUpdateTitle: e.target.value})}
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              <div className="edit-modal-actions">
+                <button className="edit-cancel-btn" onClick={() => setEditModalOpen(false)}>
+                  Cancel
+                </button>
+                <button className="edit-save-btn" onClick={handleSaveEdit}>
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
     </div>
   );
 };

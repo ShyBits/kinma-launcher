@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ShoppingCart, Plus, Minus, ShoppingBag, Eye, EyeOff, Grid, List, ArrowLeft, Crown, TrendingUp, TrendingDown, Zap, Clock, Star, Users, Flame, ArrowRight, Sparkles, BarChart3, DollarSign, TrendingUp as TrendingUpIcon, PieChart, Target, Award, Activity, ArrowUpRight, ArrowDownRight, FileText, CheckCircle2, UserPlus, Search, X, ChevronLeft, RotateCw, RotateCcw, Maximize2, Minimize2, GitCompare, Flag, CheckSquare, Square, SlidersHorizontal } from 'lucide-react';
-import { getUserData, saveUserData, getAllUsersData } from '../utils/UserDataManager';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { ShoppingCart, Plus, Minus, ShoppingBag, Eye, EyeOff, Grid, List, ArrowLeft, Crown, TrendingUp, TrendingDown, Zap, Clock, Star, Users, Flame, ArrowRight, Sparkles, BarChart3, DollarSign, TrendingUp as TrendingUpIcon, PieChart, Target, Award, Activity, ArrowUpRight, ArrowDownRight, FileText, CheckCircle2, UserPlus, Search, X, ChevronLeft, RotateCw, RotateCcw, Maximize2, Minimize2, GitCompare, Flag, CheckSquare, Square, SlidersHorizontal, MousePointer2, ArrowUp, ArrowDown } from 'lucide-react';
+import { getUserData, saveUserData, getAllUsersData, getCurrentUserId } from '../utils/UserDataManager';
 import Item3DView from '../components/Item3DView';
 import './Market.css';
 
@@ -16,12 +16,12 @@ const getUserInventory = (gameId) => {
 };
 
 // Get all inventory items from all games (same as Profile.js)
-const getAllInventoryItems = () => {
+const getAllInventoryItems = async () => {
   try {
     const allItems = [];
     
     // Get all games from all users
-    const allGames = getAllUsersData('customGames');
+    const allGames = await getAllUsersData('customGames');
     
     // Create a map of gameId to game name
     const gameMap = {};
@@ -32,9 +32,93 @@ const getAllInventoryItems = () => {
       }
     });
     
+    // Always add dummy game for testing
+    const dummyGameId = 'dummy-game-1';
+    const dummyGameName = 'Dummy Game';
+    gameMap[dummyGameId] = dummyGameName;
+    
+    // If no games exist, create dummy data for a default game
+    if (allGames.length === 0) {
+      const defaultGameId = 'default-game';
+      const defaultGameName = 'Default Game';
+      gameMap[defaultGameId] = defaultGameName;
+    }
+    
+    // Initialize dummy data if no inventory exists
+    const initializeDummyInventory = async (gameId, gameName) => {
+      const existingInventory = await getUserData(`inventory_${gameId}`, []);
+      if (!existingInventory || existingInventory.length === 0) {
+        const dummyItems = [
+          {
+            id: `dummy-${gameId}-1`,
+            name: 'Epic Sword',
+            description: 'A powerful legendary weapon with enhanced damage',
+            rarity: 'epic',
+            type: 'Weapon',
+            image: '⚔️',
+            gameId: gameId,
+            gameName: gameName
+          },
+          {
+            id: `dummy-${gameId}-2`,
+            name: 'Rare Shield',
+            description: 'A sturdy defensive item that blocks incoming attacks',
+            rarity: 'rare',
+            type: 'Armor',
+            image: '🛡️',
+            gameId: gameId,
+            gameName: gameName
+          },
+          {
+            id: `dummy-${gameId}-3`,
+            name: 'Legendary Potion',
+            description: 'Restores health completely and grants temporary buffs',
+            rarity: 'legendary',
+            type: 'Consumable',
+            image: '🧪',
+            gameId: gameId,
+            gameName: gameName
+          },
+          {
+            id: `dummy-${gameId}-4`,
+            name: 'Common Boots',
+            description: 'Basic footwear that provides minimal protection',
+            rarity: 'common',
+            type: 'Armor',
+            image: '👢',
+            gameId: gameId,
+            gameName: gameName
+          },
+          {
+            id: `dummy-${gameId}-5`,
+            name: 'Rare Helmet',
+            description: 'Protective headgear with moderate defense',
+            rarity: 'rare',
+            type: 'Armor',
+            image: '⛑️',
+            gameId: gameId,
+            gameName: gameName
+          },
+          {
+            id: `dummy-${gameId}-6`,
+            name: 'Epic Bow',
+            description: 'A long-range weapon with high accuracy',
+            rarity: 'epic',
+            type: 'Weapon',
+            image: '🏹',
+            gameId: gameId,
+            gameName: gameName
+          }
+        ];
+        await saveUserData(`inventory_${gameId}`, dummyItems);
+        return dummyItems;
+      }
+      return existingInventory;
+    };
+    
     // Get inventory for each game
-    Object.keys(gameMap).forEach(gameId => {
-      const inventory = getUserData(`inventory_${gameId}`, []);
+    for (const gameId of Object.keys(gameMap)) {
+      const inventory = await initializeDummyInventory(gameId, gameMap[gameId]);
       if (inventory && Array.isArray(inventory) && inventory.length > 0) {
         inventory.forEach(item => {
           allItems.push({
@@ -44,9 +128,25 @@ const getAllInventoryItems = () => {
           });
         });
       }
-    });
+    }
     
-    // Also check localStorage directly for any inventory_ keys
+    // If no games exist, create dummy inventory for a default game
+    if (allGames.length === 0 && Object.keys(gameMap).length === 0) {
+      const defaultGameId = 'default-game';
+      const defaultGameName = 'Default Game';
+      const inventory = await initializeDummyInventory(defaultGameId, defaultGameName);
+      if (inventory && Array.isArray(inventory) && inventory.length > 0) {
+        inventory.forEach(item => {
+          allItems.push({
+            ...item,
+            gameId: defaultGameId,
+            gameName: defaultGameName
+          });
+        });
+      }
+    }
+    
+    // Also check localStorage directly for any inventory_ keys (for backward compatibility)
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (key && key.startsWith('inventory_')) {
@@ -54,6 +154,8 @@ const getAllInventoryItems = () => {
         if (!gameMap[gameId]) {
           // Game not in customGames, use gameId as name
           gameMap[gameId] = gameId;
+          // Initialize dummy data for this game too
+          await initializeDummyInventory(gameId, gameId);
         }
         try {
           const inventory = JSON.parse(localStorage.getItem(key) || '[]');
@@ -84,33 +186,203 @@ const getAllInventoryItems = () => {
   }
 };
 
+// Format price with letter abbreviations (1.00k, 1.00m, etc.)
+const formatPriceCompact = (price) => {
+  const num = parseFloat(price);
+  if (isNaN(num)) return '0.00';
+  
+  if (num >= 1000000000) {
+    return (num / 1000000000).toFixed(2) + 'b';
+  } else if (num >= 1000000) {
+    return (num / 1000000).toFixed(2) + 'm';
+  } else if (num >= 1000) {
+    return (num / 1000).toFixed(2) + 'k';
+  } else {
+    return num.toFixed(2);
+  }
+};
+
 const Market = () => {
   const { gameId } = useParams();
   const navigate = useNavigate();
-  const [selectedGame, setSelectedGame] = useState(null);
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  // Check both pathname and hash for compare-only mode (HashRouter uses hash)
+  // HashRouter puts the route in location.pathname, but we also check hash for safety
+  const currentPath = location.pathname + (location.hash || '');
+  const isCompareOnlyMode = currentPath.includes('/market/compare') || 
+                            (gameId && currentPath.includes(`/game/${gameId}/market/compare`)) || 
+                            searchParams.get('compare') === 'true' ||
+                            window.location.hash.includes('/market/compare') ||
+                            (gameId && window.location.hash.includes(`/game/${gameId}/market/compare`));
+  // Load selected game from localStorage on mount
+  const [selectedGame, setSelectedGame] = useState(() => {
+    try {
+      const saved = localStorage.getItem('market_selected_game');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [lastSelectedGameInBrowse, setLastSelectedGameInBrowse] = useState(() => {
+    try {
+      const saved = localStorage.getItem('market_last_selected_game');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  }); // Remember last selected game when in browse view
+  const isRestoringGameRef = useRef(false); // Track if we're restoring a game
+  const [isRestoringGame, setIsRestoringGame] = useState(false); // State to track restoration for smooth rendering
   const [selectedTab, setSelectedTab] = useState('items');
   const [sortBy, setSortBy] = useState('price-low');
   const [rarityFilter, setRarityFilter] = useState(new Set(['all'])); // Multiple choice
   const [viewMode, setViewMode] = useState('grid');
   const [itemSearch, setItemSearch] = useState('');
   const [priceFilter, setPriceFilter] = useState(new Set(['all'])); // Multiple choice
+  const [openFilterDropdown, setOpenFilterDropdown] = useState(null); // 'rarity', 'price', 'sort', or null
   const [selectedFilters, setSelectedFilters] = useState({
     rarity: new Set(['all']),
     price: new Set(['all']),
     sort: 'price-low'
   });
-  const [watchedItems, setWatchedItems] = useState(new Set());
+  const [watchedItems, setWatchedItems] = useState(() => {
+    try {
+      const stored = localStorage.getItem('watchedItems');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return new Set(Array.isArray(parsed) ? parsed : []);
+      }
+    } catch (e) {
+      console.error('Error loading watched items:', e);
+    }
+    return new Set();
+  });
   const [isSearchMode, setIsSearchMode] = useState(false);
   const searchInputRef = useRef(null);
+  const [generalSearch, setGeneralSearch] = useState(''); // General search for browse/watchlist/analytics
   const searchWrapperRef = useRef(null);
   const [showSellModal, setShowSellModal] = useState(false);
+  const [cartItems, setCartItems] = useState([]); // Track cart items for visual feedback
   const [showQuickBuyModal, setShowQuickBuyModal] = useState(false);
   const [showItemDetailModal, setShowItemDetailModal] = useState(false);
   const [selectedItemDetail, setSelectedItemDetail] = useState(null);
-  const [comparisonItems, setComparisonItems] = useState([]);
+  // Load comparison items from localStorage on mount and sync between windows
+  const [comparisonItems, setComparisonItems] = useState(() => {
+    try {
+      const stored = localStorage.getItem('market_comparison_items');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
   const [showComparisonModal, setShowComparisonModal] = useState(false);
+  
+  // Sync comparison items to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('market_comparison_items', JSON.stringify(comparisonItems));
+      // Dispatch event to sync with other windows
+      window.dispatchEvent(new CustomEvent('comparison-items-updated', { detail: comparisonItems }));
+    } catch (error) {
+      console.error('Error saving comparison items:', error);
+    }
+  }, [comparisonItems]);
+  
+  // Load cart items on mount and listen for updates
+  useEffect(() => {
+    const loadCartItems = async () => {
+      try {
+        const userId = await getCurrentUserId();
+        if (!userId) {
+          setCartItems([]);
+          return;
+        }
+        
+        // Load from localStorage
+        const stored = localStorage.getItem(`cartItems_${userId}`);
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+              setCartItems(parsed);
+            }
+          } catch (e) {
+            console.error('Error parsing cart items:', e);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading cart items:', error);
+      }
+    };
+    
+    loadCartItems();
+    
+    // Listen for cart update events
+    const handleCartUpdate = (event) => {
+      if (event.detail && event.detail.items && Array.isArray(event.detail.items)) {
+        setCartItems(event.detail.items);
+      } else {
+        // If no items in event, reload from localStorage
+        loadCartItems();
+      }
+    };
+    
+    window.addEventListener('cart-updated', handleCartUpdate);
+    return () => {
+      window.removeEventListener('cart-updated', handleCartUpdate);
+    };
+  }, []);
+  
+  // Listen for comparison items updates from other windows
+  useEffect(() => {
+    const handleComparisonUpdate = (event) => {
+      if (event.detail && Array.isArray(event.detail)) {
+        // Only update if the items are actually different
+        setComparisonItems(prev => {
+          const prevIds = prev.map(i => i.id).sort().join(',');
+          const newIds = event.detail.map(i => i.id).sort().join(',');
+          if (prevIds !== newIds) {
+            return event.detail;
+          }
+          return prev;
+        });
+      }
+    };
+    
+    // Also listen to storage events for cross-window synchronization
+    const handleStorageChange = (e) => {
+      if (e.key === 'market_comparison_items') {
+        try {
+          const stored = e.newValue ? JSON.parse(e.newValue) : [];
+          if (Array.isArray(stored)) {
+            setComparisonItems(prev => {
+              const prevIds = prev.map(i => i.id).sort().join(',');
+              const newIds = stored.map(i => i.id).sort().join(',');
+              if (prevIds !== newIds) {
+                return stored;
+              }
+              return prev;
+            });
+          }
+        } catch (error) {
+          console.error('Error parsing comparison items from storage:', error);
+        }
+      }
+    };
+    
+    window.addEventListener('comparison-items-updated', handleComparisonUpdate);
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('comparison-items-updated', handleComparisonUpdate);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
   const [comparisonModalAutoOpened, setComparisonModalAutoOpened] = useState(false);
   const [comparisonModalManuallyClosed, setComparisonModalManuallyClosed] = useState(false);
+  const [showAddItemsModal, setShowAddItemsModal] = useState(false);
+  const popOutOpeningRef = useRef(false);
   const [referenceItemId, setReferenceItemId] = useState(null);
   const [comparisonRotations, setComparisonRotations] = useState({});
   const [comparisonZooms, setComparisonZooms] = useState({});
@@ -118,6 +390,7 @@ const Market = () => {
   const [comparisonIsRotating, setComparisonIsRotating] = useState({});
   const [comparisonIsPanning, setComparisonIsPanning] = useState({});
   const [comparisonIsResetting, setComparisonIsResetting] = useState({});
+  const [expanded3DViews, setExpanded3DViews] = useState({}); // Object with item IDs as keys and boolean values for expanded state
   const comparison3dRefs = useRef({});
   const comparisonAnimationFrameRefs = useRef({});
   const comparisonCurrentValuesRefs = useRef({});
@@ -205,6 +478,8 @@ const Market = () => {
   const [collapsedBannerHeight, setCollapsedBannerHeight] = useState(300);
   const itemsGridRef = useRef(null);
   const [marketItemsRefresh, setMarketItemsRefresh] = useState(0);
+  const [marketItems, setMarketItems] = useState([]); // Declare early to avoid initialization error
+  const [allMarketItemsForWatchlist, setAllMarketItemsForWatchlist] = useState([]); // All market items from all games for watchlist
   const [marketView, setMarketView] = useState('browse'); // browse, petitions, featured, trending, favorites, stats
   const [customGames, setCustomGames] = useState([]);
   const [watchedGames, setWatchedGames] = useState(new Set());
@@ -224,12 +499,100 @@ const Market = () => {
   const [petitionSearchQuery, setPetitionSearchQuery] = useState('');
   const [selectedPetitionGame, setSelectedPetitionGame] = useState(null);
   
+  // Bid System State
+  const [itemBids, setItemBids] = useState(() => {
+    try {
+      const stored = localStorage.getItem('market_item_bids');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  }); // { itemId: { saleType: 'buy'|'bid', bidEndTime: timestamp, currentBid: number, bidHistory: [], bidDuration: minutes } }
+  
+  const [bidInputs, setBidInputs] = useState({}); // { itemId: { amount: number, duration: number } }
+  const [soldItems, setSoldItems] = useState({}); // { itemId: true } - items that have been sold and should disappear
+  const [noBidItems, setNoBidItems] = useState({}); // { itemId: true } - items that ended with no bids
+  const [lockedItems, setLockedItems] = useState(() => {
+    try {
+      const stored = localStorage.getItem('market_locked_items');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  }); // { itemId: { userId: string, timestamp: number, timeout: number } } - items locked for purchase
+  const [showBidModal, setShowBidModal] = useState(false);
+  const [selectedBidItem, setSelectedBidItem] = useState(null);
+  const [bidModalError, setBidModalError] = useState(null);
+  const [showPurchaseConfirmation, setShowPurchaseConfirmation] = useState(false);
+  const [pendingPurchaseItem, setPendingPurchaseItem] = useState(null);
+  
+  // Current user state
+  const [currentUserId, setCurrentUserId] = useState(null);
+  const [currentUsername, setCurrentUsername] = useState(null);
+  
+  // Load current user
+  useEffect(() => {
+    const loadCurrentUser = async () => {
+      try {
+        const userId = await getCurrentUserId();
+        const username = await getUserData('username', null);
+        // Also try to get from authUser in localStorage as fallback
+        let fallbackUsername = null;
+        try {
+          const authUser = localStorage.getItem('authUser');
+          if (authUser) {
+            const user = JSON.parse(authUser);
+            fallbackUsername = user.name || user.username || user.email;
+          }
+        } catch (e) {
+          // Ignore
+        }
+        const finalUsername = username || fallbackUsername;
+        let finalUserId = userId;
+        try {
+          const authUser = localStorage.getItem('authUser');
+          if (authUser && !finalUserId) {
+            const user = JSON.parse(authUser);
+            finalUserId = user.id;
+          }
+        } catch (e) {
+          // Ignore
+        }
+        setCurrentUserId(finalUserId);
+        setCurrentUsername(finalUsername);
+        console.log('Current user loaded:', { 
+          userId, 
+          finalUserId,
+          username, 
+          fallbackUsername, 
+          finalUsername,
+          authUserFromStorage: localStorage.getItem('authUser')
+        });
+      } catch (error) {
+        console.error('Error loading current user:', error);
+      }
+    };
+    loadCurrentUser();
+  }, []);
+  
+  // Sale type state for sell modal (buy or bid)
+  const [saleType, setSaleType] = useState('buy'); // 'buy' or 'bid'
+  
   // Window width for responsive sidebar sizing
   const [windowWidth, setWindowWidth] = useState(() => {
     return typeof window !== 'undefined' ? window.innerWidth : 1120;
   });
 
   // Right sidebar resizing state
+  const [marketLeftSidebarWidth, setMarketLeftSidebarWidth] = useState(() => {
+    try {
+      const saved = localStorage.getItem('sidebarWidth');
+      return saved ? parseInt(saved, 10) : 260;
+    } catch {
+      return 260;
+    }
+  });
+
   const [marketRightSidebarWidth, setMarketRightSidebarWidth] = useState(() => {
     try {
       const saved = localStorage.getItem('marketRightSidebarWidth');
@@ -254,7 +617,15 @@ const Market = () => {
   // Calculate responsive sidebar width based on window size
   // Scales between 15-25% of window width, clamped between 200px and 250px
   // Get all inventory items (same as Profile.js)
-  const allInventoryItems = useMemo(() => getAllInventoryItems(), [inventoryRefresh]);
+  const [allInventoryItems, setAllInventoryItems] = useState([]);
+  
+  useEffect(() => {
+    const loadInventory = async () => {
+      const items = await getAllInventoryItems();
+      setAllInventoryItems(items);
+    };
+    loadInventory();
+  }, [inventoryRefresh]);
   
   // Get unique games from inventory
   const inventoryGames = useMemo(() => {
@@ -272,6 +643,15 @@ const Market = () => {
   const filteredInventoryItems = useMemo(() => {
     let filtered = [...allInventoryItems];
     
+    // If a game is selected in the marketplace, only show items from that game
+    const currentGameId = selectedGame?.id || selectedGame?.gameId || gameId;
+    if (currentGameId) {
+      filtered = filtered.filter(item => {
+        const itemGameId = item.gameId;
+        return itemGameId && String(itemGameId) === String(currentGameId);
+      });
+    }
+    
     // Search filter
     if (inventorySearch) {
       filtered = filtered.filter(item =>
@@ -280,8 +660,8 @@ const Market = () => {
       );
     }
     
-    // Game filter
-    if (inventoryGameFilter !== 'all') {
+    // Game filter (only applies if no game is selected in marketplace)
+    if (!currentGameId && inventoryGameFilter !== 'all') {
       filtered = filtered.filter(item => item.gameId === inventoryGameFilter);
     }
     
@@ -293,24 +673,40 @@ const Market = () => {
     }
     
     // Filter out items that are already listed in the marketplace
-    if (selectedGame && Array.isArray(currentMarketItems)) {
+    // Use currentMarketItems which is synchronized with marketItems via useEffect
+    const allMarketItems = Array.isArray(currentMarketItems) ? currentMarketItems : [];
+    
+    if (selectedGame && allMarketItems.length > 0) {
       const gameId = selectedGame.id || selectedGame.gameId;
       if (gameId) {
         const listedItemIds = new Set(
-          currentMarketItems
-            .filter(mi => mi.status === 'active')
-            .map(mi => `${mi.gameId || gameId}_${mi.originalItemId || mi.id}`)
+          allMarketItems
+            .filter(mi => {
+              // Only include active items, or items without a status (for backwards compatibility)
+              const status = mi.status;
+              return !status || status === 'active';
+            })
+            .map(mi => {
+              // Use originalItemId if available, otherwise use id
+              const itemId = mi.originalItemId || mi.id;
+              const itemGameId = mi.gameId || gameId;
+              return `${String(itemGameId)}_${String(itemId)}`;
+            })
         );
         
         filtered = filtered.filter(item => {
-          const itemKey = `${item.gameId || gameId}_${item.id}`;
-          return !listedItemIds.has(itemKey);
+          const itemKey = `${String(item.gameId || gameId)}_${String(item.id)}`;
+          const isListed = listedItemIds.has(itemKey);
+          if (isListed) {
+            console.log(`Filtering out listed item: ${item.name} (${itemKey})`);
+          }
+          return !isListed;
         });
       }
     }
     
     return filtered;
-  }, [allInventoryItems, inventorySearch, inventoryGameFilter, inventoryRarityFilter, selectedGame, marketItemsRefresh, currentMarketItems]);
+  }, [allInventoryItems, inventorySearch, inventoryGameFilter, inventoryRarityFilter, selectedGame, gameId, marketItemsRefresh, currentMarketItems]);
   
   // Refresh inventory on storage changes
   useEffect(() => {
@@ -334,38 +730,43 @@ const Market = () => {
     }
   }, [selectedGame]);
 
+  // Save selectedGame to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      if (selectedGame) {
+        localStorage.setItem('market_selected_game', JSON.stringify(selectedGame));
+      } else {
+        localStorage.removeItem('market_selected_game');
+      }
+    } catch (error) {
+      console.error('Error saving selected game:', error);
+    }
+  }, [selectedGame]);
+
+  // Save lastSelectedGameInBrowse to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      if (lastSelectedGameInBrowse) {
+        localStorage.setItem('market_last_selected_game', JSON.stringify(lastSelectedGameInBrowse));
+      } else {
+        localStorage.removeItem('market_last_selected_game');
+      }
+    } catch (error) {
+      console.error('Error saving last selected game:', error);
+    }
+  }, [lastSelectedGameInBrowse]);
+
+  // Save selectedGame when in browse view, so it can be restored when returning
+  useEffect(() => {
+    if (marketView === 'browse' && selectedGame) {
+      // Save the currently selected game when in browse view
+      setLastSelectedGameInBrowse(selectedGame);
+    }
+  }, [marketView, selectedGame]);
+
 
 
   // Handle banner collapsing on scroll
-  useEffect(() => {
-    // Use market-content-area as scroll container
-    const scrollContainer = document.querySelector('.market-content-area');
-    if (!scrollContainer || !selectedGame) return;
-
-    let lastScrollTop = 0;
-
-    const handleScroll = () => {
-      const scrollTop = scrollContainer.scrollTop;
-      const initialHeight = 300;
-      const minHeight = 60; // Minimum height for back button visibility
-      
-      // Switch directly to collapsed version on first scroll with smooth animation
-      if (scrollTop > 0 && lastScrollTop === 0) {
-        setCollapsedBannerHeight(minHeight);
-      } else if (scrollTop === 0 && lastScrollTop > 0) {
-        // Switch back to full height when scrolled to top with smooth animation
-        setCollapsedBannerHeight(initialHeight);
-      }
-      
-      lastScrollTop = scrollTop;
-    };
-
-    scrollContainer.addEventListener('scroll', handleScroll, { passive: true });
-    
-    return () => {
-      scrollContainer.removeEventListener('scroll', handleScroll);
-    };
-  }, [selectedGame]);
 
   const responsiveSidebarWidth = useMemo(() => {
     const minWidth = 200;
@@ -409,12 +810,49 @@ const Market = () => {
     });
     // Listen for sidebar resize events
     window.addEventListener('sidebar-resize', updateContentWidth);
+    
+    // Update left sidebar width from localStorage or event
+    const updateLeftSidebarWidth = (event) => {
+      try {
+        // Use event detail if available (more immediate), otherwise fall back to localStorage
+        const width = event?.detail?.width;
+        if (width) {
+          setMarketLeftSidebarWidth(width);
+        } else {
+          const saved = localStorage.getItem('sidebarWidth');
+          if (saved) {
+            setMarketLeftSidebarWidth(parseInt(saved, 10));
+          }
+        }
+      } catch (_) {}
+    };
+    
+    updateLeftSidebarWidth();
+    window.addEventListener('sidebar-resize', updateLeftSidebarWidth);
+    
     return () => {
       window.removeEventListener('resize', updateWindowSize);
       window.removeEventListener('resize', updateContentWidth);
       window.removeEventListener('sidebar-resize', updateContentWidth);
+      window.removeEventListener('sidebar-resize', updateLeftSidebarWidth);
     };
   }, [marketRightSidebarWidth]);
+
+  // Close filter dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (openFilterDropdown && !e.target.closest('.market-filter-dropdown-wrapper')) {
+        setOpenFilterDropdown(null);
+      }
+    };
+    
+    if (openFilterDropdown) {
+      document.addEventListener('click', handleClickOutside);
+      return () => {
+        document.removeEventListener('click', handleClickOutside);
+      };
+    }
+  }, [openFilterDropdown]);
 
   // Calculate banner height based on content width (maintain aspect ratio)
   // Use 20% of content width, clamped between 180px and 600px
@@ -674,7 +1112,25 @@ const Market = () => {
       };
     });
 
-    return [...customGamesData];
+    // Add dummy game for testing
+    const dummyGame = {
+      id: 'dummy-game-1',
+      name: 'Dummy Game',
+      icon: 'D',
+      image: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=1200&h=600&fit=crop',
+      logo: null,
+      installed: false,
+      hasMarket: true,
+      signatures: 0,
+      myToken: null,
+      isCustom: false,
+      cardImage: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=1200&h=600&fit=crop',
+      marketRank: null,
+      totalVolume: '$15,230',
+      marketTrend: '+8.5%'
+    };
+
+    return [...customGamesData, dummyGame];
   }, [customGames, petitions, marketDataCache]);
 
   // Get games with markets and games without markets
@@ -682,6 +1138,7 @@ const Market = () => {
   const gamesWithoutMarkets = allGamesData.filter(g => g.hasMarket === false);
   
   // Calculate ranks for browse view (by volume) - games with same stats get same rank
+  // Rankings should NOT be affected by search/filter - use gamesWithMarketsRaw
   const gamesWithMarkets = React.useMemo(() => {
     const sorted = [...gamesWithMarketsRaw].sort((a, b) => {
       const parseVolume = (volume) => {
@@ -728,6 +1185,7 @@ const Market = () => {
   }, [gamesWithMarketsRaw]);
 
   // Sort games by 24h trend for trending view
+  // Rankings should NOT be affected by search/filter - use gamesWithMarketsRaw
   const trendingGames = React.useMemo(() => {
     const sorted = [...gamesWithMarketsRaw].sort((a, b) => {
       const parseTrend = (trend) => {
@@ -774,6 +1232,7 @@ const Market = () => {
   }, [gamesWithMarketsRaw]);
 
   // Sort games by volume for top markets view
+  // Rankings should NOT be affected by search/filter - use gamesWithMarketsRaw
   const topMarketsGames = React.useMemo(() => {
     const sorted = [...gamesWithMarketsRaw].sort((a, b) => {
       const parseVolume = (volume) => {
@@ -820,11 +1279,25 @@ const Market = () => {
   }, [gamesWithMarketsRaw]);
 
   // Get current games list based on marketView (must be after gamesWithMarkets, trendingGames, topMarketsGames)
+  // Apply search filter but preserve rankings from unfiltered data
   const currentGamesList = useMemo(() => {
-    if (marketView === 'trending') return trendingGames;
-    if (marketView === 'featured') return topMarketsGames;
-    return gamesWithMarkets;
-  }, [marketView, trendingGames, topMarketsGames, gamesWithMarkets]);
+    let baseList;
+    if (marketView === 'trending') baseList = trendingGames;
+    else if (marketView === 'featured') baseList = topMarketsGames;
+    else baseList = gamesWithMarkets;
+    
+    // Apply search filter if there's a search query
+    if (generalSearch && marketView !== 'petitions') {
+      const searchLower = generalSearch.toLowerCase();
+      return baseList.filter(game => {
+        const name = (game.name || '').toLowerCase();
+        const gameId = (game.id || game.gameId || '').toLowerCase();
+        return name.includes(searchLower) || gameId.includes(searchLower);
+      });
+    }
+    
+    return baseList;
+  }, [marketView, trendingGames, topMarketsGames, gamesWithMarkets, generalSearch]);
   
   // Reset visible range when marketView changes
   useEffect(() => {
@@ -924,23 +1397,233 @@ const Market = () => {
     return currentGamesList.slice(visibleRange.start, visibleRange.end);
   }, [currentGamesList, visibleRange]);
 
-  // Auto-select game based on URL parameter
+  // Auto-select game based on URL parameter or restore from localStorage
   useEffect(() => {
-    if (!gameId) {
-      setSelectedGame(null);
+    if (gameId) {
+      // If gameId is in URL, use that
+      const match = allGamesData.find(g => String(g.id) === String(gameId));
+      if (match) {
+        setSelectedGame(match);
+        // Update lastSelectedGameInBrowse when game is auto-selected from URL
+        setLastSelectedGameInBrowse(match);
+        isRestoringGameRef.current = false;
+      }
       return;
     }
 
-    // Find game in computed list (custom games only)
-    const match = allGamesData.find(g => String(g.id) === String(gameId));
-    if (match) {
-      setSelectedGame(match);
+    // No gameId in URL - check if we should restore from localStorage
+    // Only restore if we're in browse view, have a saved game, and not currently restoring
+    if (marketView === 'browse' && !isRestoringGameRef.current && !selectedGame) {
+      // Check localStorage directly for saved game
+      let gameToRestore = lastSelectedGameInBrowse;
+      if (!gameToRestore) {
+        try {
+          const saved = localStorage.getItem('market_last_selected_game');
+          gameToRestore = saved ? JSON.parse(saved) : null;
+        } catch (error) {
+          console.error('Error loading saved game from localStorage:', error);
+        }
+      }
+      
+      if (gameToRestore) {
+        const gameIdToRestore = gameToRestore.id || gameToRestore.gameId;
+        if (gameIdToRestore) {
+          // Check if the game still exists in allGamesData
+          const match = allGamesData.find(g => String(g.id) === String(gameIdToRestore) || String(g.gameId) === String(gameIdToRestore));
+          if (match) {
+            isRestoringGameRef.current = true;
+            setIsRestoringGame(true);
+            setSelectedGame(match);
+            setLastSelectedGameInBrowse(match);
+            // Navigate to the game's marketplace URL
+            navigate(`/game/${gameIdToRestore}/market`, { replace: true });
+            setTimeout(() => {
+              isRestoringGameRef.current = false;
+              setIsRestoringGame(false);
+            }, 200);
+            return;
+          }
+        }
+      }
     }
-  }, [gameId, allGamesData]);
 
-  // Load market items from account-separated storage
-  const [marketItems, setMarketItems] = useState([]);
-  
+    // Don't clear selectedGame if we're restoring a game
+    if (!isRestoringGameRef.current && !gameId) {
+      // Only clear if we explicitly don't have a gameId and we're not restoring
+      // This allows the back button to work properly
+      if (marketView === 'browse' && !lastSelectedGameInBrowse) {
+        setSelectedGame(null);
+      }
+    } else if (isRestoringGameRef.current) {
+      // Reset the flag after a short delay
+      setTimeout(() => {
+        isRestoringGameRef.current = false;
+      }, 100);
+    }
+  }, [gameId, allGamesData, marketView, lastSelectedGameInBrowse, navigate, selectedGame]);
+
+  // Initialize dummy market items for a game if none exist
+  const initializeDummyMarketItems = async (gameId, gameName) => {
+    const existingItems = await getUserData(`marketItems_${gameId}`, []);
+    if (!existingItems || existingItems.length === 0) {
+      // Get current user info for dummy items
+      const username = await getUserData('username', 'Unknown');
+      const userId = await getCurrentUserId();
+      let fallbackUsername = null;
+      try {
+        const authUser = localStorage.getItem('authUser');
+        if (authUser) {
+          const user = JSON.parse(authUser);
+          fallbackUsername = user.name || user.username || user.email;
+        }
+      } catch (e) {
+        // Ignore
+      }
+      const finalUsername = username || fallbackUsername || 'Unknown';
+      const finalUserId = userId || null;
+      
+      const dummyMarketItems = [
+        {
+          id: `market-${gameId}-1`,
+          name: 'Epic Sword',
+          description: 'A powerful legendary weapon with enhanced damage',
+          rarity: 'epic',
+          type: 'Weapon',
+          image: '⚔️',
+          imageUrl: null,
+          price: 45.99,
+          seller: finalUsername,
+          sellerId: finalUserId,
+          listedAt: Date.now() - (35 * 60 * 1000), // 35 minutes ago
+          status: 'active',
+          gameId: gameId,
+          gameName: gameName
+        },
+        {
+          id: `market-${gameId}-2`,
+          name: 'Rare Shield',
+          description: 'A sturdy defensive item that blocks incoming attacks',
+          rarity: 'rare',
+          type: 'Armor',
+          image: '🛡️',
+          imageUrl: null,
+          price: 32.50,
+          seller: finalUsername,
+          sellerId: finalUserId,
+          listedAt: Date.now() - (35 * 60 * 1000),
+          status: 'active',
+          gameId: gameId,
+          gameName: gameName
+        },
+        {
+          id: `market-${gameId}-3`,
+          name: 'Rare Helmet',
+          description: 'Protective headgear with moderate defense',
+          rarity: 'rare',
+          type: 'Armor',
+          image: '⛑️',
+          imageUrl: null,
+          price: 28.75,
+          seller: finalUsername,
+          sellerId: finalUserId,
+          listedAt: Date.now() - (35 * 60 * 1000),
+          status: 'active',
+          gameId: gameId,
+          gameName: gameName
+        },
+        {
+          id: `market-${gameId}-4`,
+          name: 'Common Boots',
+          description: 'Basic footwear that provides minimal protection',
+          rarity: 'common',
+          type: 'Armor',
+          image: '👢',
+          imageUrl: null,
+          price: 12.00,
+          seller: finalUsername,
+          sellerId: finalUserId,
+          listedAt: Date.now() - (35 * 60 * 1000),
+          status: 'active',
+          gameId: gameId,
+          gameName: gameName
+        },
+        {
+          id: `market-${gameId}-5`,
+          name: 'Epic Bow',
+          description: 'A long-range weapon with high accuracy',
+          rarity: 'epic',
+          type: 'Weapon',
+          image: '🏹',
+          imageUrl: null,
+          price: 55.25,
+          seller: finalUsername,
+          sellerId: finalUserId,
+          listedAt: Date.now() - (35 * 60 * 1000),
+          status: 'active',
+          gameId: gameId,
+          gameName: gameName
+        },
+        {
+          id: `market-${gameId}-6`,
+          name: 'Legendary Potion',
+          description: 'Restores health completely and grants temporary buffs',
+          rarity: 'legendary',
+          type: 'Consumable',
+          image: '🧪',
+          imageUrl: null,
+          price: 89.99,
+          seller: finalUsername,
+          sellerId: finalUserId,
+          listedAt: Date.now() - (35 * 60 * 1000),
+          status: 'active',
+          gameId: gameId,
+          gameName: gameName
+        }
+      ];
+      await saveUserData(`marketItems_${gameId}`, dummyMarketItems);
+      return dummyMarketItems;
+    }
+    
+    // Update existing items that have "Unknown" as seller to current user if logged in
+    const username = await getUserData('username', null);
+    const userId = await getCurrentUserId();
+    let fallbackUsername = null;
+    try {
+      const authUser = localStorage.getItem('authUser');
+      if (authUser) {
+        const user = JSON.parse(authUser);
+        fallbackUsername = user.name || user.username || user.email;
+      }
+    } catch (e) {
+      // Ignore
+    }
+    const finalUsername = username || fallbackUsername;
+    const finalUserId = userId || null;
+    
+    if (finalUsername && finalUsername !== 'Unknown') {
+      const needsUpdate = existingItems.some(item => 
+        item.seller === 'Unknown' || (!item.sellerId && finalUserId)
+      );
+      
+      if (needsUpdate) {
+        const updatedItems = existingItems.map(item => {
+          if (item.seller === 'Unknown' || (!item.sellerId && finalUserId)) {
+            return {
+              ...item,
+              seller: finalUsername,
+              sellerId: finalUserId
+            };
+          }
+          return item;
+        });
+        await saveUserData(`marketItems_${gameId}`, updatedItems);
+        return updatedItems;
+      }
+    }
+    
+    return existingItems;
+  };
+
   // Load market items for selected game
   useEffect(() => {
     const loadMarketItems = async () => {
@@ -956,16 +1639,140 @@ const Market = () => {
           return;
         }
         
-        const items = await getUserData(`marketItems_${gameId}`, []);
+        // Initialize dummy market items if none exist
+        const items = await initializeDummyMarketItems(gameId, selectedGame.name || selectedGame.gameName || 'Game');
         setMarketItems(Array.isArray(items) ? items : []);
       } catch (error) {
         console.error('Error loading market items:', error);
         setMarketItems([]);
-      }
+    }
     };
     
     loadMarketItems();
   }, [selectedGame, marketItemsRefresh]);
+
+  // Load all market items from all games for watchlist
+  useEffect(() => {
+    const loadAllMarketItems = async () => {
+      if (marketView !== 'favorites') {
+        setAllMarketItemsForWatchlist([]);
+        return;
+      }
+      
+      try {
+        const allItems = [];
+        const allGames = await getAllUsersData('customGames');
+        
+        // Get market items from all games
+        for (const game of allGames) {
+          const gameId = game.gameId || game.id;
+          if (gameId) {
+            try {
+              const items = await getUserData(`marketItems_${gameId}`, []);
+              if (Array.isArray(items) && items.length > 0) {
+                items.forEach(item => {
+                  allItems.push({
+                    ...item,
+                    gameId: gameId,
+                    gameName: game.name || game.gameName || gameId
+                  });
+                });
+              }
+            } catch (e) {
+              console.error(`Error loading market items for game ${gameId}:`, e);
+            }
+          }
+        }
+        
+        // Also check localStorage directly for any marketItems_ keys
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('marketItems_')) {
+            const gameId = key.replace('marketItems_', '');
+            try {
+              const items = JSON.parse(localStorage.getItem(key) || '[]');
+              if (Array.isArray(items) && items.length > 0) {
+                items.forEach(item => {
+                  // Check if item already added
+                  const exists = allItems.some(existing => 
+                    existing.id === item.id && existing.gameId === gameId
+                  );
+                  if (!exists) {
+                    allItems.push({
+                      ...item,
+                      gameId: gameId,
+                      gameName: item.gameName || gameId
+                    });
+                  }
+                });
+              }
+            } catch (e) {
+              console.error(`Error parsing market items for game ${gameId}:`, e);
+            }
+          }
+        }
+        
+        console.log('📦 Loaded all market items for watchlist:', allItems.length);
+        console.log('👀 Watched items:', Array.from(watchedItems));
+        console.log('✅ Matching watched items:', allItems.filter(item => watchedItems.has(item.id)).map(i => ({ id: i.id, name: i.name })));
+        
+        setAllMarketItemsForWatchlist(allItems);
+      } catch (e) {
+        console.error('Error loading all market items:', e);
+        setAllMarketItemsForWatchlist([]);
+      }
+    };
+    
+    loadAllMarketItems();
+  }, [marketView, watchedItems, marketItemsRefresh]);
+
+  // Update currentMarketItems when marketItems changes
+  useEffect(() => {
+    setCurrentMarketItems(Array.isArray(marketItems) ? marketItems : []);
+    
+    // Initialize itemBids from items that have saleType: 'bid'
+    setItemBids(prev => {
+      const updated = { ...prev };
+      let hasChanges = false;
+      
+      marketItems.forEach(item => {
+        // Check if item has saleType: 'bid' (explicitly set)
+        const itemSaleType = item.saleType || 'buy';
+        console.log('🔍 Loading item:', item.name, 'saleType:', itemSaleType);
+        
+        if (itemSaleType === 'bid') {
+          const now = Date.now();
+          let bidEndTime = item.bidEndTime;
+          let bidDuration = item.bidDuration || 60;
+          
+          // If no bidEndTime is set, start the timer immediately from now
+          if (!bidEndTime) {
+            bidEndTime = now + (bidDuration * 60 * 1000);
+            console.log('⏰ Starting bid timer immediately for item:', item.name, 'ends at:', new Date(bidEndTime));
+            hasChanges = true;
+          }
+          
+          // Only add if bid is still active (not expired) or if it doesn't exist in itemBids
+          if (bidEndTime > now || !updated[item.id]) {
+            updated[item.id] = {
+              saleType: 'bid',
+              bidEndTime: bidEndTime,
+              currentBid: item.currentBid || item.price,
+              bidHistory: item.bidHistory || [],
+              bidDuration: bidDuration
+            };
+            console.log('✅ Initialized bid for item:', item.name, 'active:', bidEndTime > now);
+            hasChanges = true;
+          }
+        }
+      });
+      
+      if (hasChanges) {
+        localStorage.setItem('market_item_bids', JSON.stringify(updated));
+      }
+      return updated;
+    });
+  }, [marketItems]);
 
   const [marketTransactions, setMarketTransactions] = useState([]);
   
@@ -992,7 +1799,7 @@ const Market = () => {
     
     loadMarketData();
   }, [marketItemsRefresh]);
-  
+
   // Calculate market statistics from account-separated storage
   const marketStats = React.useMemo(() => {
     try {
@@ -1113,21 +1920,74 @@ const Market = () => {
 
   const handleAddToComparison = (item, e) => {
     e.stopPropagation();
+    
+    // Get current game ID
+    const currentGameId = selectedGame?.id || selectedGame?.gameId || gameId;
+    const itemGameId = item.gameId;
+    
+    // Only allow comparing items from the current game
+    if (currentGameId && itemGameId && String(currentGameId) !== String(itemGameId)) {
+      alert(`You can only compare items from the same game. This item is from a different game.`);
+      return;
+    }
+    
+    // If there are existing comparison items, check they're from the same game
+    if (comparisonItems.length > 0) {
+      const firstItemGameId = comparisonItems[0].gameId;
+      if (firstItemGameId && itemGameId && String(firstItemGameId) !== String(itemGameId)) {
+        alert(`You can only compare items from the same game. Please clear the comparison first.`);
+        return;
+      }
+    }
+    
+    let newComparisonItems = comparisonItems;
     if (comparisonItems.some(i => i.id === item.id)) {
-      setComparisonItems(comparisonItems.filter(i => i.id !== item.id));
+      newComparisonItems = comparisonItems.filter(i => i.id !== item.id);
+      setComparisonItems(newComparisonItems);
     } else {
       if (comparisonItems.length >= 8) {
         alert('Maximum 8 items can be compared at once');
         return;
       }
-      const newComparisonItems = [...comparisonItems, item];
+      newComparisonItems = [...comparisonItems, item];
       setComparisonItems(newComparisonItems);
       
-      // Auto-open modal when 2 items are selected (only if not manually closed)
-      if (newComparisonItems.length === 2 && !comparisonModalManuallyClosed) {
-        setShowComparisonModal(true);
-        setComparisonModalAutoOpened(true);
-      }
+      // Auto-open pop-out window when 2 items are selected (only if not manually closed and not already opened)
+      // This is now handled by the useEffect hook to prevent multiple opens
+    }
+    
+    // Focus the compare pop-out window if it exists, or open it if it doesn't (only if not in pop-out mode)
+    if (!isCompareOnlyMode && window.electronAPI && window.electronAPI.focusComparePopoutWindow) {
+      window.electronAPI.focusComparePopoutWindow().then(result => {
+        if (result && result.found) {
+          console.log('✅ Focused compare pop-out window');
+        } else {
+          // If pop-out doesn't exist, open it immediately when compare button is clicked
+          const api = window.electronAPI;
+          if (api?.openPopOutWindow) {
+            const route = gameId ? `/game/${gameId}/market/compare` : '/market/compare';
+            api.openPopOutWindow(route).then(() => {
+              setComparisonModalAutoOpened(true);
+              console.log('✅ Opened compare pop-out window');
+            }).catch(err => {
+              console.error('Error opening compare pop-out window:', err);
+            });
+          }
+        }
+      }).catch(err => {
+        console.error('Error focusing compare pop-out window:', err);
+        // If focus fails, try to open the window anyway
+        const api = window.electronAPI;
+        if (api?.openPopOutWindow) {
+          const route = gameId ? `/game/${gameId}/market/compare` : '/market/compare';
+          api.openPopOutWindow(route).then(() => {
+            setComparisonModalAutoOpened(true);
+            console.log('✅ Opened compare pop-out window (fallback)');
+          }).catch(openErr => {
+            console.error('Error opening compare pop-out window:', openErr);
+          });
+        }
+      });
     }
   };
 
@@ -1141,7 +2001,9 @@ const Market = () => {
       // Only clear reference if no items remain
       setReferenceItemId(null);
     }
-    // Don't close modal - let user stay in comparison view
+    // Don't close pop-out window or modal - let user stay in comparison view
+    // Keep the pop-out window open even if list becomes empty
+    // Only "Clear All" should close the window
     // Clean up rotations/zooms for removed item
     setComparisonRotations(prev => {
       const updated = { ...prev };
@@ -1171,14 +2033,64 @@ const Market = () => {
     setComparisonPans({});
   };
 
-  // Auto-open comparison modal when 2 items are selected (only if not manually closed)
+  // Filter comparison items to only include items from the current game
   useEffect(() => {
+    if (!selectedGame || comparisonItems.length === 0) return;
+    
+    const currentGameId = selectedGame.id || selectedGame.gameId;
+    if (!currentGameId) return;
+    
+    // Filter comparison items to only include items from the current game
+    const filteredComparisonItems = comparisonItems.filter(item => {
+      const itemGameId = item.gameId;
+      return itemGameId && String(currentGameId) === String(itemGameId);
+    });
+    
+    // If items were filtered out, update the comparison
+    if (filteredComparisonItems.length !== comparisonItems.length) {
+      setComparisonItems(filteredComparisonItems);
+      // Clear reference if it was removed
+      if (referenceItemId && !filteredComparisonItems.some(item => item.id === referenceItemId)) {
+        setReferenceItemId(filteredComparisonItems.length > 0 ? filteredComparisonItems[0].id : null);
+      }
+    }
+  }, [selectedGame, comparisonItems, referenceItemId]);
+
+  // Auto-open pop-out window when 2 items are selected (only if not manually closed and not already opened)
+  useEffect(() => {
+    // Prevent opening from within a pop-out window
+    if (isCompareOnlyMode) return;
+    
+    // Prevent opening if already opened or if we're currently opening one
+    if (comparisonModalAutoOpened || popOutOpeningRef.current) return;
+    
     if (comparisonItems.length >= 2 && !comparisonModalManuallyClosed && !showComparisonModal) {
-      setShowComparisonModal(true);
-      setComparisonModalAutoOpened(true);
+      popOutOpeningRef.current = true;
+      const openPopOut = async () => {
+        try {
+          const api = window.electronAPI;
+          if (api?.openPopOutWindow) {
+            const route = gameId ? `/game/${gameId}/market/compare` : '/market/compare';
+            await api.openPopOutWindow(route);
+            setComparisonModalAutoOpened(true);
+          } else {
+            // Fallback: open comparison modal if pop-out not available
+            setShowComparisonModal(true);
+            setComparisonModalAutoOpened(true);
+          }
+        } catch (error) {
+          console.error('Error opening pop-out window:', error);
+          // Fallback: open comparison modal on error
+          setShowComparisonModal(true);
+          setComparisonModalAutoOpened(true);
+        } finally {
+          popOutOpeningRef.current = false;
+        }
+      };
+      openPopOut();
     }
     // Don't auto-close when items are removed - let user stay in comparison view
-  }, [comparisonItems.length, comparisonModalManuallyClosed, showComparisonModal]);
+  }, [comparisonItems.length, comparisonModalManuallyClosed, showComparisonModal, gameId, isCompareOnlyMode, comparisonModalAutoOpened]);
 
   // Set first item as reference when modal opens
   useEffect(() => {
@@ -1329,6 +2241,22 @@ const Market = () => {
       };
     });
   };
+
+  // Auto-open comparison modal in pop-out mode and ensure selectedGame is set
+  // This must be with all other hooks, before any early returns
+  useEffect(() => {
+    if (isCompareOnlyMode) {
+      setShowComparisonModal(true);
+      // Ensure selectedGame is set in pop-out mode based on gameId from URL
+      if (gameId && !selectedGame) {
+        // Find the game from allGamesData
+        const game = allGamesData.find(g => (g.id || g.gameId) === gameId);
+        if (game) {
+          setSelectedGame(game);
+        }
+      }
+    }
+  }, [isCompareOnlyMode, gameId, selectedGame, allGamesData]);
 
   // Mouse rotation and panning handlers for comparison items - exact copy from item detail modal
   useEffect(() => {
@@ -1553,9 +2481,549 @@ const Market = () => {
     setSelectedItems([]);
   };
 
-  const handleBuyItem = (itemId) => {
-    alert(`Buying item ${itemId} for ${selectedGame.name}`);
+  // Format time remaining in compact format - always show 2 time units (except when only seconds)
+  const formatTimeRemaining = (milliseconds) => {
+    if (milliseconds <= 0) return '0s';
+    
+    const totalSeconds = Math.floor(milliseconds / 1000);
+    const years = Math.floor(totalSeconds / (365 * 24 * 60 * 60));
+    const months = Math.floor((totalSeconds % (365 * 24 * 60 * 60)) / (30 * 24 * 60 * 60));
+    const weeks = Math.floor((totalSeconds % (30 * 24 * 60 * 60)) / (7 * 24 * 60 * 60));
+    const days = Math.floor((totalSeconds % (7 * 24 * 60 * 60)) / (24 * 60 * 60));
+    const hours = Math.floor((totalSeconds % (24 * 60 * 60)) / (60 * 60));
+    const minutes = Math.floor((totalSeconds % (60 * 60)) / 60);
+    const seconds = Math.floor(totalSeconds % 60);
+    
+    // If only seconds remain, show only seconds
+    if (totalSeconds < 60) {
+      return `${seconds}s`;
+    }
+    
+    // Find the highest non-zero unit and show it with the next unit
+    if (years > 0) {
+      const remainingAfterYears = totalSeconds % (365 * 24 * 60 * 60);
+      const monthsInRemaining = Math.floor(remainingAfterYears / (30 * 24 * 60 * 60));
+      return `${years}y ${monthsInRemaining}m`;
+    }
+    
+    if (months > 0) {
+      const remainingAfterMonths = totalSeconds % (30 * 24 * 60 * 60);
+      const weeksInRemaining = Math.floor(remainingAfterMonths / (7 * 24 * 60 * 60));
+      return `${months}m ${weeksInRemaining}w`;
+    }
+    
+    if (weeks > 0) {
+      const remainingAfterWeeks = totalSeconds % (7 * 24 * 60 * 60);
+      const daysInRemaining = Math.floor(remainingAfterWeeks / (24 * 60 * 60));
+      return `${weeks}w ${daysInRemaining}d`;
+    }
+    
+    if (days > 0) {
+      const remainingAfterDays = totalSeconds % (24 * 60 * 60);
+      const hoursInRemaining = Math.floor(remainingAfterDays / (60 * 60));
+      return `${days}d ${hoursInRemaining}h`;
+    }
+    
+    if (hours > 0) {
+      const remainingAfterHours = totalSeconds % (60 * 60);
+      const minutesInRemaining = Math.floor(remainingAfterHours / 60);
+      return `${hours}h ${minutesInRemaining}m`;
+    }
+    
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    }
+    
+    return `${seconds}s`;
   };
+  
+  // Format large numbers with letters (K, M, B, T, etc.)
+  const formatLargeNumber = (num) => {
+    if (!num || num === 0) return '$0.00';
+    
+    if (num >= 1000000000000) {
+      const trillions = num / 1000000000000;
+      if (trillions >= 1000) {
+        return `$${(trillions / 1000).toFixed(2)}Q`;
+      }
+      return `$${trillions.toFixed(2)}T`;
+    } else if (num >= 1000000000) {
+      const billions = num / 1000000000;
+      if (billions >= 1000) {
+        return `$${(billions / 1000).toFixed(2)}T`;
+      }
+      return `$${billions.toFixed(2)}B`;
+    } else if (num >= 1000000) {
+      const millions = num / 1000000;
+      if (millions >= 1000) {
+        return `$${(millions / 1000).toFixed(2)}B`;
+      }
+      return `$${millions.toFixed(2)}M`;
+    } else if (num >= 1000) {
+      const thousands = num / 1000;
+      if (thousands >= 1000) {
+        return `$${(thousands / 1000).toFixed(2)}M`;
+      }
+      return `$${thousands.toFixed(2)}K`;
+    }
+    return `$${num.toFixed(2)}`;
+  };
+
+  // Helper function to manage user balance
+  const updateUserBalance = async (amount) => {
+    try {
+      const currentUserId = await getCurrentUserId();
+      if (!currentUserId) return;
+      
+      const currentBalance = await getUserData('userBalance', 0);
+      const newBalance = Math.max(0, currentBalance + amount);
+      await saveUserData('userBalance', newBalance);
+      
+      // Trigger balance update event
+      window.dispatchEvent(new CustomEvent('balance-updated', { detail: { balance: newBalance } }));
+    } catch (error) {
+      console.error('Error updating balance:', error);
+    }
+  };
+  
+  const handleBuyItem = async (itemId, itemsArray = null) => {
+    const items = itemsArray || sortedItems || [];
+    const item = items.find(i => i.id === itemId);
+    if (!item) return;
+    
+    const bid = itemBids[itemId];
+    const itemSaleType = item.saleType || 'buy';
+    const isBidItem = itemSaleType === 'bid' || bid?.saleType === 'bid';
+    const isActiveBid = bid?.saleType === 'bid' && bid?.bidEndTime && bid.bidEndTime > Date.now();
+    const currentUserId = await getCurrentUserId();
+    
+    if (isBidItem) {
+      if (isActiveBid && bid) {
+        // Handle bid submission for active bid (don't restart timer)
+        let bidAmount = bidInputs[itemId]?.amount || (bid.currentBid ? bid.currentBid + 0.01 : item.price + 0.01);
+        
+        // Cap bid amount at 1 million
+        if (bidAmount > 1000000) {
+          alert('Maximum bid amount is $1,000,000.00');
+          bidAmount = 1000000;
+        }
+        
+        const now = Date.now();
+        const currentHighestBid = bid.currentBid || item.price;
+        
+        // Get user's current bid
+        const userBids = bid.bidHistory?.filter(b => b.userId === currentUserId || b.userId === 'current-user') || [];
+        const userCurrentBid = userBids.length > 0 
+          ? userBids.reduce((max, b) => b.amount > max.amount ? b : max, userBids[0])
+          : null;
+        const userCurrentBidAmount = userCurrentBid?.amount || 0;
+        
+        // Get second highest bid (excluding user's bids)
+        const otherBids = bid.bidHistory?.filter(b => b.userId !== currentUserId && b.userId !== 'current-user') || [];
+        const secondHighestBid = otherBids.length > 0
+          ? otherBids.reduce((max, b) => b.amount > max.amount ? b : max, otherBids[0])
+          : null;
+        const secondHighestAmount = secondHighestBid?.amount || item.price;
+        
+        // Check if new bid would make user lose highest bid
+        if (userCurrentBidAmount > 0 && bidAmount < secondHighestAmount) {
+          alert(`This bid would make you lose the highest bid position. The second highest bid is $${secondHighestAmount.toFixed(2)}. Please enter at least $${(secondHighestAmount + 0.01).toFixed(2)} to maintain your position.`);
+          return;
+        }
+        
+        // Check if bid is higher than current highest bid
+        if (bidAmount > currentHighestBid) {
+          // Find the previous highest bidder (if not the current user)
+          const previousHighestBidder = bid.bidHistory?.find(b => 
+            b.amount === currentHighestBid && 
+            (b.userId !== currentUserId && b.userId !== 'current-user')
+          );
+          
+          // Refund the previous highest bidder if they exist
+          if (previousHighestBidder) {
+            // Note: This would need to be done server-side or via a proper user lookup
+            // For now, we'll just handle the current user's refund
+            console.log(`Previous highest bidder ${previousHighestBidder.userId} should be refunded $${previousHighestBidder.amount}`);
+          }
+          
+          // Refund user's previous bid if they had one (but weren't highest)
+          if (userCurrentBidAmount > 0 && userCurrentBidAmount < currentHighestBid) {
+            await updateUserBalance(userCurrentBidAmount);
+          }
+          
+          // Deduct new bid amount
+          await updateUserBalance(-bidAmount);
+          
+          setItemBids(prev => {
+            const newBids = {
+              ...prev,
+              [itemId]: {
+                ...prev[itemId],
+                currentBid: bidAmount,
+                bidHistory: [
+                  ...(prev[itemId]?.bidHistory || []),
+                  { userId: currentUserId || 'current-user', amount: bidAmount, timestamp: now }
+                ]
+                // Keep existing bidEndTime and bidDuration - don't restart timer
+              }
+            };
+            localStorage.setItem('market_item_bids', JSON.stringify(newBids));
+            return newBids;
+          });
+          
+          setBidInputs(prev => {
+            const newInputs = { ...prev };
+            delete newInputs[itemId];
+            return newInputs;
+          });
+        } else if (bidAmount < userCurrentBidAmount && bidAmount >= secondHighestAmount) {
+          // User is lowering their bid but still highest - refund difference
+          const refundAmount = userCurrentBidAmount - bidAmount;
+          await updateUserBalance(refundAmount);
+          
+          // Update bid
+          setItemBids(prev => {
+            const newBids = {
+              ...prev,
+              [itemId]: {
+                ...prev[itemId],
+                currentBid: bidAmount,
+                bidHistory: [
+                  ...(prev[itemId]?.bidHistory || []),
+                  { userId: currentUserId || 'current-user', amount: bidAmount, timestamp: now }
+                ]
+              }
+            };
+            localStorage.setItem('market_item_bids', JSON.stringify(newBids));
+            return newBids;
+          });
+          
+          setBidInputs(prev => {
+            const newInputs = { ...prev };
+            delete newInputs[itemId];
+            return newInputs;
+          });
+        } else {
+          alert(`A higher bid of $${currentHighestBid.toFixed(2)} has already been placed. Please enter a higher total amount.`);
+        }
+      } else {
+        // Handle new bid setup (start timer) - for items without active bids or expired bids
+        let bidAmount = bidInputs[itemId]?.amount || item.price + 0.01;
+        
+        // Cap bid amount at 1 million
+        if (bidAmount > 1000000) {
+          alert('Maximum bid amount is $1,000,000.00');
+          bidAmount = 1000000;
+        }
+        
+        // Use existing bidDuration from item or bid, or default to 60 minutes
+        const bidDuration = bidInputs[itemId]?.duration || bid?.bidDuration || item.bidDuration || 60;
+        
+        const now = Date.now();
+        const endTime = now + (bidDuration * 60 * 1000);
+        
+        // Deduct bid amount
+        await updateUserBalance(-bidAmount);
+        
+        setItemBids(prev => {
+          const newBids = {
+            ...prev,
+            [itemId]: {
+              ...prev[itemId],
+              saleType: 'bid',
+              bidEndTime: endTime,
+              currentBid: bidAmount,
+              bidHistory: [
+                ...(prev[itemId]?.bidHistory || []),
+                { userId: currentUserId || 'current-user', amount: bidAmount, timestamp: now }
+              ],
+              bidDuration: bidDuration
+            }
+          };
+          localStorage.setItem('market_item_bids', JSON.stringify(newBids));
+          return newBids;
+        });
+        
+        setBidInputs(prev => {
+          const newInputs = { ...prev };
+          delete newInputs[itemId];
+          return newInputs;
+        });
+      }
+    } else {
+      // Handle direct buy - check if item is locked by another user
+      const lock = lockedItems[itemId];
+      const now = Date.now();
+      const LOCK_TIMEOUT = 30000; // 30 seconds
+      
+      // Check if item is locked by another user
+      if (lock && lock.userId !== currentUserId && (now - lock.timestamp) < LOCK_TIMEOUT) {
+        alert(`This item is currently being purchased by another user. Please try again in a moment.`);
+        return;
+      }
+      
+      // Lock the item for this user
+      const lockTimestamp = now;
+      setLockedItems(prev => {
+        const newLocks = {
+          ...prev,
+          [itemId]: {
+            userId: currentUserId,
+            timestamp: lockTimestamp,
+            timeout: LOCK_TIMEOUT
+          }
+        };
+        localStorage.setItem('market_locked_items', JSON.stringify(newLocks));
+        return newLocks;
+      });
+      
+      // Set timeout to release lock if purchase isn't completed
+      const lockTimeoutId = setTimeout(() => {
+        setLockedItems(prev => {
+          const newLocks = { ...prev };
+          const lock = newLocks[itemId];
+          if (lock && (Date.now() - lock.timestamp) >= LOCK_TIMEOUT) {
+            delete newLocks[itemId];
+            localStorage.setItem('market_locked_items', JSON.stringify(newLocks));
+          }
+          return newLocks;
+        });
+      }, LOCK_TIMEOUT);
+      
+      // Store timeout ID for potential cancellation
+      if (!window.itemLockTimeouts) {
+        window.itemLockTimeouts = {};
+      }
+      window.itemLockTimeouts[itemId] = lockTimeoutId;
+      
+      // Show purchase confirmation
+      setPendingPurchaseItem(item);
+      setShowPurchaseConfirmation(true);
+    }
+  };
+  
+  const handleConfirmPurchase = async () => {
+    if (!pendingPurchaseItem) return;
+    
+    const item = pendingPurchaseItem;
+    const itemId = item.id;
+      const currentBalance = await getUserData('userBalance', 0);
+      
+      if (currentBalance < item.price) {
+        alert(`Insufficient balance. You need $${item.price.toFixed(2)} but only have $${currentBalance.toFixed(2)}.`);
+      // Release lock
+      setLockedItems(prev => {
+        const newLocks = { ...prev };
+        delete newLocks[itemId];
+        localStorage.setItem('market_locked_items', JSON.stringify(newLocks));
+        return newLocks;
+      });
+      if (window.itemLockTimeouts && window.itemLockTimeouts[itemId]) {
+        clearTimeout(window.itemLockTimeouts[itemId]);
+        delete window.itemLockTimeouts[itemId];
+      }
+      setShowPurchaseConfirmation(false);
+      setPendingPurchaseItem(null);
+        return;
+      }
+      
+      // Deduct balance
+      await updateUserBalance(-item.price);
+      
+      // Add item to inventory
+      const gameId = item.gameId || selectedGame?.id || selectedGame?.gameId;
+      if (gameId) {
+        const inventory = await getUserInventory(gameId);
+        const newItem = {
+          ...item,
+          id: `bought-${item.id}-${Date.now()}`,
+          boughtAt: Date.now(),
+          boughtFrom: item.seller || 'Market'
+        };
+        inventory.push(newItem);
+        await saveUserData(`inventory_${gameId}`, inventory);
+      }
+      
+      // Remove item from market (mark as sold)
+      setSoldItems(prev => ({ ...prev, [itemId]: true }));
+      
+      // Remove from market items
+      const marketItems = await getUserData(`marketItems_${gameId}`, []);
+      const updatedMarketItems = marketItems.filter(i => i.id !== itemId);
+      await saveUserData(`marketItems_${gameId}`, updatedMarketItems);
+    
+    // Release lock
+    setLockedItems(prev => {
+      const newLocks = { ...prev };
+      delete newLocks[itemId];
+      localStorage.setItem('market_locked_items', JSON.stringify(newLocks));
+      return newLocks;
+    });
+    
+    // Clear timeout
+    if (window.itemLockTimeouts && window.itemLockTimeouts[itemId]) {
+      clearTimeout(window.itemLockTimeouts[itemId]);
+      delete window.itemLockTimeouts[itemId];
+    }
+      
+      // Refresh market
+      setMarketItemsRefresh(prev => prev + 1);
+    
+    setShowPurchaseConfirmation(false);
+    setPendingPurchaseItem(null);
+      
+      alert(`Successfully purchased ${item.name} for $${item.price.toFixed(2)}!`);
+  };
+  
+  const handleCancelPurchase = () => {
+    if (!pendingPurchaseItem) return;
+    
+    const itemId = pendingPurchaseItem.id;
+    
+    // Release lock
+    setLockedItems(prev => {
+      const newLocks = { ...prev };
+      delete newLocks[itemId];
+      localStorage.setItem('market_locked_items', JSON.stringify(newLocks));
+      return newLocks;
+    });
+    
+    // Clear timeout
+    if (window.itemLockTimeouts && window.itemLockTimeouts[itemId]) {
+      clearTimeout(window.itemLockTimeouts[itemId]);
+      delete window.itemLockTimeouts[itemId];
+    }
+    
+    setShowPurchaseConfirmation(false);
+    setPendingPurchaseItem(null);
+  };
+  
+  const handleCancelBid = async (itemId, itemsArray = null) => {
+    const bid = itemBids[itemId];
+    if (!bid) return;
+    
+    const currentUserId = await getCurrentUserId();
+    
+    // Find user's bid in history
+    const userBids = bid.bidHistory?.filter(b => b.userId === currentUserId || b.userId === 'current-user') || [];
+    if (userBids.length === 0) return;
+    
+    // Get user's highest bid
+    const userHighestBid = userBids.reduce((max, b) => b.amount > max.amount ? b : max, userBids[0]);
+    const userBidAmount = userHighestBid.amount;
+    
+    // Check if user is currently the highest bidder
+    const isCurrentlyHighest = bid.currentBid === userBidAmount;
+    
+    // Remove user's bids from history
+    const updatedHistory = bid.bidHistory?.filter(b => b.userId !== currentUserId && b.userId !== 'current-user') || [];
+    
+    // Update current bid to the next highest bid
+    let newCurrentBid = bid.currentBid;
+    if (updatedHistory.length > 0) {
+      const highestRemainingBid = updatedHistory.reduce((max, b) => b.amount > max.amount ? b : max, updatedHistory[0]);
+      newCurrentBid = highestRemainingBid.amount;
+    } else {
+      // If no bids remain, reset to item price
+      const items = itemsArray || sortedItems || [];
+      const item = items.find(i => i.id === itemId);
+      newCurrentBid = item?.price || bid.currentBid;
+    }
+    
+    // Refund user's bid amount
+    if (isCurrentlyHighest) {
+      // User was highest bidder - refund full amount
+      await updateUserBalance(userBidAmount);
+    } else {
+      // User was not highest - refund full amount (they weren't winning anyway)
+      await updateUserBalance(userBidAmount);
+    }
+    
+    setItemBids(prev => {
+      const newBids = {
+        ...prev,
+        [itemId]: {
+          ...prev[itemId],
+          currentBid: newCurrentBid,
+          bidHistory: updatedHistory
+        }
+      };
+      localStorage.setItem('market_item_bids', JSON.stringify(newBids));
+      return newBids;
+    });
+  };
+  
+  // Sync lockedItems to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('market_locked_items', JSON.stringify(lockedItems));
+    } catch (error) {
+      console.error('Error saving locked items:', error);
+    }
+  }, [lockedItems]);
+  
+  // Clean up expired locks
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const LOCK_TIMEOUT = 30000; // 30 seconds
+      
+      setLockedItems(prev => {
+        const newLocks = { ...prev };
+        let hasChanges = false;
+        
+        Object.keys(newLocks).forEach(itemId => {
+          const lock = newLocks[itemId];
+          if (lock && (now - lock.timestamp) >= LOCK_TIMEOUT) {
+            delete newLocks[itemId];
+            hasChanges = true;
+            
+            // Clear timeout if exists
+            if (window.itemLockTimeouts && window.itemLockTimeouts[itemId]) {
+              clearTimeout(window.itemLockTimeouts[itemId]);
+              delete window.itemLockTimeouts[itemId];
+            }
+          }
+        });
+        
+        if (hasChanges) {
+          localStorage.setItem('market_locked_items', JSON.stringify(newLocks));
+        }
+        
+        return newLocks;
+      });
+    }, 1000); // Check every second
+    
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Timer state for real-time updates
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  
+  // Update current time every second for timer display
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Auto-hide sold items after 2 seconds
+  useEffect(() => {
+    const now = currentTime;
+    const endedBids = Object.entries(itemBids).filter(([itemId, bid]) => {
+      return bid?.saleType === 'bid' && bid?.bidEndTime && bid.bidEndTime <= now;
+    });
+    
+    endedBids.forEach(([itemId]) => {
+      if (!soldItems[itemId]) {
+        setTimeout(() => {
+          setSoldItems(prev => ({ ...prev, [itemId]: true }));
+        }, 2000);
+      }
+    });
+  }, [currentTime, itemBids, soldItems]);
+  
 
   const handleWatchItem = (itemId) => {
     const newWatchedItems = new Set(watchedItems);
@@ -1565,6 +3033,12 @@ const Market = () => {
       newWatchedItems.add(itemId);
     }
     setWatchedItems(newWatchedItems);
+    // Save to localStorage
+    try {
+      localStorage.setItem('watchedItems', JSON.stringify(Array.from(newWatchedItems)));
+    } catch (e) {
+      console.error('Error saving watched items:', e);
+    }
   };
 
   const handleBackToGames = () => {
@@ -1672,7 +3146,23 @@ const Market = () => {
       return [];
     }
     
+    // Get current game ID
+    const currentGameId = selectedGame?.id || selectedGame?.gameId || gameId;
+    
     return marketItems.filter(item => {
+      // Filter out sold items (items that were won in bids)
+      if (soldItems[item.id]) {
+        return false;
+      }
+      
+      // First, ensure item belongs to the current game
+      if (currentGameId) {
+        const itemGameId = item.gameId;
+        if (itemGameId && String(currentGameId) !== String(itemGameId)) {
+          return false; // Item doesn't belong to current game
+        }
+      }
+      
       // Rarity filter (multiple choice)
       const rarityMatch = rarityFilter.has('all') || rarityFilter.has(item.rarity.toLowerCase());
       
@@ -1692,7 +3182,7 @@ const Market = () => {
       
       return rarityMatch && searchMatch && priceMatch;
     });
-  }, [marketItems, rarityFilter, itemSearch, priceFilter]);
+  }, [marketItems, rarityFilter, itemSearch, priceFilter, selectedGame, gameId, soldItems]);
 
   const sortedItems = useMemo(() => {
     return [...filteredItems].sort((a, b) => {
@@ -1707,55 +3197,328 @@ const Market = () => {
       }
     });
   }, [filteredItems, sortBy]);
+  
+  // Check and process expired bids - must be after sortedItems definition
+  useEffect(() => {
+    const checkExpiredBids = async () => {
+      const now = Date.now();
+      const sortedItemsArray = sortedItems || [];
+      
+      for (const item of sortedItemsArray) {
+        const bid = itemBids[item.id];
+        if (bid?.saleType === 'bid' && bid?.bidEndTime && bid.bidEndTime <= now && !soldItems[item.id] && !noBidItems[item.id]) {
+          // Bid expired - check if there are any valid bids
+          // Only consider bidHistory - if it's empty or doesn't exist, no bids were placed
+          const hasValidBids = bid.bidHistory && Array.isArray(bid.bidHistory) && bid.bidHistory.length > 0;
+          
+          let highestBid = null;
+          if (hasValidBids) {
+            // Find highest bid from history
+            highestBid = bid.bidHistory.reduce((max, b) => b.amount > max.amount ? b : max, bid.bidHistory[0]);
+          }
+          // If no valid bids in history, highestBid remains null
+          
+          if (highestBid) {
+            // Remove item from marketplace
+            const gameId = item.gameId || selectedGame?.id || selectedGame?.gameId;
+            if (gameId) {
+              try {
+                // Remove item from marketplace
+                const marketItems = await getUserData(`marketItems_${gameId}`, []);
+                const updatedMarketItems = marketItems.filter(marketItem => marketItem.id !== item.id);
+                await saveUserData(`marketItems_${gameId}`, updatedMarketItems);
+                
+                // Add item to winner's inventory (not back to seller)
+                const winnerUserId = highestBid.userId;
+                if (winnerUserId && winnerUserId !== 'current-user') {
+                  // Add to winner's inventory using their userId
+                  const winnerInventory = await getUserData(`inventory_${gameId}`, [], winnerUserId);
+                  const itemToAdd = {
+                    ...item,
+                    id: `bid-won-${item.id}-${Date.now()}`, // New ID to avoid conflicts
+                    purchasedAt: Date.now(),
+                    wonFromBid: true,
+                    bidAmount: highestBid.amount
+                  };
+                  const updatedWinnerInventory = Array.isArray(winnerInventory) ? [...winnerInventory, itemToAdd] : [itemToAdd];
+                  await saveUserData(`inventory_${gameId}`, updatedWinnerInventory, winnerUserId);
+                  console.log(`✅ Item "${item.name}" transferred to winner ${winnerUserId} for $${highestBid.amount.toFixed(2)}`);
+                } else if (winnerUserId === 'current-user' || !winnerUserId) {
+                  // Current user won - add to their inventory
+                  const currentUserId = await getCurrentUserId();
+                  if (currentUserId) {
+                const winnerInventory = await getUserData(`inventory_${gameId}`, []);
+                const itemToAdd = {
+                  ...item,
+                      id: `bid-won-${item.id}-${Date.now()}`,
+                      purchasedAt: Date.now(),
+                      wonFromBid: true,
+                      bidAmount: highestBid.amount
+                    };
+                    const updatedWinnerInventory = Array.isArray(winnerInventory) ? [...winnerInventory, itemToAdd] : [itemToAdd];
+                    await saveUserData(`inventory_${gameId}`, updatedWinnerInventory);
+                    console.log(`✅ Item "${item.name}" transferred to current user for $${highestBid.amount.toFixed(2)}`);
+                  }
+                }
+                
+                // Mark item as sold (this will hide the entire item from the list)
+                setSoldItems(prev => ({ ...prev, [item.id]: true }));
+                
+                // Remove from itemBids
+                setItemBids(prev => {
+                  const updated = { ...prev };
+                  delete updated[item.id];
+                  localStorage.setItem('market_item_bids', JSON.stringify(updated));
+                  return updated;
+                });
+                
+                // Refresh marketplace to remove the item from display
+                setMarketItemsRefresh(prev => prev + 1);
+                
+                console.log(`🏁 Bid ended for "${item.name}" - item removed from marketplace and transferred to winner`);
+              } catch (error) {
+                console.error('Error processing expired bid:', error);
+              }
+            }
+          } else {
+            // No bids - return to seller's inventory
+            const gameId = item.gameId || selectedGame?.id || selectedGame?.gameId;
+            if (gameId) {
+              try {
+                // Remove item from marketplace
+                const marketItems = await getUserData(`marketItems_${gameId}`, []);
+                const updatedMarketItems = marketItems.filter(marketItem => marketItem.id !== item.id);
+                await saveUserData(`marketItems_${gameId}`, updatedMarketItems);
+                
+                // Return item to seller's inventory
+                const sellerId = item.sellerId;
+                if (sellerId) {
+                  const sellerInventory = await getUserData(`inventory_${gameId}`, [], sellerId);
+                  const inventoryArray = Array.isArray(sellerInventory) ? [...sellerInventory] : [];
+                  
+                  // Check if item already exists in inventory
+                  const existingItem = inventoryArray.find(invItem => 
+                    String(invItem.id) === String(item.originalItemId || item.id) &&
+                    String(invItem.gameId) === String(gameId)
+                  );
+                  
+                  if (!existingItem) {
+                    // Reconstruct original item from marketplace item
+                    const restoredItem = {
+                      id: item.originalItemId || item.id,
+                      gameId: gameId,
+                      gameName: item.gameName || selectedGame?.name,
+                      name: item.name,
+                      description: item.description,
+                      rarity: item.rarity,
+                      type: item.type,
+                      category: item.category,
+                      image: item.image,
+                      imageUrl: item.imageUrl
+                    };
+                    
+                    inventoryArray.push(restoredItem);
+                    await saveUserData(`inventory_${gameId}`, inventoryArray, sellerId);
+                    console.log(`✅ Item "${item.name}" returned to seller ${sellerId}'s inventory (no bids placed)`);
+                  }
+                } else {
+                  // Fallback: try current user if sellerId not found
+                  const currentUserId = await getCurrentUserId();
+                  if (currentUserId) {
+                    const inventory = await getUserData(`inventory_${gameId}`, []);
+                    const inventoryArray = Array.isArray(inventory) ? [...inventory] : [];
+                    
+                    const existingItem = inventoryArray.find(invItem => 
+                      String(invItem.id) === String(item.originalItemId || item.id) &&
+                      String(invItem.gameId) === String(gameId)
+                    );
+                    
+                    if (!existingItem) {
+                      const restoredItem = {
+                        id: item.originalItemId || item.id,
+                        gameId: gameId,
+                        gameName: item.gameName || selectedGame?.name,
+                        name: item.name,
+                        description: item.description,
+                        rarity: item.rarity,
+                        type: item.type,
+                        category: item.category,
+                        image: item.image,
+                        imageUrl: item.imageUrl
+                      };
+                      
+                      inventoryArray.push(restoredItem);
+                      await saveUserData(`inventory_${gameId}`, inventoryArray);
+                      console.log(`✅ Item "${item.name}" returned to current user's inventory (no bids placed)`);
+                    }
+                  }
+                }
+                
+                // Mark as no bid - this will show "NO BID PLACED" in red
+                setNoBidItems(prev => ({ ...prev, [item.id]: true }));
+                
+                // Remove from itemBids
+                setItemBids(prev => {
+                  const updated = { ...prev };
+                  delete updated[item.id];
+                  localStorage.setItem('market_item_bids', JSON.stringify(updated));
+                  return updated;
+                });
+                
+                // Hide item after showing "NO BID PLACED" for 2 seconds
+                setTimeout(() => {
+                  setSoldItems(prev => ({ ...prev, [item.id]: true }));
+                }, 2000);
+                
+                setMarketItemsRefresh(prev => prev + 1);
+                console.log(`🏁 Bid ended for "${item.name}" with no bids - item returned to seller`);
+              } catch (error) {
+                console.error('Error processing expired bid with no winner:', error);
+              }
+            }
+          }
+        }
+      }
+    };
+    
+    const interval = setInterval(checkExpiredBids, 1000); // Check every second
+    return () => clearInterval(interval);
+  }, [sortedItems, selectedGame, soldItems, itemBids, noBidItems]);
+
+  // Always set bid amount to 1 cent higher than current highest bid when modal opens
+  useEffect(() => {
+    if (showBidModal && selectedBidItem) {
+      const expectedBidAmount = selectedBidItem.currentPrice + 0.01;
+      const currentBidAmount = bidInputs[selectedBidItem.id]?.amount;
+      
+      // Only update if the amount is different (to avoid infinite loops)
+      if (currentBidAmount !== expectedBidAmount) {
+        setBidInputs(prev => ({
+          ...prev,
+          [selectedBidItem.id]: {
+            ...prev[selectedBidItem.id],
+            amount: expectedBidAmount,
+            duration: prev[selectedBidItem.id]?.duration || selectedBidItem.bidDuration || 60
+          }
+        }));
+      }
+    }
+  }, [showBidModal, selectedBidItem]);
+
+  // Remove sold items from cart
+  useEffect(() => {
+    const removeSoldItemsFromCart = async () => {
+      const soldItemIds = Object.keys(soldItems).filter(id => soldItems[id]);
+      if (soldItemIds.length === 0) return;
+
+      const userId = await getCurrentUserId();
+      if (!userId) return;
+
+      try {
+        const api = window.electronAPI;
+        let currentCartItems = [];
+        
+        if (api?.dbGetCartItems) {
+          const result = await api.dbGetCartItems(userId);
+          if (result && result.success && Array.isArray(result.items)) {
+            currentCartItems = result.items;
+          }
+        } else {
+          const stored = localStorage.getItem(`cartItems_${userId}`);
+          if (stored) {
+            currentCartItems = JSON.parse(stored);
+          }
+        }
+
+        const updatedCart = currentCartItems.filter(i => 
+          !(i.itemType === 'market_item' && soldItemIds.includes(i.itemData?.id))
+        );
+
+        if (updatedCart.length !== currentCartItems.length) {
+          if (api?.dbSaveCartItems) {
+            await api.dbSaveCartItems(userId, updatedCart);
+          } else {
+            localStorage.setItem(`cartItems_${userId}`, JSON.stringify(updatedCart));
+          }
+          
+          // Trigger cart update event for TopNavigation
+          window.dispatchEvent(new CustomEvent('cart-updated'));
+        }
+      } catch (error) {
+        console.error('Error removing sold items from cart:', error);
+      }
+    };
+
+    removeSoldItemsFromCart();
+  }, [soldItems]);
 
   // If no game is selected, show game selection
-  if (!selectedGame) {
+  // But don't show it if we're restoring a game (check localStorage for smooth transition)
+  const shouldShowSelection = !selectedGame && !isRestoringGame;
+  if (shouldShowSelection) {
+    // Check if we should be restoring (for smooth transition)
+    // If we're in browse view and have a saved game or gameId in URL, don't show selection screen yet
+    // The useEffect will handle the restoration - wait for it to complete
+    if (marketView === 'browse' && (lastSelectedGameInBrowse || gameId)) {
+      // We have a saved game or gameId, so we're likely restoring - don't show selection screen
+      // Return a minimal container that will be replaced once restoration completes
+      // This prevents the flash of the selection screen
+      return (
+        <div className="market" style={{ '--market-sidebar-width': `${marketLeftSidebarWidth}px` }}>
+          <div className="market-main-container">
+            <div className="marketplace-content">
+              {/* Placeholder - restoration in progress */}
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
-      <div className="market">
+      <div className="market" style={{ '--market-sidebar-width': `${marketLeftSidebarWidth}px` }}>
         <div className="market-main-container">
         {/* Main Content Area */}
         <div className="marketplace-content">
           {/* Live Activity Ticker - Always at top in all views */}
-          <div 
-            className="marketplace-ticker"
-            style={{ '--content-width': `${contentWidth}px` }}
-          >
-            <div className="ticker-label">
+            <div 
+              className="marketplace-ticker"
+              style={{ '--content-width': `${contentWidth}px` }}
+            >
+              <div className="ticker-label">
               <span className="live-status-text active">Live</span>
             </div>
-            <div className="ticker-content">
+              <div className="ticker-content">
               <div className="ticker-content-wrapper">
                 <div className="ticker-item">
                   <span className="ticker-user">Player123</span>
                   <span className="ticker-action">bought</span>
                   <span className="ticker-item-name">Legendary Sword</span>
                   <span className="ticker-price">for $45.99</span>
-                </div>
+            </div>
                 <div className="ticker-item">
                   <span className="ticker-user">TraderPro</span>
                   <span className="ticker-action">listed</span>
                   <span className="ticker-item-name">Rare Armor Set</span>
                   <span className="ticker-price">at $89.50</span>
-                </div>
+            </div>
                 <div className="ticker-item">
                   <span className="ticker-user">Collector2024</span>
                   <span className="ticker-action">sold</span>
                   <span className="ticker-item-name">Epic Shield</span>
                   <span className="ticker-price">for $120.00</span>
-                </div>
+            </div>
                 {/* Duplicate for seamless loop */}
                 <div className="ticker-item">
                   <span className="ticker-user">Player123</span>
                   <span className="ticker-action">bought</span>
                   <span className="ticker-item-name">Legendary Sword</span>
                   <span className="ticker-price">for $45.99</span>
-                </div>
+          </div>
                 <div className="ticker-item">
                   <span className="ticker-user">TraderPro</span>
                   <span className="ticker-action">listed</span>
                   <span className="ticker-item-name">Rare Armor Set</span>
                   <span className="ticker-price">at $89.50</span>
-                </div>
+            </div>
                 <div className="ticker-item">
                   <span className="ticker-user">Collector2024</span>
                   <span className="ticker-action">sold</span>
@@ -1935,7 +3698,15 @@ const Market = () => {
             >
             
             <div className="watchlist-grid">
-              {[...watchedGames].map(gameId => {
+              {[...watchedGames].filter(gameId => {
+                if (!generalSearch) return true;
+                const game = gamesWithMarkets.find(g => g.id === gameId);
+                if (!game) return false;
+                const searchLower = generalSearch.toLowerCase();
+                const name = (game.name || '').toLowerCase();
+                const id = (game.id || game.gameId || '').toLowerCase();
+                return name.includes(searchLower) || id.includes(searchLower);
+              }).map(gameId => {
                 const game = gamesWithMarkets.find(g => g.id === gameId);
                 if (!game) return null;
                 const isExpanded = expandedCards.has(game.id);
@@ -2122,7 +3893,446 @@ const Market = () => {
             </div>
           </div>
           </>
-        ) : marketView === 'favorites' && watchedGames.size === 0 ? (
+        ) : marketView === 'favorites' && watchedGames.size === 0 && watchedItems.size > 0 ? (
+          <>
+            {/* Marketplace Hero Section */}
+            <div 
+              className="marketplace-hero"
+              style={{ 
+                '--content-width': `${contentWidth}px`,
+                '--banner-height': `${bannerHeight}px`,
+                height: `${bannerHeight}px`
+              }}
+            >
+              <div className="marketplace-hero-content">
+                <div className="marketplace-hero-left">
+                  <h1 className="marketplace-hero-title">Watched Items</h1>
+                  <p className="marketplace-hero-subtitle">Monitor {watchedItems.size} {watchedItems.size === 1 ? 'item' : 'items'} for price changes.</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="marketplace-items-container">
+              {(() => {
+                // Get all watched items from all games
+                const allWatchedItems = allMarketItemsForWatchlist.filter(item => watchedItems.has(item.id));
+                
+                if (allWatchedItems.length === 0) {
+                  return (
+                    <div className="marketplace-empty-state">
+                      <div className="empty-state-icon">📦</div>
+                      <h3 className="empty-state-title">No watched items available</h3>
+                      <p className="empty-state-text">The items you're watching are not currently listed in the marketplace.</p>
+                    </div>
+                  );
+                }
+                
+                // Separate bid items and buy items
+                const bidItems = allWatchedItems.filter(item => {
+                  const itemSaleType = item.saleType || 'buy';
+                  const bid = itemBids[item.id];
+                  return itemSaleType === 'bid' || bid?.saleType === 'bid';
+                });
+                const buyItems = allWatchedItems.filter(item => {
+                  const itemSaleType = item.saleType || 'buy';
+                  const bid = itemBids[item.id];
+                  return itemSaleType !== 'bid' && bid?.saleType !== 'bid';
+                });
+                
+                return (
+                  <>
+                    {/* Bid Items - Horizontal Scrollable Row */}
+                    {bidItems.length > 0 && (
+                      <>
+                        <div className="watchlist-bid-row">
+                          <div className="watchlist-bid-scroll">
+                            {bidItems.map(item => {
+                              // Get bid data for this item
+                              const bid = itemBids[item.id];
+                              const itemSaleType = item.saleType || 'buy';
+                              const isBidMode = itemSaleType === 'bid' || bid?.saleType === 'bid';
+                              const bidEndTime = bid?.bidEndTime || item.bidEndTime;
+                              const now = currentTime;
+                              const isBidActive = isBidMode && bidEndTime && bidEndTime > now;
+                              const isBidEnded = isBidMode && bidEndTime && bidEndTime <= now;
+                              
+                              return (
+                                <div 
+                                  key={item.id} 
+                                  className="market-item-card watchlist-bid-card"
+                                  onClick={() => {
+                                    setSelectedItemDetail(item);
+                                    setShowItemDetailModal(true);
+                                  }}
+                                >
+                                  <div className="item-image-container">
+                                    {item.imageUrl ? (
+                                      <img 
+                                        src={item.imageUrl} 
+                                        alt={item.name}
+                                        className="item-image"
+                                        onError={(e) => {
+                                          e.target.style.display = 'none';
+                                          e.target.nextSibling.style.display = 'flex';
+                                        }}
+                                      />
+                                    ) : null}
+                                    <div className="item-icon-large" style={{display: item.imageUrl ? 'none' : 'flex'}}>
+                                      {item.image || '📦'}
+                                    </div>
+                                    <button 
+                                      className={`watch-btn watch-btn-image ${watchedItems.has(item.id) ? 'watched' : ''}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleWatchItem(item.id);
+                                      }}
+                                      title={watchedItems.has(item.id) ? 'Remove from watchlist' : 'Add to watchlist'}
+                                    >
+                                      {watchedItems.has(item.id) ? <Eye size={16} /> : <EyeOff size={16} />}
+                                    </button>
+                                  </div>
+                                  <div className={`rarity-line rarity-${item.rarity.toLowerCase()}`}></div>
+                                  <div className="item-details">
+                                    <div className="item-name-row">
+                                      <h3 className="item-name-large">{item.name}</h3>
+                                    </div>
+                                    <div className="item-meta-row">
+                                      <span className="seller-name">{item.seller || 'Unknown'}</span>
+                                      <span className="item-price">${item.price.toFixed(2)}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        
+                        {/* Divider between bid and buy items */}
+                        {buyItems.length > 0 && (
+                          <div className="watchlist-divider"></div>
+                        )}
+                      </>
+                    )}
+                    
+                    {/* Buy Items - Normal Grid */}
+                    {buyItems.length > 0 && (
+                      <div className={`items-grid ${viewMode === 'grid' ? 'grid-view' : 'row-view'}`}>
+                        {buyItems.map(item => (
+                          <div 
+                            key={item.id} 
+                            className="market-item-card"
+                            onClick={() => {
+                              setSelectedItemDetail(item);
+                              setShowItemDetailModal(true);
+                            }}
+                          >
+                            <div className="item-image-container">
+                              <img 
+                                src={item.imageUrl} 
+                                alt={item.name}
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  if (e.target.nextSibling) {
+                                    e.target.nextSibling.style.display = 'flex';
+                                  }
+                                }}
+                              />
+                              <div className="item-icon-large" style={{display: item.imageUrl ? 'none' : 'flex'}}>
+                                {item.image || '📦'}
+                              </div>
+                              <button 
+                                className={`watch-btn watch-btn-image ${watchedItems.has(item.id) ? 'watched' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleWatchItem(item.id);
+                                }}
+                                title={watchedItems.has(item.id) ? 'Remove from watchlist' : 'Add to watchlist'}
+                              >
+                                {watchedItems.has(item.id) ? <Eye size={16} /> : <EyeOff size={16} />}
+                              </button>
+                            </div>
+                            
+                            {viewMode === 'row' && <div className={`rarity-line-vertical rarity-${item.rarity.toLowerCase()}`}></div>}
+                            
+                            <div className={`rarity-line rarity-${item.rarity.toLowerCase()}`}></div>
+                            
+                            <div className="item-details">
+                              <div className="item-name-row">
+                                <h3 className="item-name-large">{item.name}</h3>
+                              </div>
+                              
+                              <div className="item-meta-row">
+                                <span className="seller-name">{item.seller || 'Unknown'}</span>
+                                <span className="listed-at-text">{formatListedAt(item.listedAt)}</span>
+                              </div>
+                              
+                            </div>
+                            
+                            <div className="item-action-buttons" onClick={(e) => e.stopPropagation()}>
+                              {(() => {
+                                const bid = itemBids[item.id];
+                                const itemSaleType = item.saleType || 'buy';
+                                const isBidMode = itemSaleType === 'bid' || bid?.saleType === 'bid';
+                                
+                                // Use bid data from itemBids or from item itself
+                                let bidEndTime = bid?.bidEndTime || item.bidEndTime;
+                                const bidDuration = bid?.bidDuration || item.bidDuration || 60;
+                                const currentBid = bid?.currentBid || item.currentBid || item.price;
+                                const now = Date.now();
+                                
+                                // If item is in bid mode but has no bidEndTime, start timer immediately
+                                if (isBidMode && !bidEndTime) {
+                                  bidEndTime = now + (bidDuration * 60 * 1000);
+                                }
+                                
+                                const isBidActive = isBidMode && bidEndTime && bidEndTime > now;
+                                const isBidEnded = isBidMode && bidEndTime && bidEndTime <= now;
+                                
+                                // Calculate progress and timer for active bids
+                                const timeRemaining = isBidActive ? Math.max(0, bidEndTime - now) : 0;
+                                const totalDuration = bidDuration * 60 * 1000;
+                                const progress = totalDuration > 0 ? ((totalDuration - timeRemaining) / totalDuration) * 100 : 0;
+                                const timeFormatted = formatTimeRemaining(timeRemaining);
+                                // For bid items, use currentBid if available, otherwise use item price
+                                const currentPrice = isBidMode ? (currentBid || item.price) : item.price;
+                                const isNearEnd = progress >= 90;
+                                // Check if there are any valid bids - only bidHistory counts
+                                const hasBids = bid.bidHistory && Array.isArray(bid.bidHistory) && bid.bidHistory.length > 0;
+                                // If bid ended and no bids in history, show "NO BID PLACED" (even if bids were removed)
+                                const isNoBid = isBidEnded && !hasBids;
+                                const timerText = isBidEnded ? (isNoBid ? 'no bid placed' : 'bid ended') : (isNearEnd ? `bidding ending | ${timeFormatted}` : timeFormatted);
+                                
+                                if (soldItems[item.id]) {
+                                  return null; // Don't render sold items
+                                }
+                                
+                                // Check if current user is the seller
+                                const isSeller = item.sellerId && currentUserId && String(item.sellerId) === String(currentUserId);
+                                
+                                // Show bid button if item is in bid mode (active or not yet started), otherwise show buy button
+                                if (isBidMode) {
+                                  // Bid item - show bid button (active, ended, or not yet started)
+                                  return (
+                                    <div className="buy-button-wrapper">
+                                      {(isBidActive || isBidEnded) && (
+                                        <div className="bid-info-row">
+                                          <div className={isNearEnd && !isBidEnded ? 'bid-timer-above bid-timer-warning' : 'bid-timer-above'}>
+                                            {timerText}
+                                          </div>
+                                        </div>
+                                      )}
+                                      <div className="button-row">
+                                        <button 
+                                          className={`compare-btn-item ${comparisonItems.some(i => i.id === item.id) ? 'active' : ''}`}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            handleAddToComparison(item, e);
+                                          }}
+                                          title={comparisonItems.some(i => i.id === item.id) ? 'Remove from comparison' : 'Add to comparison'}
+                                        >
+                                          <GitCompare size={14} />
+                                        </button>
+                                        <div className="bid-buttons-container">
+                                          <button 
+                                            className={`buy-now-btn bid-mode ${isBidActive ? 'bid-active' : ''} ${isBidEnded && hasBids ? 'bid-sold' : ''} ${isNoBid ? 'bid-no-bid' : ''} ${isSeller ? 'seller-item' : ''}`}
+                                            onClick={() => {
+                                              if (!isBidEnded && !isSeller) {
+                                                setSelectedBidItem(item);
+                                                setShowBidModal(true);
+                                              }
+                                            }}
+                                            disabled={isBidEnded || isSeller}
+                                            title={isSeller ? 'You cannot bid on your own item' : isBidEnded ? 'Bid ended' : 'Place a bid'}
+                                          >
+                                            {isBidActive && !isBidEnded && (
+                                              <div 
+                                                className="bid-progress-bar"
+                                                style={{ width: `${progress}%` }}
+                                              />
+                                            )}
+                                            <span className="buy-button-text">
+                                              {isBidEnded ? (
+                                                <>
+                                                  <span className="buy-price">${formatPriceCompact(currentPrice)}</span>
+                                                  <span className="buy-label bid-label">{isNoBid ? 'NO BID PLACED' : 'SOLD'}</span>
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <span className="buy-price">${formatPriceCompact(currentPrice)}</span>
+                                                  <span className="buy-label bid-label">Bid</span>
+                                                </>
+                                              )}
+                                            </span>
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                } else {
+                                  // Buy now item - show buy button
+                                  const lock = lockedItems[item.id];
+                                  const LOCK_TIMEOUT = 30000;
+                                  const isLocked = lock && (now - lock.timestamp) < LOCK_TIMEOUT;
+                                  const isLockedByOther = isLocked && lock.userId !== currentUserId;
+                                  const isLockedByMe = isLocked && lock.userId === currentUserId;
+                                  
+                                  const isInCart = cartItems.some(i => i.itemType === 'market_item' && i.itemData?.id === item.id);
+                                  
+                                  // Check if current user is the seller
+                                  const isSeller = item.sellerId && currentUserId && String(item.sellerId) === String(currentUserId);
+                                  
+                                  return (
+                                    <div className="buy-button-wrapper">
+                                      <div className="button-row">
+                                        <button 
+                                          className={`compare-btn-item ${comparisonItems.some(i => i.id === item.id) ? 'active' : ''}`}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            handleAddToComparison(item, e);
+                                          }}
+                                          title={comparisonItems.some(i => i.id === item.id) ? 'Remove from comparison' : 'Add to comparison'}
+                                        >
+                                          <GitCompare size={14} />
+                                        </button>
+                                        <div className="bid-buttons-container">
+                                          <button 
+                                            className={`buy-now-btn ${isLockedByOther ? 'locked' : ''} ${isLockedByMe ? 'locked-by-me' : ''} ${isSeller ? 'seller-item' : ''}`}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              if (!isLockedByOther && !isSeller) {
+                                                handleBuyItem(item.id);
+                                              }
+                                            }}
+                                            disabled={isLockedByOther || isSeller}
+                                            title={isSeller ? 'You cannot buy your own item' : isLockedByOther ? 'This item is being purchased by another user' : isLockedByMe ? 'Confirming purchase...' : 'Buy now'}
+                                          >
+                                            <span className="buy-button-text">
+                                              <span className="buy-price">${formatPriceCompact(item.price)}</span>
+                                              <span className="buy-label">
+                                                {isLockedByOther ? 'Locked' : isLockedByMe ? 'Confirming...' : 'Buy'}
+                                              </span>
+                                            </span>
+                                          </button>
+                                        </div>
+                                        <button 
+                                          className={`cart-btn-item ${isInCart ? 'active' : ''} ${isSeller ? 'seller-item' : ''}`}
+                                          type="button"
+                                          disabled={isSeller}
+                                          onMouseDown={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                          }}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            e.preventDefault();
+                                            if (isSeller) return;
+                                            // Use the same cart logic as in browse view
+                                            (async () => {
+                                              try {
+                                                const userId = await getCurrentUserId();
+                                                if (!userId) {
+                                                  alert('Please log in to add items to cart.');
+                                                  return;
+                                                }
+                                                const api = window.electronAPI;
+                                                let currentCartItems = [];
+                                                const stored = localStorage.getItem(`cartItems_${userId}`);
+                                                if (stored) {
+                                                  try {
+                                                    const parsed = JSON.parse(stored);
+                                                    if (Array.isArray(parsed)) {
+                                                      currentCartItems = parsed;
+                                                    }
+                                                  } catch (e) {
+                                                    console.error('Error parsing localStorage cart:', e);
+                                                  }
+                                                }
+                                                const itemInCart = currentCartItems.some(i => 
+                                                  i.itemType === 'market_item' && i.itemData?.id === item.id
+                                                );
+                                                let updatedCart;
+                                                if (itemInCart) {
+                                                  updatedCart = currentCartItems.filter(i => 
+                                                    !(i.itemType === 'market_item' && i.itemData?.id === item.id)
+                                                  );
+                                                } else {
+                                                  const cartItem = {
+                                                    id: `market-${item.id}-${Date.now()}`,
+                                                    amount: parseFloat(item.price) || 0,
+                                                    timestamp: new Date().toISOString(),
+                                                    itemType: 'market_item',
+                                                    itemData: {
+                                                      id: String(item.id || ''),
+                                                      name: String(item.name || 'Unknown Item'),
+                                                      price: parseFloat(item.price) || 0,
+                                                      image: String(item.image || ''),
+                                                      imageUrl: item.imageUrl ? String(item.imageUrl) : null,
+                                                      gameId: item.gameId ? String(item.gameId) : null,
+                                                      gameName: item.gameName || selectedGame?.name ? String(item.gameName || selectedGame?.name) : null,
+                                                      seller: item.seller ? String(item.seller) : null,
+                                                      sellerId: item.sellerId ? String(item.sellerId) : null
+                                                    }
+                                                  };
+                                                  updatedCart = [...currentCartItems, cartItem];
+                                                }
+                                                const serializableCart = updatedCart.map(i => ({
+                                                  id: String(i.id || Date.now()),
+                                                  amount: parseFloat(i.amount || 0),
+                                                  timestamp: String(i.timestamp || new Date().toISOString()),
+                                                  itemType: String(i.itemType || 'market_item'),
+                                                  itemData: i.itemData && typeof i.itemData === 'object' ? {
+                                                    id: String(i.itemData.id || ''),
+                                                    name: String(i.itemData.name || 'Unknown Item'),
+                                                    price: parseFloat(i.itemData.price || 0),
+                                                    image: String(i.itemData.image || ''),
+                                                    imageUrl: i.itemData.imageUrl ? String(i.itemData.imageUrl) : null,
+                                                    gameId: i.itemData.gameId ? String(i.itemData.gameId) : null,
+                                                    gameName: i.itemData.gameName ? String(i.itemData.gameName) : null,
+                                                    seller: i.itemData.seller ? String(i.itemData.seller) : null,
+                                                    sellerId: i.itemData.sellerId ? String(i.itemData.sellerId) : null
+                                                  } : {}
+                                                }));
+                                                localStorage.setItem(`cartItems_${userId}`, JSON.stringify(serializableCart));
+                                                if (api?.dbSaveCartItems) {
+                                                  try {
+                                                    await api.dbSaveCartItems(userId, serializableCart);
+                                                  } catch (err) {
+                                                    console.error('Error saving to DB:', err);
+                                                  }
+                                                }
+                                                setTimeout(() => {
+                                                  window.dispatchEvent(new CustomEvent('cart-updated', { detail: { items: serializableCart } }));
+                                                }, 100);
+                                              } catch (error) {
+                                                console.error('Cart error:', error);
+                                                alert('Error: ' + (error.message || 'Failed to update cart'));
+                                              }
+                                            })();
+                                          }}
+                                          title={isSeller ? "You cannot add your own item to cart" : (isInCart ? "Remove from cart" : "Add to cart")}
+                                        >
+                                          <ShoppingCart size={14} className="cart-icon-default" />
+                                          <Plus size={14} className="cart-icon-hover cart-icon-plus" />
+                                          <Minus size={14} className="cart-icon-hover cart-icon-minus" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                              })()}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          </>
+        ) : marketView === 'favorites' && watchedGames.size === 0 && watchedItems.size === 0 ? (
           <>
             {/* Marketplace Hero Section */}
             <div 
@@ -2533,14 +4743,14 @@ const Market = () => {
                       className="games-selection-grid"
                     >
                       {visibleGames.map((game, index) => {
-                        const rankClass = game.marketRank <= 3 ? `rank-${game.marketRank}` : '';
-                        const isWatched = watchedGames.has(game.id);
-                        return (
-                          <div
-                            key={game.id}
-                            className={`game-select-card ${rankClass}`}
-                            onClick={() => navigate(`/game/${game.id}/market`)}
-                          >
+                      const rankClass = game.marketRank <= 3 ? `rank-${game.marketRank}` : '';
+                      const isWatched = watchedGames.has(game.id);
+                      return (
+                        <div
+                          key={game.id}
+                          className={`game-select-card ${rankClass}`}
+                          onClick={() => navigate(`/game/${game.id}/market`)}
+            >
               {/* Banner Section */}
               <div className="game-select-banner">
                 <button 
@@ -2593,7 +4803,7 @@ const Market = () => {
                 </div>
             </div>
           );
-                      })}
+                    })}
                     </div>
                     
                     {/* Bottom Spacer for items after visible range */}
@@ -2617,89 +4827,221 @@ const Market = () => {
                         />
                       );
                     })()}
-                  </div>
+          </div>
                 </>
               )}
             </>
           )}
         </div>
 
-        {/* Bottom Navigation Container - Search Button, Island, Close Button */}
-        <div className="market-bottom-nav-container">
-          {/* Search Button - Left of Island */}
-          {!isSearchMode && (
-            <button 
-              className="market-search-trigger-button"
-              onClick={() => {
-                setIsSearchMode(true);
-                setTimeout(() => {
-                  if (searchInputRef.current) {
-                    searchInputRef.current.focus();
-                    searchInputRef.current.select();
-                  }
-                }, 50);
-              }}
-            >
-              <Search size={18} />
-            </button>
-          )}
-          
-          {/* Bottom Navigation Island / Search Bar */}
-          <div className={`market-bottom-nav-island ${isSearchMode ? 'search-mode' : ''}`}>
-            {!isSearchMode ? (
-              <div className="market-bottom-nav-content">
-                <button 
-                  className={`market-bottom-nav-item market-bottom-nav-main ${marketView === 'browse' ? 'active' : ''}`}
-                  onClick={() => setMarketView('browse')}
-                >
-                  <ShoppingBag size={17} />
-                  <span>Browse</span>
-                </button>
-                <button 
-                  className={`market-bottom-nav-item ${marketView === 'favorites' ? 'active' : ''}`}
-                  onClick={() => setMarketView('favorites')}
-                >
-                  <Eye size={17} />
-                  <span>Watchlist</span>
-                </button>
-                <button 
-                  className={`market-bottom-nav-item ${marketView === 'stats' ? 'active' : ''}`}
-                  onClick={() => setMarketView('stats')}
-                >
-                  <BarChart3 size={17} />
-                  <span>Analytics</span>
-                </button>
-                <button 
-                  className={`market-bottom-nav-item ${marketView === 'petitions' ? 'active' : ''}`}
-                  onClick={() => setMarketView('petitions')}
-                >
-                  <FileText size={17} />
-                  <span>Petitions</span>
-                </button>
-              </div>
-            ) : (
-              <div className="market-search-island-content">
-                <Search size={16} className="market-search-island-icon" />
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  placeholder="Search items..."
-                  value={itemSearch}
-                  onChange={(e) => setItemSearch(e.target.value)}
-                  className="market-search-island-input"
-                />
-                <button
-                  className="market-search-island-clear"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsSearchMode(false);
-                    setItemSearch('');
-                  }}
-                >
-                  <X size={14} />
-                </button>
-              </div>
+        {/* Bottom Navigation Container - Search Button, Island, Close Button - Fixed at bottom */}
+        <div className="market-bottom-menu-container">
+          {/* Centered Menu Items Group */}
+          <div className="market-bottom-menu-items">
+            {/* Dummy element for centering in marketplace selection */}
+            {!gameId && !selectedGame && <div className="market-bottom-nav-dummy"></div>}
+            <div className="market-bottom-nav-container">
+            {/* Search Button - Left of Island */}
+            {!isSearchMode && (
+              <button 
+                className="market-search-trigger-button"
+                onClick={() => {
+                  setIsSearchMode(true);
+                  setTimeout(() => {
+                    if (searchInputRef.current) {
+                      searchInputRef.current.focus();
+                      searchInputRef.current.select();
+                    }
+                  }, 50);
+                }}
+              >
+                <Search size={18} />
+              </button>
             )}
+            
+            {/* Bottom Navigation Island / Search Bar */}
+            <div className={`market-bottom-nav-island ${isSearchMode ? 'search-mode' : ''}`}>
+              {!isSearchMode ? (
+                <div className="market-bottom-nav-content">
+                  <button 
+                    className={`market-bottom-nav-item market-bottom-nav-main ${marketView === 'browse' ? 'active' : ''}`}
+                    onClick={() => setMarketView('browse')}
+                  >
+                    <Search size={17} />
+                    <span>Browse</span>
+                  </button>
+                  <button 
+                    className={`market-bottom-nav-item ${marketView === 'favorites' ? 'active' : ''}`}
+                    onClick={() => setMarketView('favorites')}
+                  >
+                    <Eye size={17} />
+                    <span>Watchlist</span>
+                  </button>
+                  <button 
+                    className={`market-bottom-nav-item ${marketView === 'stats' ? 'active' : ''}`}
+                    onClick={() => setMarketView('stats')}
+                  >
+                    <BarChart3 size={17} />
+                    <span>Analytics</span>
+                  </button>
+                  <button 
+                    className={`market-bottom-nav-item ${marketView === 'petitions' ? 'active' : ''}`}
+                    onClick={() => setMarketView('petitions')}
+                  >
+                    <FileText size={17} />
+                    <span>Petitions</span>
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* Menu Selector - Options displayed above search bar */}
+                  <div className="market-search-menu-toggle-wrapper">
+                    <div className="market-search-menu-options">
+                      <button 
+                        className={`market-search-menu-option ${marketView === 'browse' ? 'active' : ''}`}
+                        onClick={() => {
+                          setMarketView('browse');
+                          // Restore last selected game when returning to browse
+                          if (lastSelectedGameInBrowse) {
+                            const gameIdToNavigate = lastSelectedGameInBrowse.id || lastSelectedGameInBrowse.gameId;
+                            const gameToRestore = lastSelectedGameInBrowse;
+                            if (gameIdToNavigate) {
+                              // Set flag to prevent clearing during navigation
+                              isRestoringGameRef.current = true;
+                              // Restore the selected game state immediately
+                              setSelectedGame(gameToRestore);
+                              // Navigate to the game's marketplace
+                              navigate(`/game/${gameIdToNavigate}/market`);
+                              // Ensure selectedGame is set after navigation completes
+                              setTimeout(() => {
+                                setSelectedGame(prev => {
+                                  // Only update if not already set correctly
+                                  if (!prev || (prev.id !== gameIdToNavigate && prev.gameId !== gameIdToNavigate)) {
+                                    return gameToRestore;
+                                  }
+                                  return prev;
+                                });
+                                isRestoringGameRef.current = false;
+                              }, 200);
+                            } else {
+                              setSelectedGame(null);
+                              navigate('/market');
+                            }
+                          } else {
+                            setSelectedGame(null);
+                            navigate('/market');
+                          }
+                        }}
+                      >
+                        <ShoppingBag size={12} />
+                        <span>Browse</span>
+                      </button>
+                      <button 
+                        className={`market-search-menu-option ${marketView === 'favorites' ? 'active' : ''}`}
+                        onClick={() => {
+                          // Save current selectedGame when leaving browse
+                          if (marketView === 'browse' && selectedGame) {
+                            setLastSelectedGameInBrowse(selectedGame);
+                          }
+                          setSelectedGame(null);
+                          setMarketView('favorites');
+                          navigate('/market');
+                        }}
+                      >
+                        <Eye size={14} />
+                        <span>Watchlist</span>
+                      </button>
+                      <button 
+                        className={`market-search-menu-option ${marketView === 'stats' ? 'active' : ''}`}
+                        onClick={() => {
+                          // Save current selectedGame when leaving browse
+                          if (marketView === 'browse' && selectedGame) {
+                            setLastSelectedGameInBrowse(selectedGame);
+                          }
+                          setSelectedGame(null);
+                          setMarketView('stats');
+                          navigate('/market');
+                        }}
+                      >
+                        <BarChart3 size={12} />
+                        <span>Analytics</span>
+                      </button>
+                      <button 
+                        className={`market-search-menu-option ${marketView === 'petitions' ? 'active' : ''}`}
+                        onClick={() => {
+                          // Save current selectedGame when leaving browse
+                          if (marketView === 'browse' && selectedGame) {
+                            setLastSelectedGameInBrowse(selectedGame);
+                          }
+                          setSelectedGame(null);
+                          setMarketView('petitions');
+                          navigate('/market');
+                        }}
+                      >
+                        <FileText size={12} />
+                        <span>Petitions</span>
+                      </button>
+                    </div>
+                  </div>
+                  <div className="market-search-island-dummy-left"></div>
+                  <div className="market-search-island-content">
+                    <Search size={16} className="market-search-island-icon" />
+                    <input
+                      ref={searchInputRef}
+                      type="text"
+                      placeholder={(() => {
+                        if (gameId) {
+                          return "Search items...";
+                        }
+                        switch (marketView) {
+                          case 'browse':
+                            return "Search games...";
+                          case 'favorites':
+                            return "Search watchlist...";
+                          case 'stats':
+                            return "Search analytics...";
+                          case 'petitions':
+                            return "Search petitions...";
+                          default:
+                            return "Search...";
+                        }
+                      })()}
+                      value={gameId ? itemSearch : (marketView === 'petitions' ? petitionSearchQuery : generalSearch)}
+                      onChange={(e) => {
+                        if (gameId) {
+                          setItemSearch(e.target.value);
+                        } else if (marketView === 'petitions') {
+                          setPetitionSearchQuery(e.target.value);
+                        } else {
+                          setGeneralSearch(e.target.value);
+                        }
+                      }}
+                      className="market-search-island-input"
+                    />
+                  </div>
+                  <button
+                    className="market-search-island-clear"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsSearchMode(false);
+                      if (gameId) {
+                        setItemSearch('');
+                      } else if (marketView === 'petitions') {
+                        setPetitionSearchQuery('');
+                      } else {
+                        setGeneralSearch('');
+                      }
+                    }}
+                  >
+                    <X size={14} />
+                  </button>
+                  <div className="market-search-island-dummy-right"></div>
+                </>
+              )}
+            </div>
+            </div>
+            {/* Dummy element for centering in marketplace selection */}
+            {!gameId && !selectedGame && <div className="market-bottom-nav-dummy"></div>}
           </div>
         </div>
 
@@ -2928,464 +5270,370 @@ const Market = () => {
     }
   };
 
-  // Show comparison view as full-screen submenu
-  if (showComparisonModal) {
+  // Render split view when comparison modal is open
+  const renderComparisonPanel = () => {
     return (
-      <div className="market">
-        <div className="market-main-container">
-          <div className="market-content-area">
-            <div className="comparison-fullscreen-view">
-              <div className="comparison-fullscreen-header">
-                <button 
-                  className="comparison-back-btn"
-                  onClick={() => {
-                    setShowComparisonModal(false);
-                    setComparisonModalAutoOpened(false);
-                    setComparisonModalManuallyClosed(true);
-                    // Allow user to manually close even with items selected
-                  }}
-                >
-                  <ArrowLeft size={18} />
-                  <span>Back to Marketplace</span>
-                </button>
-                <h2 className="comparison-fullscreen-title">Compare Items ({comparisonItems.length}/8)</h2>
-                <div className="comparison-fullscreen-actions">
-                  <div className="comparison-view-mode-toggle">
-                    <button 
-                      className={`comparison-view-mode-btn ${comparisonViewMode === 'both' ? 'active' : ''}`}
-                      onClick={() => setComparisonViewMode('both')}
-                      title="Show both 3D view and stats"
-                    >
-                      <Grid size={16} />
-                      <span>Both</span>
-                    </button>
-                    <button 
-                      className={`comparison-view-mode-btn ${comparisonViewMode === '3d' ? 'active' : ''}`}
-                      onClick={() => setComparisonViewMode('3d')}
-                      title="Show only 3D view"
-                    >
-                      <Maximize2 size={16} />
-                      <span>3D View</span>
-                    </button>
-                    <button 
-                      className={`comparison-view-mode-btn ${comparisonViewMode === 'stats' ? 'active' : ''}`}
-                      onClick={() => setComparisonViewMode('stats')}
-                      title="Show only stats"
-                    >
-                      <BarChart3 size={16} />
-                      <span>Stats</span>
-                    </button>
-                  </div>
-                  {comparisonItems.length > 0 && (
-                    <button className="comparison-clear-btn" onClick={handleClearComparison}>
-                      Clear All
-                    </button>
-                  )}
-                </div>
-              </div>
-
-
-              <div className="comparison-fullscreen-content">
-                {comparisonItems.length === 0 ? (
-                  <div className="comparison-empty">
-                    <GitCompare size={48} />
-                    <p>No items selected for comparison</p>
-                    <span>Click the compare icon on items below to add them</span>
-                  </div>
-                ) : (
+      <div className="comparison-panel">
+        <div className="comparison-panel-content">
+          {comparisonItems.length === 0 ? (
+            <div className="comparison-empty">
+              <GitCompare size={48} />
+              <p>No items selected for comparison</p>
+              <span>Click the compare icon on items to add them</span>
+            </div>
+          ) : (
+            <div 
+              className={`comparison-3d-grid comparison-view-mode-${comparisonViewMode}`}
+              style={{
+                '--item-count': comparisonItems.length,
+                '--grid-columns': comparisonViewMode === '3d' 
+                  ? (comparisonItems.length === 2 ? '2' : 
+                     comparisonItems.length === 3 ? '2' : 
+                     comparisonItems.length === 4 ? '2' : 
+                     comparisonItems.length <= 6 ? '3' : 
+                     comparisonItems.length <= 8 ? '4' : '4')
+                  : (comparisonItems.length <= 5 ? comparisonItems.length.toString() : '3'),
+                '--grid-rows': comparisonViewMode === '3d'
+                  ? (comparisonItems.length === 2 ? '1' : 
+                     comparisonItems.length === 3 ? '2' : 
+                     comparisonItems.length === 4 ? '2' : 
+                     comparisonItems.length <= 6 ? '2' : 
+                     comparisonItems.length <= 8 ? '2' : '2')
+                  : (comparisonItems.length <= 5 ? '1' : '2')
+              }}
+            >
+              {comparisonItems.map((item, index) => {
+                const spanColumns = comparisonViewMode === '3d' && comparisonItems.length === 3 && index === 0 ? 2 : 1;
+                const spanRows = comparisonViewMode === '3d' && comparisonItems.length === 3 && index === 0 ? 1 : 1;
+                const diffColor = getDifferenceColor(item);
+                const isReference = referenceItemId === item.id;
+                const hasDifferences = !isReference && diffColor !== null && diffColor !== undefined;
+                
+                return (
                   <div 
-                    className={`comparison-3d-grid comparison-view-mode-${comparisonViewMode}`}
+                    key={item.id} 
+                    className={`comparison-3d-item ${isReference ? 'is-reference' : ''} ${hasDifferences ? 'has-differences' : ''}`}
                     style={{
-                      '--item-count': comparisonItems.length,
-                      '--grid-columns': comparisonViewMode === '3d' 
-                        ? (comparisonItems.length === 2 ? '2' : 
-                           comparisonItems.length === 3 ? '2' : 
-                           comparisonItems.length === 4 ? '2' : 
-                           comparisonItems.length <= 6 ? '3' : 
-                           comparisonItems.length <= 8 ? '4' : '4')
-                        : (comparisonItems.length <= 4 ? comparisonItems.length.toString() : '4'),
-                      '--grid-rows': comparisonViewMode === '3d'
-                        ? (comparisonItems.length === 2 ? '1' : 
-                           comparisonItems.length === 3 ? '2' : 
-                           comparisonItems.length === 4 ? '2' : 
-                           comparisonItems.length <= 6 ? '2' : 
-                           comparisonItems.length <= 8 ? '2' : '2')
-                        : (comparisonItems.length <= 4 ? '1' : '2')
+                      ...(hasDifferences && diffColor ? { '--diff-color': diffColor } : {}),
+                      gridColumn: `span ${spanColumns}`,
+                      gridRow: `span ${spanRows}`,
+                      cursor: 'pointer'
+                    }}
+                    onClick={(e) => {
+                      // Only set as reference if clicking on the item itself, not on interactive elements
+                      const target = e.target;
+                      const isInteractiveElement = target.closest('.comparison-remove-btn') ||
+                                                   target.closest('.comparison-reference-checkbox') ||
+                                                   target.closest('.item-3d-controls') ||
+                                                   target.closest('button');
+                      if (!isInteractiveElement) {
+                        setReferenceItemId(item.id);
+                      }
                     }}
                   >
-                    {comparisonItems.map((item, index) => {
-                      // For 3D view with 3 items: first item spans 2 columns
-                      const spanColumns = comparisonViewMode === '3d' && comparisonItems.length === 3 && index === 0 ? 2 : 1;
-                      const spanRows = comparisonViewMode === '3d' && comparisonItems.length === 3 && index === 0 ? 1 : 1;
-                      const diffColor = getDifferenceColor(item);
-                      const isReference = referenceItemId === item.id;
-                      const hasDifferences = !isReference && diffColor !== null && diffColor !== undefined;
-                      
-                      return (
-                        <div 
-                          key={item.id} 
-                          className={`comparison-3d-item ${isReference ? 'is-reference' : ''} ${hasDifferences ? 'has-differences' : ''}`}
-                          style={{
-                            ...(hasDifferences && diffColor ? { '--diff-color': diffColor } : {}),
-                            gridColumn: `span ${spanColumns}`,
-                            gridRow: `span ${spanRows}`
+                    <div className="comparison-3d-header">
+                      <div className="comparison-3d-header-left">
+                        <div
+                          className="comparison-reference-checkbox"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setReferenceItemId(item.id);
                           }}
+                          title={isReference ? "Reference item" : "Set as reference"}
                         >
-                          <div className="comparison-3d-header">
-                            <div className="comparison-3d-header-left">
-                              <button
-                                className="comparison-reference-checkbox"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setReferenceItemId(item.id);
-                                }}
-                                title={isReference ? "Reference item" : "Set as reference"}
-                              >
-                                {isReference ? <CheckSquare size={18} /> : <Square size={18} />}
-                              </button>
-                              <h3 className="comparison-3d-item-name">{item.name}</h3>
-                            </div>
-                            <button 
-                              className="comparison-remove-btn"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRemoveFromComparison(item.id);
-                              }}
-                              title="Remove from comparison"
-                            >
-                              <X size={14} />
-                            </button>
-                          </div>
-                          
-                          {/* Use existing 3D view system - exact copy */}
-                          {(comparisonViewMode === 'both' || comparisonViewMode === '3d') && (
-                          <div className="item-3d-view">
-                            <div 
-                              className="item-3d-container" 
-                              ref={(el) => {
-                                if (el) {
-                                  comparison3dRefs.current[item.id] = el;
-                                } else {
-                                  delete comparison3dRefs.current[item.id];
-                                }
-                              }}
-                            >
-                              <div className="item-3d-model-wrapper" style={{
-                                transform: `translate(${comparisonPans[item.id]?.x || 0}px, ${comparisonPans[item.id]?.y || 0}px) rotateX(${normalizeRotation(comparisonRotations[item.id]?.x)}deg) rotateY(${normalizeRotation(comparisonRotations[item.id]?.y)}deg) rotateZ(${normalizeRotation(comparisonRotations[item.id]?.z)}deg) scale(${comparisonZooms[item.id] || 1})`,
-                                transformStyle: 'preserve-3d',
-                                transition: (comparisonIsRotating[item.id] || comparisonIsPanning[item.id]) ? 'none' : (comparisonIsResetting[item.id] ? 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)' : 'transform 0.1s ease')
-                              }}>
-                                {item.imageUrl ? (
-                                  <img 
-                                    src={item.imageUrl} 
-                                    alt={item.name}
-                                    className="item-3d-image"
-                                  />
-                                ) : (
-                                  <div className="item-3d-placeholder">
-                                    <div className="item-3d-icon">{item.image || '📦'}</div>
-                                    <p>3D Model View</p>
-                                    <span className="item-3d-note">3D model preview will be available here</span>
-                                  </div>
-                                )}
-                              </div>
-                              <div className="item-3d-controls item-3d-controls-zoom" onClick={(e) => e.stopPropagation()}>
-                                <button 
-                                  className="item-3d-btn" 
-                                  title="Zoom In"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setComparisonZooms(prev => {
-                                      const current = prev[item.id] || 1;
-                                      return {
-                                        ...prev,
-                                        [item.id]: Math.max(0.5, Math.min(2, current + 0.1))
-                                      };
-                                    });
-                                  }}
-                                >
-                                  <Plus size={14} />
-                                </button>
-                                <button 
-                                  className="item-3d-btn" 
-                                  title="Zoom Out"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setComparisonZooms(prev => {
-                                      const current = prev[item.id] || 1;
-                                      return {
-                                        ...prev,
-                                        [item.id]: Math.max(0.5, Math.min(2, current - 0.1))
-                                      };
-                                    });
-                                  }}
-                                >
-                                  <Minus size={14} />
-                                </button>
-                              </div>
-                            </div>
-                            {isReference && (
-                              <div className="comparison-reference-badge">
-                                <Flag size={14} />
-                                <span>Reference</span>
-                              </div>
-                            )}
-                          </div>
-                          )}
-                          
-                          {(comparisonViewMode === 'both' || comparisonViewMode === 'stats') && (
-                          <div className="comparison-3d-info">
-                            <div className="comparison-info-grid">
-                              <div className="comparison-info-item">
-                                <span className="comparison-info-label">Price</span>
-                                <span className={`comparison-info-value ${referenceItem && referenceItem.price !== item.price ? 'different' : ''}`}>
-                                  ${item.price.toFixed(2)}
-                                </span>
-                              </div>
-                              <div className="comparison-info-item">
-                                <span className="comparison-info-label">Rarity</span>
-                                <span className={`comparison-info-value rarity-${item.rarity.toLowerCase()} ${referenceItem && referenceItem.rarity !== item.rarity ? 'different' : ''}`}>
-                                  {item.rarity}
-                                </span>
-                              </div>
-                              {item.type && (
-                                <div className="comparison-info-item">
-                                  <span className="comparison-info-label">Type</span>
-                                  <span className={`comparison-info-value ${referenceItem && referenceItem.type !== item.type ? 'different' : ''}`}>
-                                    {item.type}
-                                  </span>
-                                </div>
-                              )}
-                              <div className="comparison-info-item">
-                                <span className="comparison-info-label">Seller</span>
-                                <span className="comparison-info-value">{item.seller || 'Unknown'}</span>
-                              </div>
-                            </div>
-                          </div>
-                          )}
+                          {isReference ? <CheckSquare size={18} /> : <Square size={18} />}
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* Resizable Bottom Drawer for Items */}
-              {selectedGame && marketItems.length > 0 && (
-                <div className="comparison-drawer-container">
-                  <div 
-                    className={`comparison-drawer ${(drawerHeight <= 60 && !isAnimating) ? 'minimized' : ''} ${isDraggingDrawer ? 'dragging' : ''}`}
-                    style={{ height: `${drawerHeight}px` }}
-                  >
-                    <div className="comparison-drawer-handle-wrapper">
-                      <div className="comparison-drawer-handle-hint">
-                        {drawerHeight <= 60 ? 'Click to open' : 'Click to close'}
+                        <h3 className="comparison-3d-item-name">{item.name}</h3>
                       </div>
-                      <div 
-                        className="comparison-drawer-handle"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          setHasDragged(false);
-                          setIsDraggingDrawer(true);
+                      <button 
+                        className="comparison-remove-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveFromComparison(item.id);
                         }}
+                        title="Remove from comparison"
                       >
-                        <div className="comparison-drawer-handle-bar"></div>
-                      </div>
+                        <X size={14} />
+                      </button>
                     </div>
                     
-                    {showDrawerContent && (
-                      <>
-                        <div className="comparison-drawer-header">
-                          <h3>Add More Items to Compare</h3>
+                    {(comparisonViewMode === 'both' || comparisonViewMode === '3d') && (
+                    <div className="item-3d-view">
+                      <Item3DView
+                        imageUrl={item.imageUrl}
+                        image={item.image}
+                        name={item.name}
+                        isMaximized={expanded3DViews[item.id] || false}
+                        onMaximizeToggle={() => {
+                          setExpanded3DViews(prev => ({
+                            ...prev,
+                            [item.id]: !prev[item.id]
+                          }));
+                        }}
+                        maxZoom={expanded3DViews[item.id] ? 4 : 2}
+                        showMaximizeButton={true}
+                        showZoomControls={true}
+                      />
+                      {isReference && (
+                        <div className="comparison-reference-badge">
+                          <Flag size={14} />
+                          <span>Reference</span>
                         </div>
-
-                        <div className="comparison-drawer-content">
-                      <div className="marketplace-filters-bar" style={{ '--content-width': `${contentWidth}px` }}>
-                        <div className="filters-bar-left">
-                          <div className="marketplace-search-wrapper">
-                            <Search size={16} className="search-icon" />
-                            <input
-                              type="text"
-                              className="marketplace-search-input"
-                              placeholder="Search items..."
-                              value={itemSearch}
-                              onChange={(e) => setItemSearch(e.target.value)}
-                            />
-                            {itemSearch && (
-                              <button 
-                                className="search-clear-btn"
-                                onClick={() => setItemSearch('')}
-                                title="Clear search"
-                              >
-                                <X size={12} />
-                              </button>
-                            )}
-                          </div>
-                          
-                          <div className="marketplace-filters-group">
-                            <select
-                              className="marketplace-filter-select"
-                              value={rarityFilter}
-                              onChange={(e) => setRarityFilter(e.target.value)}
-                            >
-                              <option value="all">All Rarities</option>
-                              <option value="common">Common</option>
-                              <option value="rare">Rare</option>
-                              <option value="epic">Epic</option>
-                              <option value="legendary">Legendary</option>
-                            </select>
-                            
-                            <select
-                              className="marketplace-filter-select"
-                              value={priceFilter}
-                              onChange={(e) => setPriceFilter(e.target.value)}
-                            >
-                              <option value="all">All Prices</option>
-                              <option value="under-10">Under $10</option>
-                              <option value="10-50">$10 - $50</option>
-                              <option value="50-100">$50 - $100</option>
-                              <option value="over-100">Over $100</option>
-                            </select>
-                            
-                            <select
-                              className="marketplace-filter-select"
-                              value={sortBy}
-                              onChange={(e) => setSortBy(e.target.value)}
-                            >
-                              <option value="price-low">Price: Low to High</option>
-                              <option value="price-high">Price: High to Low</option>
-                              <option value="name-asc">Name: A to Z</option>
-                              <option value="name-desc">Name: Z to A</option>
-                              <option value="newest">Newest First</option>
-                              <option value="oldest">Oldest First</option>
-                            </select>
-                          </div>
+                      )}
+                    </div>
+                    )}
+                    
+                    {(comparisonViewMode === 'both' || comparisonViewMode === 'stats') && (
+                    <div className="comparison-3d-info">
+                      <div className="comparison-info-grid">
+                        <div className="comparison-info-item">
+                          <span className="comparison-info-label">Price</span>
+                          <span className={`comparison-info-value ${referenceItem && referenceItem.price !== item.price ? 'different' : ''}`}>
+                            ${item.price.toFixed(2)}
+                          </span>
                         </div>
-
-                        <div className="filters-bar-right">
-                          <div className="items-count">
-                            {sortedItems.length} {sortedItems.length === 1 ? 'item' : 'items'}
-                            {itemSearch || !rarityFilter.has('all') || !priceFilter.has('all') ? (
-                              <span className="items-count-filtered"> (filtered)</span>
-                            ) : null}
-                          </div>
-                          <div className="view-mode-controls">
-                            <button 
-                              className={`view-mode-btn ${viewMode === 'grid' ? 'active' : ''}`}
-                              onClick={() => setViewMode('grid')}
-                              title="Grid view"
-                            >
-                              <Grid size={16} />
-                            </button>
-                            <button 
-                              className={`view-mode-btn ${viewMode === 'row' ? 'active' : ''}`}
-                              onClick={() => setViewMode('row')}
-                              title="List view"
-                            >
-                              <List size={16} />
-                            </button>
-                          </div>
+                        <div className="comparison-info-item">
+                          <span className="comparison-info-label">Rarity</span>
+                          <span className={`comparison-info-value rarity-${item.rarity.toLowerCase()} ${referenceItem && referenceItem.rarity !== item.rarity ? 'different' : ''}`}>
+                            {item.rarity}
+                          </span>
                         </div>
-                      </div>
-                      
-                      <div 
-                        ref={itemsGridRef}
-                        className={`items-grid ${viewMode === 'grid' ? 'grid-view' : 'row-view'}`}
-                      >
-                        {sortedItems.length === 0 ? (
-                          <div className="marketplace-empty-state">
-                            <div className="empty-state-icon">📦</div>
-                            <h3 className="empty-state-title">No items listed</h3>
-                            <p className="empty-state-description">Be the first to list an item for {selectedGame.name}</p>
-                            <button className="empty-state-action-btn" onClick={handleSellItem}>
-                              <Plus size={16} />
-                              <span>List Item</span>
-                            </button>
+                        {item.type && (
+                          <div className="comparison-info-item">
+                            <span className="comparison-info-label">Type</span>
+                            <span className={`comparison-info-value ${referenceItem && referenceItem.type !== item.type ? 'different' : ''}`}>
+                              {item.type}
+                            </span>
                           </div>
-                        ) : (
-                          sortedItems.map(item => (
-                          <div 
-                            key={item.id} 
-                            className="market-item-card"
-                            onClick={() => {
-                              setSelectedItemDetail(item);
-                              setShowItemDetailModal(true);
-                            }}
-                          >
-                            <div className="item-image-container">
-                              <img 
-                                src={item.imageUrl} 
-                                alt={item.name}
-                                onError={(e) => {
-                                  e.target.style.display = 'none';
-                                  if (e.target.nextSibling) {
-                                    e.target.nextSibling.style.display = 'flex';
-                                  }
-                                }}
-                              />
-                              <div className="item-icon-large" style={{display: item.imageUrl ? 'none' : 'flex'}}>
-                                {item.image || '📦'}
-                              </div>
-                            </div>
-                            
-                            {viewMode === 'row' && <div className={`rarity-line-vertical rarity-${item.rarity.toLowerCase()}`}></div>}
-                            
-                            <div className={`rarity-line rarity-${item.rarity.toLowerCase()}`}></div>
-                            
-                            <div className="item-details">
-                              <div className="item-name-row">
-                                <h3 className="item-name-large">{item.name}</h3>
-                              </div>
-                              
-                              <div className="item-meta-row">
-                                <span className="seller-name">{item.seller || 'Unknown'}</span>
-                                <span className="listed-at-text">{formatListedAt(item.listedAt)}</span>
-                              </div>
-                              
-                              <div className="item-bottom-row">
-                                <div className="item-price-row">
-                                  <span className="price-value">${item.price.toFixed(2)}</span>
-                                </div>
-                                
-                                <div className="item-action-buttons" onClick={(e) => e.stopPropagation()}>
-                                  <button className="buy-now-btn" onClick={() => handleBuyItem(item.id)}>Buy</button>
-                                  <button 
-                                    className={`compare-btn-item ${comparisonItems.some(i => i.id === item.id) ? 'active' : ''}`}
-                                    onClick={(e) => handleAddToComparison(item, e)}
-                                    title={comparisonItems.some(i => i.id === item.id) ? 'Remove from comparison' : 'Add to comparison'}
-                                  >
-                                    <GitCompare size={14} />
-                                  </button>
-                                  <button 
-                                    className={`watch-btn ${watchedItems.has(item.id) ? 'watched' : ''}`}
-                                    onClick={() => handleWatchItem(item.id)}
-                                  >
-                                    {watchedItems.has(item.id) ? <Eye size={16} /> : <EyeOff size={16} />}
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                          ))
                         )}
+                        <div className="comparison-info-item">
+                          <span className="comparison-info-label">Seller</span>
+                          <span className="comparison-info-value">{item.seller || 'Unknown'}</span>
+                        </div>
                       </div>
                     </div>
-                      </>
                     )}
                   </div>
-                </div>
-              )}
+                );
+              })}
+            </div>
+          )}
+        </div>
+        
+        {/* Fixed bottom control bar with floating islands */}
+        <div className="comparison-bottom-controls">
+          <button
+            className="comparison-add-items-btn"
+            onClick={() => {
+              setShowAddItemsModal(true);
+            }}
+            title={comparisonItems.length > 0 ? `Add more items (${comparisonItems.length}/8)` : 'Add items to compare'}
+          >
+            <Plus size={16} />
+            <span>Add Items</span>
+          </button>
+          
+          {!isCompareOnlyMode && (
+            <div className="comparison-control-island">
+              <button
+                className="comparison-popout-btn"
+                onClick={async () => {
+                  try {
+                    const api = window.electronAPI;
+                    if (api?.openPopOutWindow) {
+                      const route = gameId ? `/game/${gameId}/market/compare` : '/market/compare';
+                      await api.openPopOutWindow(route);
+                    }
+                  } catch (error) {
+                    console.error('Error opening pop-out window:', error);
+                  }
+                }}
+                title="Open in separate window"
+              >
+                <Maximize2 size={16} />
+              </button>
+            </div>
+          )}
+          
+          <div className="comparison-control-island">
+            <div className="comparison-view-mode-toggle">
+              <button 
+                className={`comparison-view-mode-btn ${comparisonViewMode === 'both' ? 'active' : ''}`}
+                onClick={() => setComparisonViewMode('both')}
+                title="Show both 3D view and stats"
+              >
+                <Grid size={16} />
+                <span>Both</span>
+              </button>
+              <button 
+                className={`comparison-view-mode-btn ${comparisonViewMode === '3d' ? 'active' : ''}`}
+                onClick={() => setComparisonViewMode('3d')}
+                title="Show only 3D view"
+              >
+                <Maximize2 size={16} />
+                <span>3D View</span>
+              </button>
+              <button 
+                className={`comparison-view-mode-btn ${comparisonViewMode === 'stats' ? 'active' : ''}`}
+                onClick={() => setComparisonViewMode('stats')}
+                title="Show only stats"
+              >
+                <BarChart3 size={16} />
+                <span>Stats</span>
+              </button>
+            </div>
+          </div>
+          
+          {comparisonItems.length > 0 && (
+            <button className="comparison-clear-btn" onClick={handleClearComparison}>
+              Clear All
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // If in compare-only mode (pop-out window), show only the comparison panel
+  // This early return must be AFTER renderComparisonPanel is defined
+  if (isCompareOnlyMode) {
+    return (
+      <div className="market compare-only-mode">
+        <div className="market-main-container">
+          <div className="market-content-area">
+            <div className="market-main-content">
+              {renderComparisonPanel()}
             </div>
           </div>
         </div>
+        
+        {/* Add Items to Comparison Modal - Also available in pop-out */}
+        {showAddItemsModal && (
+          <div className="modal-overlay" onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowAddItemsModal(false);
+            }
+          }}>
+            <div className="sell-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1000px', height: '80vh' }}>
+              <div className="sell-modal-header">
+                <h3>Add Items to Comparison ({comparisonItems.length}/8)</h3>
+                <button className="modal-close-btn" onClick={() => setShowAddItemsModal(false)}>✕</button>
+              </div>
+              
+              <div className="sell-modal-body" style={{ overflowY: 'auto', padding: '20px' }}>
+                {(() => {
+                  // Get current game ID
+                  const currentGameId = selectedGame?.id || selectedGame?.gameId || gameId;
+                  
+                  // Filter out items that are already in comparison AND ensure items are from the current game
+                  const availableItems = sortedItems.filter(item => {
+                    // Check if item is already in comparison
+                    const isInComparison = comparisonItems.some(compItem => compItem.id === item.id);
+                    if (isInComparison) return false;
+                    
+                    // Check if item is from the current game
+                    const itemGameId = item.gameId;
+                    if (currentGameId && itemGameId) {
+                      return String(currentGameId) === String(itemGameId);
+                    }
+                    
+                    // If no game ID is set, allow the item (for backwards compatibility)
+                    return true;
+                  });
+                  
+                  return availableItems.length === 0 ? (
+                    <div className="marketplace-empty-state" style={{ padding: '40px', textAlign: 'center' }}>
+                      <div className="empty-state-icon">📦</div>
+                      <h3 className="empty-state-title">No items available</h3>
+                      <p className="empty-state-description">
+                        {sortedItems.length === 0 
+                          ? 'There are no items listed in the marketplace'
+                          : 'All available items are already in the comparison'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="items-grid grid-view" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
+                      {availableItems.map(item => {
+                        const canAdd = comparisonItems.length < 8;
+                        
+                        return (
+                          <div 
+                            key={item.id} 
+                            className="market-item-card"
+                            style={{ cursor: canAdd ? 'pointer' : 'default' }}
+                            onClick={() => {
+                              if (canAdd) {
+                                handleAddToComparison(item, { stopPropagation: () => {} });
+                              }
+                            }}
+                          >
+                          <div className="item-image-container">
+                            <img 
+                              src={item.imageUrl} 
+                              alt={item.name}
+                              onError={(e) => {
+                                e.target.style.display = 'none';
+                                if (e.target.nextSibling) {
+                                  e.target.nextSibling.style.display = 'flex';
+                                }
+                              }}
+                            />
+                            <div className="item-icon-large" style={{display: item.imageUrl ? 'none' : 'flex'}}>
+                              {item.image || '📦'}
+                            </div>
+                          </div>
+                          
+                          <div className={`rarity-line rarity-${item.rarity.toLowerCase()}`}></div>
+                          
+                          <div className="item-details">
+                            <div className="item-name-row">
+                              <h3 className="item-name-large">{item.name}</h3>
+                            </div>
+                            
+                            <div className="item-meta-row">
+                              <span className="seller-name">{item.seller || 'Unknown'}</span>
+                              <span className="listed-at-text">{formatListedAt(item.listedAt)}</span>
+                            </div>
+                            
+                            <div className="item-bottom-row">
+                              <div className="item-price-row">
+                                <span className="price-value">${item.price.toFixed(2)}</span>
+                              </div>
+                              
+                              <div className="item-action-buttons" onClick={(e) => e.stopPropagation()}>
+                                <button 
+                                  className="compare-btn-item"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAddToComparison(item, e);
+                                  }}
+                                  disabled={!canAdd}
+                                  title={canAdd ? 'Add to comparison' : 'Maximum 8 items'}
+                                >
+                                  <GitCompare size={14} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="market">
+    <div className="market" style={{ '--market-sidebar-width': `${marketLeftSidebarWidth}px` }}>
       <div className="market-main-container">
         <div className="market-content-area">
+          <div className="market-main-content">
       {/* Market Statistics Bar - Only show when NOT viewing a marketplace */}
       {!selectedGame && (
         <div className="watch-stats-overview">
@@ -3475,7 +5723,17 @@ const Market = () => {
                 <button 
                   className="back-btn" 
                   onClick={() => {
+                    // Clear selected game and localStorage
                     setSelectedGame(null);
+                    setLastSelectedGameInBrowse(null);
+                    setIsRestoringGame(false);
+                    isRestoringGameRef.current = false;
+                    try {
+                      localStorage.removeItem('market_selected_game');
+                      localStorage.removeItem('market_last_selected_game');
+                    } catch (error) {
+                      console.error('Error clearing selected game from localStorage:', error);
+                    }
                     navigate('/market');
                   }} 
                   title="Back to Market"
@@ -3499,7 +5757,17 @@ const Market = () => {
                 <button 
                   className="back-btn" 
                   onClick={() => {
+                    // Clear selected game and localStorage
                     setSelectedGame(null);
+                    setLastSelectedGameInBrowse(null);
+                    setIsRestoringGame(false);
+                    isRestoringGameRef.current = false;
+                    try {
+                      localStorage.removeItem('market_selected_game');
+                      localStorage.removeItem('market_last_selected_game');
+                    } catch (error) {
+                      console.error('Error clearing selected game from localStorage:', error);
+                    }
                     navigate('/market');
                   }} 
                   title="Back to Market"
@@ -3519,6 +5787,26 @@ const Market = () => {
                     <div className="banner-text">
                       <h1 className="banner-title">{selectedGame.name}</h1>
                       <span className="banner-subtitle">Marketplace</span>
+                    </div>
+                  </div>
+                )}
+                {gameId && (
+                  <div className="banner-view-controls">
+                    <div className="view-mode-controls">
+                      <button 
+                        className={`view-mode-btn ${viewMode === 'grid' ? 'active' : ''}`}
+                        onClick={() => setViewMode('grid')}
+                        title="Grid view"
+                      >
+                        <Grid size={16} />
+                      </button>
+                      <button 
+                        className={`view-mode-btn ${viewMode === 'row' ? 'active' : ''}`}
+                        onClick={() => setViewMode('row')}
+                        title="List view"
+                      >
+                        <List size={16} />
+                      </button>
                     </div>
                   </div>
                 )}
@@ -3554,105 +5842,8 @@ const Market = () => {
           </div>
         </div>
 
-        {/* Combined Search, Filter and Controls Bar */}
-        <div className="marketplace-filters-bar" style={{ '--content-width': `${contentWidth}px` }}>
-          <div className="filters-bar-left">
-          <div className="marketplace-search-wrapper">
-              <Search size={16} className="search-icon" />
-            <input
-              type="text"
-              className="marketplace-search-input"
-              placeholder="Search items..."
-              value={itemSearch}
-              onChange={(e) => setItemSearch(e.target.value)}
-            />
-            {itemSearch && (
-              <button 
-                className="search-clear-btn"
-                onClick={() => setItemSearch('')}
-                title="Clear search"
-              >
-                  <X size={12} />
-              </button>
-            )}
-          </div>
-          
-          <div className="marketplace-filters-group">
-            <select
-              className="marketplace-filter-select"
-              value={rarityFilter}
-              onChange={(e) => setRarityFilter(e.target.value)}
-            >
-              <option value="all">All Rarities</option>
-              <option value="common">Common</option>
-              <option value="rare">Rare</option>
-              <option value="epic">Epic</option>
-              <option value="legendary">Legendary</option>
-            </select>
-            
-            <select
-              className="marketplace-filter-select"
-              value={priceFilter}
-              onChange={(e) => setPriceFilter(e.target.value)}
-            >
-              <option value="all">All Prices</option>
-              <option value="under-10">Under $10</option>
-              <option value="10-50">$10 - $50</option>
-              <option value="50-100">$50 - $100</option>
-              <option value="over-100">Over $100</option>
-            </select>
-            
-            <select
-              className="marketplace-filter-select"
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-            >
-              <option value="price-low">Price: Low to High</option>
-              <option value="price-high">Price: High to Low</option>
-              <option value="name-asc">Name: A to Z</option>
-              <option value="name-desc">Name: Z to A</option>
-              <option value="newest">Newest First</option>
-              <option value="oldest">Oldest First</option>
-            </select>
-            </div>
-          </div>
+        {/* Comparison Panel - Only shown in pop-out window, not in main window */}
 
-          <div className="filters-bar-right">
-            <button
-              className="comparison-open-btn"
-              onClick={() => {
-                setShowComparisonModal(true);
-                setComparisonModalManuallyClosed(false);
-              }}
-              title={comparisonItems.length > 0 ? `Open comparison (${comparisonItems.length} items)` : 'Open comparison to add items'}
-            >
-              <GitCompare size={16} />
-              <span>Compare {comparisonItems.length > 0 ? `(${comparisonItems.length})` : ''}</span>
-            </button>
-            <div className="items-count">
-              {sortedItems.length} {sortedItems.length === 1 ? 'item' : 'items'}
-              {itemSearch || !rarityFilter.has('all') || !priceFilter.has('all') ? (
-                <span className="items-count-filtered"> (filtered)</span>
-              ) : null}
-            </div>
-            <div className="view-mode-controls">
-              <button 
-                className={`view-mode-btn ${viewMode === 'grid' ? 'active' : ''}`}
-                onClick={() => setViewMode('grid')}
-                title="Grid view"
-              >
-                <Grid size={16} />
-              </button>
-              <button 
-                className={`view-mode-btn ${viewMode === 'row' ? 'active' : ''}`}
-                onClick={() => setViewMode('row')}
-                title="List view"
-              >
-                <List size={16} />
-              </button>
-            </div>
-          </div>
-        </div>
         
         {/* Items Grid */}
         <div 
@@ -3693,6 +5884,143 @@ const Market = () => {
               <div className="item-icon-large" style={{display: item.imageUrl ? 'none' : 'flex'}}>
                 {item.image || '📦'}
               </div>
+              {/* Remove button for own items */}
+              {(() => {
+                // Check ownership by user ID (more reliable) or username (fallback)
+                const isOwnerById = currentUserId && item.sellerId && String(item.sellerId) === String(currentUserId);
+                const isOwnerByUsername = currentUsername && item.seller && (
+                  String(item.seller).toLowerCase().trim() === String(currentUsername).toLowerCase().trim() ||
+                  String(item.seller) === String(currentUsername)
+                );
+                const isOwner = isOwnerById || isOwnerByUsername;
+                
+                // Debug logging for all items to help diagnose
+                if (process.env.NODE_ENV === 'development' || true) {
+                  console.log('Item ownership check:', { 
+                    itemId: item.id,
+                    itemName: item.name,
+                    itemSeller: item.seller,
+                    itemSellerId: item.sellerId,
+                    currentUsername, 
+                    currentUserId,
+                    isOwner,
+                    isOwnerById,
+                    isOwnerByUsername,
+                    sellerMatch: item.seller && currentUsername ? String(item.seller).toLowerCase().trim() === String(currentUsername).toLowerCase().trim() : false,
+                    sellerExactMatch: item.seller === currentUsername
+                  });
+                }
+                
+                // Always show button if user is logged in, but check ownership in onClick
+                if (!currentUsername && !currentUserId) {
+                  return null;
+                }
+                
+                return (
+                  <button 
+                    className="item-remove-btn"
+                    style={{ display: isOwner ? 'flex' : 'none' }}
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      
+                      // Re-check ownership before removing
+                      const checkOwnerById = currentUserId && item.sellerId && String(item.sellerId) === String(currentUserId);
+                      const checkOwnerByUsername = currentUsername && item.seller && (
+                        String(item.seller).toLowerCase().trim() === String(currentUsername).toLowerCase().trim() ||
+                        String(item.seller) === String(currentUsername)
+                      );
+                      
+                      if (!checkOwnerById && !checkOwnerByUsername) {
+                        alert('You can only remove your own items.');
+                        console.error('Ownership check failed:', {
+                          itemSeller: item.seller,
+                          itemSellerId: item.sellerId,
+                          currentUsername,
+                          currentUserId
+                        });
+                        return;
+                      }
+                      
+                      if (confirm(`Are you sure you want to remove "${item.name}" from the marketplace? This will cancel any active bids and return the item to your inventory.`)) {
+                        try {
+                          const gameId = item.gameId || selectedGame?.id || selectedGame?.gameId;
+                          
+                          // 1. Cancel/end any active bids for this item
+                          setItemBids(prev => {
+                            const updated = { ...prev };
+                            if (updated[item.id]) {
+                              delete updated[item.id];
+                              localStorage.setItem('market_item_bids', JSON.stringify(updated));
+                            }
+                            return updated;
+                          });
+                          
+                          // 2. Remove item from marketplace
+                          const marketItems = await getUserData(`marketItems_${gameId}`, []);
+                          const itemToRemove = marketItems.find(mi => mi.id === item.id);
+                          const updatedItems = marketItems.filter(mi => mi.id !== item.id);
+                          await saveUserData(`marketItems_${gameId}`, updatedItems);
+                          
+                          // 3. Return item to inventory if it has originalItemId
+                          if (itemToRemove && itemToRemove.originalItemId) {
+                            const inventory = await getUserData(`inventory_${gameId}`, []);
+                            const inventoryArray = Array.isArray(inventory) ? inventory : [];
+                            
+                            // Check if item already exists in inventory
+                            const existingItem = inventoryArray.find(invItem => 
+                              String(invItem.id) === String(itemToRemove.originalItemId) &&
+                              String(invItem.gameId) === String(gameId)
+                            );
+                            
+                            if (!existingItem) {
+                              // Reconstruct original item from marketplace item
+                              const restoredItem = {
+                                id: itemToRemove.originalItemId,
+                                gameId: gameId,
+                                gameName: itemToRemove.gameName || selectedGame?.name,
+                                name: itemToRemove.name,
+                                description: itemToRemove.description,
+                                rarity: itemToRemove.rarity,
+                                type: itemToRemove.type,
+                                category: itemToRemove.category,
+                                image: itemToRemove.image,
+                                imageUrl: itemToRemove.imageUrl
+                              };
+                              
+                              inventoryArray.push(restoredItem);
+                              await saveUserData(`inventory_${gameId}`, inventoryArray);
+                              console.log('Item restored to inventory:', restoredItem.id);
+                              
+                              // Refresh inventory
+                              setInventoryRefresh(prev => prev + 1);
+                            }
+                          }
+                          
+                          // 4. Refresh marketplace
+                          setMarketItemsRefresh(prev => prev + 1);
+                          console.log('Item removed from marketplace and bid cancelled:', item.id);
+                        } catch (error) {
+                          console.error('Error removing item:', error);
+                          alert('Error removing item. Please try again.');
+                        }
+                      }
+                    }}
+                    title="Remove from marketplace"
+                  >
+                    <X size={14} />
+                  </button>
+                );
+              })()}
+              <button 
+                className={`watch-btn watch-btn-image ${watchedItems.has(item.id) ? 'watched' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleWatchItem(item.id);
+                }}
+                title={watchedItems.has(item.id) ? 'Remove from watchlist' : 'Add to watchlist'}
+              >
+                {watchedItems.has(item.id) ? <Eye size={16} /> : <EyeOff size={16} />}
+              </button>
             </div>
             
             {viewMode === 'row' && <div className={`rarity-line-vertical rarity-${item.rarity.toLowerCase()}`}></div>}
@@ -3709,28 +6037,358 @@ const Market = () => {
                 <span className="listed-at-text">{formatListedAt(item.listedAt)}</span>
               </div>
               
-              <div className="item-bottom-row">
-                <div className="item-price-row">
-                  <span className="price-value">${item.price.toFixed(2)}</span>
-                </div>
+            </div>
+            
+            <div className="item-action-buttons" onClick={(e) => e.stopPropagation()}>
+              {(() => {
+                const bid = itemBids[item.id];
+                const itemSaleType = item.saleType || 'buy';
+                const isBidMode = itemSaleType === 'bid' || bid?.saleType === 'bid';
                 
-                <div className="item-action-buttons" onClick={(e) => e.stopPropagation()}>
-                  <button className="buy-now-btn" onClick={() => handleBuyItem(item.id)}>Buy</button>
+                // Check if item was listed as bid (from item.saleType) or has active bid in itemBids
+                // Default to 'buy' if saleType is not set (for backward compatibility)
+                
+                // Use bid data from itemBids or from item itself
+                let bidEndTime = bid?.bidEndTime || item.bidEndTime;
+                const bidDuration = bid?.bidDuration || item.bidDuration || 60;
+                const currentBid = bid?.currentBid || item.currentBid || item.price;
+                const now = currentTime;
+                
+                // If item is in bid mode but has no bidEndTime, start timer immediately
+                if (isBidMode && !bidEndTime) {
+                  bidEndTime = now + (bidDuration * 60 * 1000);
+                }
+                
+                const isBidActive = isBidMode && bidEndTime && bidEndTime > now;
+                const isBidEnded = isBidMode && bidEndTime && bidEndTime <= now;
+                
+                // Calculate progress and timer for active bids
+                const timeRemaining = isBidActive ? Math.max(0, bidEndTime - now) : 0;
+                const totalDuration = bidDuration * 60 * 1000;
+                const progress = totalDuration > 0 ? ((totalDuration - timeRemaining) / totalDuration) * 100 : 0;
+                const timeFormatted = formatTimeRemaining(timeRemaining);
+                // For bid items, use currentBid if available, otherwise use item price
+                const currentPrice = isBidMode ? (currentBid || item.price) : item.price;
+                const isNearEnd = progress >= 90;
+                // Check if there are any valid bids - only bidHistory counts, not currentBid
+                const hasBids = bid?.bidHistory && Array.isArray(bid.bidHistory) && bid.bidHistory.length > 0;
+                const isNoBid = isBidEnded && !hasBids;
+                const timerText = isBidEnded ? (isNoBid ? 'no bid placed' : 'bid ended') : (isNearEnd ? `bidding ending | ${timeFormatted}` : timeFormatted);
+                
+                if (soldItems[item.id]) {
+                  return null; // Don't render sold items
+                }
+                
+                // Check if current user is the seller
+                const isSeller = item.sellerId && currentUserId && String(item.sellerId) === String(currentUserId);
+                
+                // Check if current user has a bid - get the most recent/highest one
+                const userBids = bid?.bidHistory?.filter(b => {
+                  return b.userId === currentUserId || b.userId === 'current-user';
+                }) || [];
+                // Get the highest bid from user (most recent or highest amount)
+                const userBid = userBids.length > 0 
+                  ? userBids.reduce((max, b) => b.amount > max.amount ? b : max, userBids[0])
+                  : null;
+                const userBidAmount = userBid?.amount;
+                
+                // Check if user is the highest bidder
+                const isHighestBidder = userBidAmount && userBidAmount === currentPrice;
+                
+                // Show bid button if item is in bid mode (active or not yet started), otherwise show buy button
+                if (isBidMode) {
+                  // Bid item - show bid button (active, ended, or not yet started)
+                  return (
+                    <div className="buy-button-wrapper">
+                      {(isBidActive || isBidEnded) && (
+                        <div className="bid-info-row">
+                          <div className={isNearEnd && !isBidEnded ? 'bid-timer-above bid-timer-warning' : 'bid-timer-above'}>
+                            {timerText}
+                          </div>
+                        </div>
+                      )}
+                      <div className="button-row">
+              <button 
+                className={`compare-btn-item ${comparisonItems.some(i => i.id === item.id) ? 'active' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  handleAddToComparison(item, e);
+                }}
+                title={comparisonItems.some(i => i.id === item.id) ? 'Remove from comparison' : 'Add to comparison'}
+              >
+                <GitCompare size={14} />
+              </button>
+                        <div className="bid-buttons-container">
+                          <button 
+                            className={`buy-now-btn bid-mode ${isBidActive ? 'bid-active' : ''} ${isBidEnded && hasBids ? 'bid-sold' : ''} ${isNoBid ? 'bid-no-bid' : ''} ${isSeller ? 'seller-item' : ''}`}
+                            onClick={() => {
+                              if (!isBidEnded && !isSeller) {
+                                setSelectedBidItem(item);
+                                setShowBidModal(true);
+                              }
+                            }}
+                            disabled={isBidEnded || isSeller}
+                            title={isSeller ? 'You cannot bid on your own item' : isBidEnded ? 'Bid ended' : 'Place a bid'}
+                          >
+                            {isBidActive && !isBidEnded && (
+                              <div 
+                                className="bid-progress-bar"
+                                style={{ width: `${progress}%` }}
+                              />
+                            )}
+                            <span className="buy-button-text">
+                              {isBidEnded ? (
+                                <>
+                                  <span className="buy-price">${formatPriceCompact(currentPrice)}</span>
+                                  <span className="buy-label bid-label">{isNoBid ? 'NO BID PLACED' : 'SOLD'}</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className="buy-price">${formatPriceCompact(currentPrice)}</span>
+                                  <span className="buy-label bid-label">Bid</span>
+                                </>
+                              )}
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                } else {
+                  // Buy now item - show buy button
+                  const lock = lockedItems[item.id];
+                  const LOCK_TIMEOUT = 30000;
+                  const isLocked = lock && (now - lock.timestamp) < LOCK_TIMEOUT;
+                  const isLockedByOther = isLocked && lock.userId !== currentUserId;
+                  const isLockedByMe = isLocked && lock.userId === currentUserId;
+                  
+                const isInCart = cartItems.some(i => i.itemType === 'market_item' && i.itemData?.id === item.id);
+                  
+                  // Check if current user is the seller
+                  const isSeller = item.sellerId && currentUserId && String(item.sellerId) === String(currentUserId);
+                  
+                return (
+                    <div className="buy-button-wrapper">
+                      <div className="button-row">
                   <button 
-                    className={`compare-btn-item ${comparisonItems.some(i => i.id === item.id) ? 'active' : ''}`}
-                    onClick={(e) => handleAddToComparison(item, e)}
-                    title={comparisonItems.some(i => i.id === item.id) ? 'Remove from comparison' : 'Add to comparison'}
-                  >
-                    <GitCompare size={14} />
-                  </button>
-                  <button 
-                    className={`watch-btn ${watchedItems.has(item.id) ? 'watched' : ''}`}
-                    onClick={() => handleWatchItem(item.id)}
-                  >
-                    {watchedItems.has(item.id) ? <Eye size={16} /> : <EyeOff size={16} />}
-                  </button>
-                </div>
-              </div>
+                          className={`compare-btn-item ${comparisonItems.some(i => i.id === item.id) ? 'active' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            handleAddToComparison(item, e);
+                          }}
+                          title={comparisonItems.some(i => i.id === item.id) ? 'Remove from comparison' : 'Add to comparison'}
+                        >
+                          <GitCompare size={14} />
+                        </button>
+                        <div className="bid-buttons-container">
+                          <button 
+                            className={`buy-now-btn ${isLockedByOther ? 'locked' : ''} ${isLockedByMe ? 'locked-by-me' : ''} ${isSeller ? 'seller-item' : ''}`}
+                            onClick={() => {
+                              if (!isLockedByOther && !isSeller) {
+                                handleBuyItem(item.id);
+                              }
+                            }}
+                            disabled={isLockedByOther || isSeller}
+                            title={isSeller ? 'You cannot buy your own item' : isLockedByOther ? 'This item is being purchased by another user' : isLockedByMe ? 'Confirming purchase...' : 'Buy now'}
+                          >
+                                            <span className="buy-button-text">
+                                              <span className="buy-price">${formatPriceCompact(item.price)}</span>
+                                              <span className="buy-label">
+                                                {isLockedByOther ? 'Locked' : isLockedByMe ? 'Confirming...' : 'Buy'}
+                                              </span>
+                                            </span>
+                                          </button>
+                                        </div>
+                  {(() => {
+                    // Check if current user is the seller
+                    const isSeller = item.sellerId && currentUserId && String(item.sellerId) === String(currentUserId);
+                    return (
+                      <button 
+                        className={`cart-btn-item ${isInCart ? 'active' : ''} ${isSeller ? 'seller-item' : ''}`}
+                    type="button"
+                        disabled={isSeller}
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                          if (isSeller) return;
+                      
+                      console.log('🛒 Cart button clicked!', item);
+                      
+                      // Immediately execute async function
+                      (async () => {
+                      
+                      try {
+                        const userId = await getCurrentUserId();
+                        if (!userId) {
+                          alert('Please log in to add items to cart.');
+                          return;
+                        }
+
+                        console.log('✅ User ID:', userId);
+
+                        const api = window.electronAPI;
+                        let currentCartItems = [];
+                        
+                        // Always check localStorage first (most reliable) - read fresh data
+                        const stored = localStorage.getItem(`cartItems_${userId}`);
+                        if (stored) {
+                          try {
+                            const parsed = JSON.parse(stored);
+                            if (Array.isArray(parsed)) {
+                              currentCartItems = parsed;
+                              console.log('📦 Loaded from localStorage:', currentCartItems.length, 'items');
+                            }
+                          } catch (e) {
+                            console.error('❌ Error parsing localStorage cart:', e);
+                          }
+                        }
+                        
+                        // Also try to get from database (but localStorage takes priority)
+                        if (api?.dbGetCartItems && currentCartItems.length === 0) {
+                          try {
+                            const result = await api.dbGetCartItems(userId);
+                            console.log('📦 Cart result from DB:', result);
+                            if (result?.success && Array.isArray(result.items) && result.items.length > 0) {
+                              currentCartItems = result.items;
+                              // Sync to localStorage
+                              localStorage.setItem(`cartItems_${userId}`, JSON.stringify(currentCartItems));
+                            }
+                          } catch (err) {
+                            console.error('❌ Error getting cart from DB:', err);
+                          }
+                        }
+
+                        console.log('📋 Current cart items:', currentCartItems);
+                        console.log('🔍 Checking for item ID:', item.id);
+
+                        // Check if item is already in cart - compare by itemData.id
+                        const itemInCart = currentCartItems.some(i => {
+                          const itemMatches = i.itemType === 'market_item' && 
+                                             i.itemData && 
+                                             i.itemData.id && 
+                                             String(i.itemData.id) === String(item.id);
+                          if (itemMatches) {
+                            console.log('✅ Found matching item in cart:', i);
+                          }
+                          return itemMatches;
+                        });
+
+                        console.log('🔍 Is in cart?', itemInCart);
+
+                        let updatedCart;
+                        let itemWasAdded = false;
+                        if (itemInCart) {
+                          // Remove from cart
+                          updatedCart = currentCartItems.filter(i => 
+                            !(i.itemType === 'market_item' && i.itemData?.id === item.id)
+                          );
+                          console.log('➖ Removing from cart');
+                        } else {
+                          // Add to cart
+                          const cartItem = {
+                            id: `market-${item.id}-${Date.now()}`,
+                            amount: parseFloat(item.price) || 0,
+                            timestamp: new Date().toISOString(),
+                            itemType: 'market_item',
+                            itemData: {
+                              id: String(item.id || ''),
+                              name: String(item.name || 'Unknown Item'),
+                              price: parseFloat(item.price) || 0,
+                              image: String(item.image || ''),
+                              imageUrl: item.imageUrl ? String(item.imageUrl) : null,
+                              gameId: item.gameId ? String(item.gameId) : null,
+                              gameName: item.gameName || selectedGame?.name ? String(item.gameName || selectedGame?.name) : null,
+                              seller: item.seller ? String(item.seller) : null,
+                              sellerId: item.sellerId ? String(item.sellerId) : null
+                            }
+                          };
+                          updatedCart = [...currentCartItems, cartItem];
+                          itemWasAdded = true;
+                          console.log('➕ Adding to cart:', cartItem);
+                        }
+                        
+                        console.log('💾 Saving cart with', updatedCart.length, 'items');
+                        
+                        // Ensure all items are properly serialized
+                        const serializableCart = updatedCart.map(i => ({
+                          id: String(i.id || Date.now()),
+                          amount: parseFloat(i.amount || 0),
+                          timestamp: String(i.timestamp || new Date().toISOString()),
+                          itemType: String(i.itemType || 'market_item'),
+                          itemData: i.itemData && typeof i.itemData === 'object' ? {
+                            id: String(i.itemData.id || ''),
+                            name: String(i.itemData.name || 'Unknown Item'),
+                            price: parseFloat(i.itemData.price || 0),
+                            image: String(i.itemData.image || ''),
+                            imageUrl: i.itemData.imageUrl ? String(i.itemData.imageUrl) : null,
+                            gameId: i.itemData.gameId ? String(i.itemData.gameId) : null,
+                            gameName: i.itemData.gameName ? String(i.itemData.gameName) : null,
+                            seller: i.itemData.seller ? String(i.itemData.seller) : null,
+                            sellerId: i.itemData.sellerId ? String(i.itemData.sellerId) : null
+                          } : {}
+                        }));
+                        
+                        console.log('📦 Serialized cart:', serializableCart);
+                        
+                        // ALWAYS save to localStorage first (most reliable)
+                        localStorage.setItem(`cartItems_${userId}`, JSON.stringify(serializableCart));
+                        console.log('💾 Saved to localStorage');
+                        
+                        // Also try to save to database (but don't fail if it doesn't work)
+                        if (api?.dbSaveCartItems) {
+                          try {
+                            const saveResult = await api.dbSaveCartItems(userId, serializableCart);
+                            console.log('💾 Save result from DB:', saveResult);
+                            if (!saveResult || !saveResult.success) {
+                              console.warn('⚠️ Database save failed, but localStorage saved successfully');
+                            }
+                          } catch (err) {
+                            console.error('❌ Error saving to DB (localStorage already saved):', err);
+                          }
+                        }
+                        
+                        // Verify the save
+                        const verifyStored = localStorage.getItem(`cartItems_${userId}`);
+                        console.log('✅ Verified stored cart:', verifyStored);
+                        
+                        // Trigger cart update event with a small delay to ensure save is complete
+                        console.log('📢 Dispatching cart-updated event');
+                        setTimeout(() => {
+                          window.dispatchEvent(new CustomEvent('cart-updated', { detail: { items: serializableCart } }));
+                          console.log('✅ Cart update event dispatched!');
+                          
+                          // Open cart menu if item was added (not removed)
+                          if (itemWasAdded) {
+                            console.log('🛒 Opening cart menu');
+                            window.dispatchEvent(new CustomEvent('open-cart-menu'));
+                          }
+                        }, 100);
+                      } catch (error) {
+                        console.error('❌ Cart error:', error);
+                        console.error('Error stack:', error.stack);
+                        alert('Error: ' + (error.message || 'Failed to update cart'));
+                      }
+                      })();
+                    }}
+                        title={isSeller ? "You cannot add your own item to cart" : (isInCart ? "Remove from cart" : "Add to cart")}
+                    >
+                      <ShoppingCart size={14} className="cart-icon-default" />
+                      <Plus size={14} className="cart-icon-hover cart-icon-plus" />
+                      <Minus size={14} className="cart-icon-hover cart-icon-minus" />
+                    </button>
+                  );
+                })()}
+                      </div>
+                    </div>
+                  );
+                }
+              })()}
             </div>
           </div>
           ))
@@ -3740,74 +6398,383 @@ const Market = () => {
           </div>
         </div>
         
-        {/* Bottom Navigation Container - Search Button, Island, Close Button - Also show in item view */}
-        <div className="market-bottom-nav-container">
-          {/* Search Button - Left of Island */}
-          {!isSearchMode && (
-            <button 
-              className="market-search-trigger-button"
-              onClick={() => {
-                setIsSearchMode(true);
-                setTimeout(() => {
-                  if (searchInputRef.current) {
-                    searchInputRef.current.focus();
-                    searchInputRef.current.select();
+        {/* Bottom Navigation Container - Compare Button, Search Bar, Sell Item Button */}
+        <div className="market-bottom-menu-container">
+          {/* Centered Menu Items Group */}
+          <div className="market-bottom-menu-items">
+            {/* Floating Action Button - Compare - Opens pop-out window */}
+            {/* Always show when marketplace is selected (selectedGame) or gameId in URL */}
+            {(gameId || selectedGame) && (
+              <button
+                className="marketplace-compare-btn-left"
+                onClick={async () => {
+                  try {
+                    const api = window.electronAPI;
+                    if (api?.openPopOutWindow) {
+                      const currentGameId = selectedGame?.id || selectedGame?.gameId || gameId;
+                      const route = currentGameId ? `/game/${currentGameId}/market/compare` : '/market/compare';
+                      await api.openPopOutWindow(route);
+                    } else {
+                      // Fallback: open comparison modal if pop-out not available
+                      setShowComparisonModal(true);
+                      setComparisonModalManuallyClosed(false);
+                    }
+                  } catch (error) {
+                    console.error('Error opening pop-out window:', error);
+                    // Fallback: open comparison modal on error
+                    setShowComparisonModal(true);
+                    setComparisonModalManuallyClosed(false);
                   }
-                }, 50);
-              }}
-            >
-              <Search size={18} />
-            </button>
-          )}
-          
-          {/* Bottom Navigation Island / Search Bar */}
-          <div className={`market-bottom-nav-island ${isSearchMode ? 'search-mode' : ''}`}>
-            {!isSearchMode ? (
-              <div className="market-bottom-nav-content">
-                <button 
-                  className={`market-bottom-nav-item market-bottom-nav-main ${marketView === 'browse' ? 'active' : ''}`}
-                  onClick={() => {
-                    setSelectedGame(null);
-                    setMarketView('browse');
-                    navigate('/market');
-                  }}
-                >
-                  <Search size={17} />
-                  <span>Browse</span>
-                </button>
-                <button 
-                  className={`market-bottom-nav-item ${marketView === 'favorites' ? 'active' : ''}`}
-                  onClick={() => setMarketView('favorites')}
-                >
-                  <Eye size={17} />
-                  <span>Watchlist</span>
-                </button>
-                <button 
-                  className={`market-bottom-nav-item ${marketView === 'stats' ? 'active' : ''}`}
-                  onClick={() => setMarketView('stats')}
-                >
-                  <BarChart3 size={17} />
-                  <span>Analytics</span>
-                </button>
-                <button 
-                  className={`market-bottom-nav-item ${marketView === 'petitions' ? 'active' : ''}`}
-                  onClick={() => setMarketView('petitions')}
-                >
-                  <FileText size={17} />
-                  <span>Petitions</span>
-                </button>
+                }}
+                title={comparisonItems.length > 0 ? `Open comparison in new window (${comparisonItems.length} items)` : 'Open comparison in new window'}
+              >
+                <GitCompare size={14} />
+                <span className="marketplace-compare-btn-text">Compare</span>
+              </button>
+            )}
+            
+            {/* Bottom Navigation Container - Search Button, Island, Close Button - Also show in item view */}
+            <div className="market-bottom-nav-container">
+            {/* Search Button - Left of Island */}
+            {!isSearchMode && (
+              <button 
+                className="market-search-trigger-button"
+                onClick={() => {
+                  setIsSearchMode(true);
+                  setTimeout(() => {
+                    if (searchInputRef.current) {
+                      searchInputRef.current.focus();
+                      searchInputRef.current.select();
+                    }
+                  }, 50);
+                }}
+              >
+                <Search size={18} />
+              </button>
+            )}
+            
+            {/* Filter Dropdowns - Only show when in search mode and inside marketplace */}
+            {isSearchMode && (gameId || selectedGame) && (
+              <div className="market-search-filters-wrapper">
+                {/* Rarity Filter Dropdown */}
+                <div className="market-filter-dropdown-wrapper">
+                  <button
+                    className="market-search-filter-select"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenFilterDropdown(openFilterDropdown === 'rarity' ? null : 'rarity');
+                    }}
+                  >
+                    {Array.from(rarityFilter)[0] === 'all' ? 'All Rarities' : 
+                     Array.from(rarityFilter)[0] === 'common' ? 'Common' :
+                     Array.from(rarityFilter)[0] === 'rare' ? 'Rare' :
+                     Array.from(rarityFilter)[0] === 'epic' ? 'Epic' :
+                     Array.from(rarityFilter)[0] === 'legendary' ? 'Legendary' : 'All Rarities'}
+                  </button>
+                  {openFilterDropdown === 'rarity' && (
+                    <div className="market-filter-dropdown-menu">
+                      {['all', 'common', 'rare', 'epic', 'legendary'].map(option => (
+                        <button
+                          key={option}
+                          className={`market-filter-dropdown-option ${Array.from(rarityFilter)[0] === option ? 'active' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setRarityFilter(new Set([option]));
+                            setOpenFilterDropdown(null);
+                          }}
+                        >
+                          {option === 'all' ? 'All Rarities' : 
+                           option === 'common' ? 'Common' :
+                           option === 'rare' ? 'Rare' :
+                           option === 'epic' ? 'Epic' :
+                           option === 'legendary' ? 'Legendary' : option}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Price Filter Dropdown */}
+                <div className="market-filter-dropdown-wrapper">
+                  <button
+                    className="market-search-filter-select"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenFilterDropdown(openFilterDropdown === 'price' ? null : 'price');
+                    }}
+                  >
+                    {Array.from(priceFilter)[0] === 'all' ? 'All Prices' :
+                     Array.from(priceFilter)[0] === 'under-10' ? 'Under $10' :
+                     Array.from(priceFilter)[0] === '10-50' ? '$10 - $50' :
+                     Array.from(priceFilter)[0] === '50-100' ? '$50 - $100' :
+                     Array.from(priceFilter)[0] === 'over-100' ? 'Over $100' : 'All Prices'}
+                  </button>
+                  {openFilterDropdown === 'price' && (
+                    <div className="market-filter-dropdown-menu">
+                      {['all', 'under-10', '10-50', '50-100', 'over-100'].map(option => (
+                        <button
+                          key={option}
+                          className={`market-filter-dropdown-option ${Array.from(priceFilter)[0] === option ? 'active' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPriceFilter(new Set([option]));
+                            setOpenFilterDropdown(null);
+                          }}
+                        >
+                          {option === 'all' ? 'All Prices' :
+                           option === 'under-10' ? 'Under $10' :
+                           option === '10-50' ? '$10 - $50' :
+                           option === '50-100' ? '$50 - $100' :
+                           option === 'over-100' ? 'Over $100' : option}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Sort Dropdown */}
+                <div className="market-filter-dropdown-wrapper">
+                  <button
+                    className="market-search-filter-select"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenFilterDropdown(openFilterDropdown === 'sort' ? null : 'sort');
+                    }}
+                  >
+                    {sortBy === 'price-low' ? 'Price: Low to High' :
+                     sortBy === 'price-high' ? 'Price: High to Low' :
+                     sortBy === 'name-asc' ? 'Name: A to Z' :
+                     sortBy === 'name-desc' ? 'Name: Z to A' :
+                     sortBy === 'newest' ? 'Newest First' :
+                     sortBy === 'oldest' ? 'Oldest First' : 'Price: Low to High'}
+                  </button>
+                  {openFilterDropdown === 'sort' && (
+                    <div className="market-filter-dropdown-menu">
+                      {['price-low', 'price-high', 'name-asc', 'name-desc', 'newest', 'oldest'].map(option => (
+                        <button
+                          key={option}
+                          className={`market-filter-dropdown-option ${sortBy === option ? 'active' : ''}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSortBy(option);
+                            setOpenFilterDropdown(null);
+                          }}
+                        >
+                          {option === 'price-low' ? 'Price: Low to High' :
+                           option === 'price-high' ? 'Price: High to Low' :
+                           option === 'name-asc' ? 'Name: A to Z' :
+                           option === 'name-desc' ? 'Name: Z to A' :
+                           option === 'newest' ? 'Newest First' :
+                           option === 'oldest' ? 'Oldest First' : option}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
+            )}
+            
+            {/* Bottom Navigation Island / Search Bar */}
+            <div className={`market-bottom-nav-island ${isSearchMode ? 'search-mode' : ''}`}>
+              {!isSearchMode ? (
+                <div className="market-bottom-nav-content">
+                  <button 
+                    className={`market-bottom-nav-item market-bottom-nav-main ${marketView === 'browse' ? 'active' : ''}`}
+                    onClick={() => {
+                      setMarketView('browse');
+                      // Restore last selected game when returning to browse
+                      if (lastSelectedGameInBrowse) {
+                        const gameIdToNavigate = lastSelectedGameInBrowse.id || lastSelectedGameInBrowse.gameId;
+                        if (gameIdToNavigate) {
+                          // Set restoration flags immediately to prevent selection screen flash
+                          isRestoringGameRef.current = true;
+                          setIsRestoringGame(true);
+                          // Restore the selected game state IMMEDIATELY before navigation
+                          // This ensures the marketplace view renders directly without showing selection screen
+                          setSelectedGame(lastSelectedGameInBrowse);
+                          setLastSelectedGameInBrowse(lastSelectedGameInBrowse);
+                          // Navigate to the game's marketplace URL immediately
+                          navigate(`/game/${gameIdToNavigate}/market`, { replace: false });
+                          // Clear restoration flags after navigation completes
+                          setTimeout(() => {
+                            setSelectedGame(prev => {
+                              // Only update if not already set correctly
+                              if (!prev || (prev.id !== gameIdToNavigate && prev.gameId !== gameIdToNavigate)) {
+                                return lastSelectedGameInBrowse;
+                              }
+                              return prev;
+                            });
+                            isRestoringGameRef.current = false;
+                            setIsRestoringGame(false);
+                          }, 100);
+                        } else {
+                          setSelectedGame(null);
+                          setLastSelectedGameInBrowse(null);
+                          setIsRestoringGame(false);
+                          navigate('/market');
+                        }
+                      } else {
+                        setSelectedGame(null);
+                        setLastSelectedGameInBrowse(null);
+                        setIsRestoringGame(false);
+                        navigate('/market');
+                      }
+                    }}
+                  >
+                    <Search size={17} />
+                    <span>Browse</span>
+                  </button>
+                  <button 
+                    className={`market-bottom-nav-item ${marketView === 'favorites' ? 'active' : ''}`}
+                    onClick={() => {
+                      // Save current selectedGame when leaving browse
+                      if (marketView === 'browse' && selectedGame) {
+                        setLastSelectedGameInBrowse(selectedGame);
+                      }
+                      setSelectedGame(null);
+                      setMarketView('favorites');
+                      navigate('/market');
+                    }}
+                  >
+                    <Eye size={17} />
+                    <span>Watchlist</span>
+                  </button>
+                  <button 
+                    className={`market-bottom-nav-item ${marketView === 'stats' ? 'active' : ''}`}
+                    onClick={() => {
+                      // Save current selectedGame when leaving browse
+                      if (marketView === 'browse' && selectedGame) {
+                        setLastSelectedGameInBrowse(selectedGame);
+                      }
+                      setSelectedGame(null);
+                      setMarketView('stats');
+                      navigate('/market');
+                    }}
+                  >
+                    <BarChart3 size={17} />
+                    <span>Analytics</span>
+                  </button>
+                  <button 
+                    className={`market-bottom-nav-item ${marketView === 'petitions' ? 'active' : ''}`}
+                    onClick={() => {
+                      // Save current selectedGame when leaving browse
+                      if (marketView === 'browse' && selectedGame) {
+                        setLastSelectedGameInBrowse(selectedGame);
+                      }
+                      setSelectedGame(null);
+                      setMarketView('petitions');
+                      navigate('/market');
+                    }}
+                  >
+                    <FileText size={17} />
+                    <span>Petitions</span>
+          </button>
+        </div>
             ) : (
-              <div className="market-search-island-content">
-                <Search size={16} className="market-search-island-icon" />
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  placeholder="Search items..."
-                  value={itemSearch}
-                  onChange={(e) => setItemSearch(e.target.value)}
-                  className="market-search-island-input"
-                />
+              <>
+                {/* Menu Selector / Marketplace Name / Filters */}
+                {!gameId ? (
+                  <div className="market-search-menu-toggle-wrapper">
+                    <div className="market-search-menu-options">
+                      <button 
+                        className={`market-search-menu-option ${marketView === 'browse' ? 'active' : ''}`}
+                        onClick={() => {
+                          setMarketView('browse');
+                          // Restore last selected game when returning to browse
+                          if (lastSelectedGameInBrowse) {
+                            const gameIdToNavigate = lastSelectedGameInBrowse.id || lastSelectedGameInBrowse.gameId;
+                            const gameToRestore = lastSelectedGameInBrowse;
+                            if (gameIdToNavigate) {
+                              // Set flag to prevent clearing during navigation
+                              isRestoringGameRef.current = true;
+                              // Restore the selected game state immediately
+                              setSelectedGame(gameToRestore);
+                              // Navigate to the game's marketplace
+                              navigate(`/game/${gameIdToNavigate}/market`);
+                              // Ensure selectedGame is set after navigation completes
+                              setTimeout(() => {
+                                setSelectedGame(prev => {
+                                  // Only update if not already set correctly
+                                  if (!prev || (prev.id !== gameIdToNavigate && prev.gameId !== gameIdToNavigate)) {
+                                    return gameToRestore;
+                                  }
+                                  return prev;
+                                });
+                                isRestoringGameRef.current = false;
+                              }, 200);
+                            } else {
+                              setSelectedGame(null);
+                              navigate('/market');
+                            }
+                          } else {
+                            setSelectedGame(null);
+                            navigate('/market');
+                          }
+                        }}
+                      >
+                        <ShoppingBag size={12} />
+                        <span>Browse</span>
+                      </button>
+                      <button 
+                        className={`market-search-menu-option ${marketView === 'favorites' ? 'active' : ''}`}
+                        onClick={() => {
+                          // Save current selectedGame when leaving browse
+                          if (marketView === 'browse' && selectedGame) {
+                            setLastSelectedGameInBrowse(selectedGame);
+                          }
+                          setSelectedGame(null);
+                          setMarketView('favorites');
+                          navigate('/market');
+                        }}
+                      >
+                        <Eye size={14} />
+                        <span>Watchlist</span>
+                      </button>
+                      <button 
+                        className={`market-search-menu-option ${marketView === 'stats' ? 'active' : ''}`}
+                        onClick={() => {
+                          // Save current selectedGame when leaving browse
+                          if (marketView === 'browse' && selectedGame) {
+                            setLastSelectedGameInBrowse(selectedGame);
+                          }
+                          setSelectedGame(null);
+                          setMarketView('stats');
+                          navigate('/market');
+                        }}
+                      >
+                        <BarChart3 size={12} />
+                        <span>Analytics</span>
+                      </button>
+                      <button 
+                        className={`market-search-menu-option ${marketView === 'petitions' ? 'active' : ''}`}
+                        onClick={() => {
+                          // Save current selectedGame when leaving browse
+                          if (marketView === 'browse' && selectedGame) {
+                            setLastSelectedGameInBrowse(selectedGame);
+                          }
+                          setSelectedGame(null);
+                          setMarketView('petitions');
+                          navigate('/market');
+                        }}
+                      >
+                        <FileText size={12} />
+                        <span>Petitions</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+                <div className="market-search-island-dummy-left"></div>
+                <div className="market-search-island-content">
+                  <Search size={16} className="market-search-island-icon" />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    placeholder="Search items..."
+                    value={itemSearch}
+                    onChange={(e) => setItemSearch(e.target.value)}
+                    className="market-search-island-input"
+                  />
+                </div>
                 <button
                   className="market-search-island-clear"
                   onClick={(e) => {
@@ -3818,22 +6785,29 @@ const Market = () => {
                 >
                   <X size={14} />
                 </button>
-              </div>
+                <div className="market-search-island-dummy-right"></div>
+              </>
+            )}
+            </div>
+            </div>
+            
+            {/* Floating Action Button - Sell Item (Right) */}
+            {/* Always show when marketplace is selected (selectedGame) or gameId in URL */}
+            {(gameId || selectedGame) && (
+              <button 
+                className="market-sell-item-floating-btn"
+                onClick={handleSellItem}
+                title="Sell Item"
+              >
+                <Plus size={14} />
+                <span className="market-sell-item-btn-text">List your item</span>
+              </button>
             )}
           </div>
         </div>
-        
-        {/* Floating Sell Item Button - Right Side */}
-        <button 
-          className="market-sell-item-floating-btn"
-          onClick={handleSellItem}
-          title="Sell Item"
-        >
-          <Plus size={20} />
-          <span className="market-sell-item-floating-btn-text">Sell Items</span>
-        </button>
         </div>
       )}
+          </div>
         </div>
 
       {/* Right Sidebar - Only show in browse view */}
@@ -4071,16 +7045,6 @@ const Market = () => {
               />
               <select 
                 className="inventory-filter"
-                value={inventoryGameFilter}
-                onChange={(e) => setInventoryGameFilter(e.target.value)}
-              >
-                <option value="all">All Games</option>
-                {inventoryGames.map(game => (
-                  <option key={game.id} value={game.id}>{game.name}</option>
-                ))}
-              </select>
-              <select 
-                className="inventory-filter"
                 value={inventoryRarityFilter}
                 onChange={(e) => setInventoryRarityFilter(e.target.value)}
               >
@@ -4095,9 +7059,25 @@ const Market = () => {
             <div className="inventory-grid">
               {filteredInventoryItems.length === 0 ? (
                 <div className="inventory-empty">
-                  {allInventoryItems.length === 0 
-                    ? 'No items in inventory' 
-                    : `Nothing found for "${inventorySearch}"`}
+                  {allInventoryItems.length === 0 ? (
+                    <>
+                      <div className="inventory-empty-icon">📦</div>
+                      <div className="inventory-empty-title">No items in inventory</div>
+                      <div className="inventory-empty-description">Your inventory is empty. Items you own will appear here.</div>
+                    </>
+                  ) : inventorySearch.trim() ? (
+                    <>
+                      <div className="inventory-empty-icon">🔍</div>
+                      <div className="inventory-empty-title">Nothing found</div>
+                      <div className="inventory-empty-description">No items match your search "{inventorySearch}"</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="inventory-empty-icon">📭</div>
+                      <div className="inventory-empty-title">No items available</div>
+                      <div className="inventory-empty-description">No items match the current filters. Try adjusting your search or filter options.</div>
+                    </>
+                  )}
                 </div>
               ) : (
                 filteredInventoryItems.map((item, index) => {
@@ -4173,8 +7153,26 @@ const Market = () => {
         }}>
           <div className="sell-modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="sell-modal-header">
-              <h3>Review & Confirm Prices</h3>
+              <h3>Review & Confirm {saleType === 'bid' ? 'Bid Settings' : 'Prices'}</h3>
               <button className="modal-close-btn" onClick={handleCancelSell}>✕</button>
+            </div>
+            
+            {/* Sale Type Switch */}
+            <div className="sale-type-switch">
+              <button 
+                className={`sale-type-btn ${saleType === 'buy' ? 'active' : ''}`}
+                onClick={() => setSaleType('buy')}
+              >
+                <ShoppingBag size={16} />
+                <span>Buy Now</span>
+              </button>
+              <button 
+                className={`sale-type-btn bid ${saleType === 'bid' ? 'active' : ''}`}
+                onClick={() => setSaleType('bid')}
+              >
+                <Clock size={16} />
+                <span>Bid Auction</span>
+              </button>
             </div>
             
             <div className="pricing-section">
@@ -4188,42 +7186,100 @@ const Market = () => {
                     </div>
                   </div>
                   <div className="pricing-item-center">
-                    <div className="pricing-input-group">
-                      <span className="pricing-input-label">Buyer pays</span>
-                      <div className="pricing-input-wrapper">
-                        <span className="price-sizer">
-                          {itemPrices[item.id] !== undefined ? itemPrices[item.id] : item.marketPrice}
-                        </span>
-                        <input 
-                          type="text" 
-                          placeholder="0"
-                          className="price-input"
-                          value={itemPrices[item.id] !== undefined ? itemPrices[item.id] : item.marketPrice}
-                          onChange={(e) => handlePriceChange(item.id, e.target.value, itemPrices[item.id] !== undefined ? itemPrices[item.id] : item.marketPrice)}
-                          onFocus={(e) => {
-                            const currentValue = itemPrices[item.id] !== undefined ? itemPrices[item.id] : item.marketPrice;
-                            if (currentValue === 0) {
-                              e.target.value = '';
-                            }
-                          }}
-                          onBlur={(e) => {
-                            const numValue = parseFloat(e.target.value);
-                            if (e.target.value === '' || isNaN(numValue)) {
-                              setItemPrices(prev => ({
+                    {saleType === 'bid' ? (
+                      <div className="bid-settings-group">
+                        <div className="pricing-input-group">
+                          <span className="pricing-input-label">Starting Bid</span>
+                          <div className="pricing-input-wrapper">
+                            <span className="price-sizer">
+                              {itemPrices[item.id] !== undefined ? itemPrices[item.id] : item.marketPrice}
+                            </span>
+                            <input 
+                              type="text" 
+                              placeholder="0"
+                              className="price-input"
+                              value={itemPrices[item.id] !== undefined ? itemPrices[item.id] : item.marketPrice}
+                              onChange={(e) => handlePriceChange(item.id, e.target.value, itemPrices[item.id] !== undefined ? itemPrices[item.id] : item.marketPrice)}
+                              onFocus={(e) => {
+                                const currentValue = itemPrices[item.id] !== undefined ? itemPrices[item.id] : item.marketPrice;
+                                if (currentValue === 0) {
+                                  e.target.value = '';
+                                }
+                              }}
+                              onBlur={(e) => {
+                                const numValue = parseFloat(e.target.value);
+                                if (e.target.value === '' || isNaN(numValue)) {
+                                  setItemPrices(prev => ({
+                                    ...prev,
+                                    [item.id]: 0
+                                  }));
+                                } else {
+                                  const rounded = Math.round(numValue * 100) / 100;
+                                  setItemPrices(prev => ({
+                                    ...prev,
+                                    [item.id]: rounded
+                                  }));
+                                }
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <div className="bid-duration-group">
+                          <span className="pricing-input-label">Duration (minutes)</span>
+                          <input 
+                            type="number"
+                            className="bid-duration-input-modal"
+                            value={bidInputs[item.id]?.duration || 60}
+                            onChange={(e) => {
+                              const duration = parseInt(e.target.value) || 60;
+                              setBidInputs(prev => ({
                                 ...prev,
-                                [item.id]: 0
+                                [item.id]: { ...prev[item.id], amount: itemPrices[item.id] || item.marketPrice, duration }
                               }));
-                            } else {
-                              const rounded = Math.round(numValue * 100) / 100;
-                              setItemPrices(prev => ({
-                                ...prev,
-                                [item.id]: rounded
-                              }));
-                            }
-                          }}
-                        />
+                            }}
+                            min="1"
+                            placeholder="60"
+                          />
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="pricing-input-group">
+                        <span className="pricing-input-label">Buyer pays</span>
+                        <div className="pricing-input-wrapper">
+                          <span className="price-sizer">
+                            {itemPrices[item.id] !== undefined ? itemPrices[item.id] : item.marketPrice}
+                          </span>
+                          <input 
+                            type="text" 
+                            placeholder="0"
+                            className="price-input"
+                            value={itemPrices[item.id] !== undefined ? itemPrices[item.id] : item.marketPrice}
+                            onChange={(e) => handlePriceChange(item.id, e.target.value, itemPrices[item.id] !== undefined ? itemPrices[item.id] : item.marketPrice)}
+                            onFocus={(e) => {
+                              const currentValue = itemPrices[item.id] !== undefined ? itemPrices[item.id] : item.marketPrice;
+                              if (currentValue === 0) {
+                                e.target.value = '';
+                              }
+                            }}
+                            onBlur={(e) => {
+                              const numValue = parseFloat(e.target.value);
+                              if (e.target.value === '' || isNaN(numValue)) {
+                                setItemPrices(prev => ({
+                                  ...prev,
+                                  [item.id]: 0
+                                }));
+                              } else {
+                                const rounded = Math.round(numValue * 100) / 100;
+                                setItemPrices(prev => ({
+                                  ...prev,
+                                  [item.id]: rounded
+                                }));
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="pricing-item-right">
                     <div className="pricing-market-info">
@@ -4275,85 +7331,158 @@ const Market = () => {
                 if (!gameId) return;
                 
                 try {
-                  // Get current market items
+                // Get current market items
                   const marketItems = await getUserData(`marketItems_${gameId}`, []);
                   const currentMarketItemsArray = Array.isArray(marketItems) ? marketItems : [];
-                  
-                  // Check for duplicate listings (items already listed)
-                  const listedItemIds = new Set(
+                
+                // Check for duplicate listings (items already listed)
+                const listedItemIds = new Set(
                     currentMarketItemsArray
-                      .filter(mi => mi.status === 'active')
-                      .map(mi => `${mi.gameId || gameId}_${mi.originalItemId || mi.id}`)
-                  );
+                    .filter(mi => mi.status === 'active')
+                    .map(mi => `${mi.gameId || gameId}_${mi.originalItemId || mi.id}`)
+                );
+                
+                // Filter out items that are already listed
+                const itemsToList = selectedItems.filter(item => {
+                  const itemKey = `${item.gameId || gameId}_${item.id}`;
+                  return !listedItemIds.has(itemKey);
+                });
+                
+                if (itemsToList.length === 0) {
+                  alert('All selected items are already listed in the marketplace!');
+                  return;
+                }
+                
+                if (itemsToList.length < selectedItems.length) {
+                  const skipped = selectedItems.length - itemsToList.length;
+                  alert(`${skipped} item(s) were skipped because they are already listed.`);
+                }
                   
-                  // Filter out items that are already listed
-                  const itemsToList = selectedItems.filter(item => {
-                    const itemKey = `${item.gameId || gameId}_${item.id}`;
-                    return !listedItemIds.has(itemKey);
-                  });
-                  
-                  if (itemsToList.length === 0) {
-                    alert('All selected items are already listed in the marketplace!');
-                    return;
-                  }
-                  
-                  if (itemsToList.length < selectedItems.length) {
-                    const skipped = selectedItems.length - itemsToList.length;
-                    alert(`${skipped} item(s) were skipped because they are already listed.`);
-                  }
-                  
-                  // Get username
+                  // Get username and user ID
                   const username = await getUserData('username', 'Unknown');
+                  const userId = await getCurrentUserId();
+                
+                // Create new market listings
+                const timestamp = Date.now();
+                const newListings = itemsToList.map(item => {
+                  const price = itemPrices[item.id] !== undefined 
+                    ? parseFloat(itemPrices[item.id]) || 0 
+                    : (item.marketPrice || 0);
                   
-                  // Create new market listings
-                  const timestamp = Date.now();
-                  const newListings = itemsToList.map(item => {
-                    const price = itemPrices[item.id] !== undefined 
-                      ? parseFloat(itemPrices[item.id]) || 0 
-                      : (item.marketPrice || 0);
-                    
-                    return {
-                      id: `${item.gameId || gameId}_${item.id}_${timestamp}_${Math.random().toString(36).substr(2, 9)}`,
-                      originalItemId: item.id,
-                      gameId: item.gameId || gameId,
-                      name: item.name || 'Unnamed Item',
-                      description: item.description || '',
-                      imageUrl: item.imageUrl || null,
-                      image: item.image || '📦',
-                      rarity: item.rarity || 'common',
-                      type: item.type || 'Item',
-                      category: item.category || 'Item',
-                      price: price,
-                      seller: username,
-                      listedAt: timestamp,
-                      status: 'active'
-                    };
-                  });
+                  const listing = {
+                    id: `${item.gameId || gameId}_${item.id}_${timestamp}_${Math.random().toString(36).substr(2, 9)}`,
+                    originalItemId: item.id,
+                    gameId: item.gameId || gameId,
+                    name: item.name || 'Unnamed Item',
+                    description: item.description || '',
+                    imageUrl: item.imageUrl || null,
+                    image: item.image || '📦',
+                    rarity: item.rarity || 'common',
+                    type: item.type || 'Item',
+                    category: item.category || 'Item',
+                    price: price,
+                    seller: username,
+                    sellerId: userId,
+                    listedAt: timestamp,
+                    status: 'active',
+                    saleType: saleType || 'buy' // Always set saleType: 'buy' or 'bid'
+                  };
                   
-                  // Add new listings to market
+                  console.log('📝 Creating listing with saleType:', saleType, 'for item:', item.name);
+                  
+                  // Add bid settings if sale type is bid
+                  if (saleType === 'bid') {
+                    const bidDuration = bidInputs[item.id]?.duration || 60;
+                    const now = Date.now();
+                    listing.bidEndTime = now + (bidDuration * 60 * 1000);
+                    listing.bidDuration = bidDuration;
+                    listing.currentBid = price;
+                    listing.bidHistory = [];
+                    console.log('🔨 Bid listing created:', {
+                      bidEndTime: listing.bidEndTime,
+                      bidDuration: listing.bidDuration,
+                      currentBid: listing.currentBid
+                    });
+                  } else {
+                    console.log('💰 Buy listing created');
+                  }
+                  
+                  return listing;
+                });
+                
+                // Add new listings to market
                   const updatedMarketItems = [...currentMarketItemsArray, ...newListings];
                   await saveUserData(`marketItems_${gameId}`, updatedMarketItems);
                   
-                  // Remove items from inventory (only items that were actually listed)
+                  // Initialize itemBids for bid items - timer starts immediately when uploaded
+                  if (saleType === 'bid') {
+                    setItemBids(prev => {
+                      const newBids = { ...prev };
+                      newListings.forEach(listing => {
+                        if (listing.saleType === 'bid' && listing.bidEndTime) {
+                          newBids[listing.id] = {
+                            saleType: 'bid',
+                            bidEndTime: listing.bidEndTime,
+                            currentBid: listing.currentBid || listing.price,
+                            bidHistory: listing.bidHistory || [],
+                            bidDuration: listing.bidDuration || 60
+                          };
+                          console.log('✅ Bid timer started immediately for:', listing.name, 'ends at:', new Date(listing.bidEndTime));
+                        }
+                      });
+                      localStorage.setItem('market_item_bids', JSON.stringify(newBids));
+                      return newBids;
+                    });
+                  }
+                
+                // Remove items from inventory (only items that were actually listed)
+                let removedCount = 0;
                   for (const item of itemsToList) {
-                    const itemGameId = item.gameId || gameId;
+                  const itemGameId = String(item.gameId || gameId);
                     const inventory = await getUserData(`inventory_${itemGameId}`, []);
                     const inventoryArray = Array.isArray(inventory) ? inventory : [];
-                    const updatedInventory = inventoryArray.filter(invItem => 
-                      !(invItem.id === item.id && invItem.gameId === itemGameId)
-                    );
-                    await saveUserData(`inventory_${itemGameId}`, updatedInventory);
+                    const itemId = String(item.id);
+                    const beforeCount = inventoryArray.length;
+                    const updatedInventory = inventoryArray.filter(invItem => {
+                      const invItemId = String(invItem.id || '');
+                      const invItemGameId = String(invItem.gameId || itemGameId);
+                      // Remove item if both ID and gameId match
+                      return !(invItemId === itemId && invItemGameId === itemGameId);
+                    });
+                    
+                    // Only save if inventory actually changed
+                    if (updatedInventory.length !== beforeCount) {
+                      await saveUserData(`inventory_${itemGameId}`, updatedInventory);
+                      removedCount++;
+                      console.log(`✅ Removed item ${itemId} from inventory for game ${itemGameId}`);
+                      
+                      // Dispatch storage event to notify other windows/components
+                      if (typeof window !== 'undefined') {
+                        window.dispatchEvent(new StorageEvent('storage', {
+                          key: `inventory_${itemGameId}`,
+                          newValue: JSON.stringify(updatedInventory),
+                          oldValue: JSON.stringify(inventoryArray)
+                        }));
+                      }
+                    } else {
+                      console.warn(`⚠️ Item ${itemId} not found in inventory for game ${itemGameId}`);
+                    }
                   }
-                  
-                  // Refresh inventory and market items
-                  setInventoryRefresh(prev => prev + 1);
-                  setMarketItemsRefresh(prev => prev + 1);
-                  
-                  // Close modal and reset
-                  setShowSellModal(false);
-                  setSellStep(1);
-                  setSelectedItems([]);
-                  setItemPrices({});
+                
+                // Refresh inventory and market items
+                setInventoryRefresh(prev => prev + 1);
+                setMarketItemsRefresh(prev => prev + 1);
+                
+                // Show success message
+                if (removedCount > 0) {
+                  console.log(`✅ Successfully removed ${removedCount} item(s) from inventory`);
+                }
+                
+                // Close modal and reset
+                setShowSellModal(false);
+                setSellStep(1);
+                setSelectedItems([]);
+                setItemPrices({});
                 } catch (error) {
                   console.error('Error listing items:', error);
                   alert('An error occurred while listing items. Please try again.');
@@ -4495,6 +7624,353 @@ const Market = () => {
         </>
       )}
 
+      {/* Maximized 3D Views for Comparison */}
+      {Object.entries(expanded3DViews).map(([itemId, isExpanded]) => {
+        if (!isExpanded) return null;
+        const expandedItem = comparisonItems.find(item => item.id === itemId);
+        if (!expandedItem) return null;
+        
+        return (
+          <div key={itemId} className="item-3d-view-maximized" onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setExpanded3DViews(prev => ({
+                ...prev,
+                [itemId]: false
+              }));
+            }
+          }}>
+            <Item3DView
+              imageUrl={expandedItem.imageUrl}
+              image={expandedItem.image}
+              name={expandedItem.name}
+              isMaximized={true}
+              onMaximizeToggle={() => {
+                setExpanded3DViews(prev => ({
+                  ...prev,
+                  [itemId]: false
+                }));
+              }}
+              maxZoom={4}
+            />
+          </div>
+        );
+      })}
+
+      {/* Add Items to Comparison Modal */}
+      {showAddItemsModal && (
+        <div className="modal-overlay" onMouseDown={(e) => {
+          if (e.target === e.currentTarget) {
+            setShowAddItemsModal(false);
+          }
+        }}>
+          <div className="sell-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1000px', height: '80vh' }}>
+            <div className="sell-modal-header">
+              <h3>Add Items to Comparison ({comparisonItems.length}/8)</h3>
+              <button className="modal-close-btn" onClick={() => setShowAddItemsModal(false)}>✕</button>
+            </div>
+            
+            <div className="sell-modal-body" style={{ overflowY: 'auto', padding: '20px' }}>
+              {(() => {
+                // Get current game ID
+                const currentGameId = selectedGame?.id || selectedGame?.gameId || gameId;
+                
+                // Filter out items that are already in comparison AND ensure items are from the current game
+                const availableItems = sortedItems.filter(item => {
+                  // Check if item is already in comparison
+                  const isInComparison = comparisonItems.some(compItem => compItem.id === item.id);
+                  if (isInComparison) return false;
+                  
+                  // Check if item is from the current game
+                  const itemGameId = item.gameId;
+                  if (currentGameId && itemGameId) {
+                    return String(currentGameId) === String(itemGameId);
+                  }
+                  
+                  // If no game ID is set, allow the item (for backwards compatibility)
+                  return true;
+                });
+                
+                return availableItems.length === 0 ? (
+                  <div className="marketplace-empty-state" style={{ padding: '40px', textAlign: 'center' }}>
+                    <div className="empty-state-icon">📦</div>
+                    <h3 className="empty-state-title">No items available</h3>
+                    <p className="empty-state-description">
+                      {sortedItems.length === 0 
+                        ? 'There are no items listed in the marketplace'
+                        : 'All available items are already in the comparison'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="items-grid grid-view" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
+                    {availableItems.map(item => {
+                      const canAdd = comparisonItems.length < 8;
+                    
+                      return (
+                        <div 
+                          key={item.id} 
+                          className="market-item-card"
+                          style={{ cursor: canAdd ? 'pointer' : 'default' }}
+                          onClick={() => {
+                            if (canAdd) {
+                              handleAddToComparison(item, { stopPropagation: () => {} });
+                            }
+                          }}
+                        >
+                        <div className="item-image-container">
+                          <img 
+                            src={item.imageUrl} 
+                            alt={item.name}
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              if (e.target.nextSibling) {
+                                e.target.nextSibling.style.display = 'flex';
+                              }
+                            }}
+                          />
+                          <div className="item-icon-large" style={{display: item.imageUrl ? 'none' : 'flex'}}>
+                            {item.image || '📦'}
+                          </div>
+                        </div>
+                        
+                        <div className={`rarity-line rarity-${item.rarity.toLowerCase()}`}></div>
+                        
+                        <div className="item-details">
+                          <div className="item-name-row">
+                            <h3 className="item-name-large">{item.name}</h3>
+                          </div>
+                          
+                          <div className="item-meta-row">
+                            <span className="seller-name">{item.seller || 'Unknown'}</span>
+                            <span className="listed-at-text">{formatListedAt(item.listedAt)}</span>
+                          </div>
+                          
+                          <div className="item-bottom-row">
+                            <div className="item-price-row">
+                              <span className="price-value">${item.price.toFixed(2)}</span>
+                            </div>
+                            
+                            <div className="item-action-buttons" onClick={(e) => e.stopPropagation()}>
+                              <button 
+                                className="compare-btn-item"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAddToComparison(item, e);
+                                }}
+                                disabled={!canAdd}
+                                title={canAdd ? 'Add to comparison' : 'Maximum 8 items'}
+                              >
+                                <GitCompare size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bid Modal */}
+      {showBidModal && selectedBidItem && (
+        <div className="modal-overlay" onClick={() => {
+          setShowBidModal(false);
+          setSelectedBidItem(null);
+          setBidModalError(null);
+        }}>
+          <div className="bid-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="bid-modal-header">
+              <h2>Place Bid</h2>
+              <button 
+                className="modal-close-btn"
+                onClick={() => {
+                  setShowBidModal(false);
+                  setSelectedBidItem(null);
+                  setBidModalError(null);
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="bid-modal-body">
+              <div className="bid-3d-view-container">
+                <Item3DView
+                  imageUrl={selectedBidItem.imageUrl}
+                  image={selectedBidItem.image}
+                  name={selectedBidItem.name}
+                  isMaximized={false}
+                  maxZoom={2}
+                />
+              </div>
+              
+              <div className="bid-item-info">
+                <div className="bid-item-details">
+                  <h3>{selectedBidItem.name}</h3>
+                  {(() => {
+                    // Get current price from itemBids or item data
+                    const bid = itemBids[selectedBidItem.id];
+                    const currentBidPrice = bid?.currentBid || selectedBidItem.currentBid || selectedBidItem.price || 0;
+                    return (
+                      <p className="bid-current-price">Current Highest Bid: ${currentBidPrice.toFixed(2)}</p>
+                    );
+                  })()}
+                </div>
+              </div>
+              
+              <div className="bid-input-section">
+                <label className="bid-input-label">Your Bid Amount</label>
+                {(() => {
+                  // Get current price from itemBids or item data
+                  const bid = itemBids[selectedBidItem.id];
+                  const currentBidPrice = bid?.currentBid || selectedBidItem.currentBid || selectedBidItem.price || 0;
+                  const minBid = currentBidPrice + 0.01;
+                  
+                  return (
+                <input
+                  type="number"
+                  className="bid-modal-input"
+                      value={bidInputs[selectedBidItem.id]?.amount ?? minBid}
+                  onChange={(e) => {
+                        let amount = parseFloat(e.target.value) || minBid;
+                    // Cap at 1 million
+                    if (amount > 1000000) {
+                      amount = 1000000;
+                      setBidModalError('Maximum bid amount is $1,000,000.00');
+                    } else {
+                      setBidModalError(null);
+                    }
+                    setBidInputs(prev => ({
+                      ...prev,
+                      [selectedBidItem.id]: { ...prev[selectedBidItem.id], amount }
+                    }));
+                  }}
+                      min={minBid}
+                  max={1000000}
+                  step="0.01"
+                      placeholder={`Minimum: $${minBid.toFixed(2)}`}
+                />
+                  );
+                })()}
+                {bidModalError && (
+                  <p className="bid-input-error">{bidModalError}</p>
+                )}
+                {(() => {
+                  // Get current price from itemBids or item data
+                  const bid = itemBids[selectedBidItem.id];
+                  const currentBidPrice = bid?.currentBid || selectedBidItem.currentBid || selectedBidItem.price || 0;
+                  return (
+                <p className="bid-input-hint">
+                      Current highest bid: ${currentBidPrice.toFixed(2)}. Enter your total bid amount (must be higher).
+                </p>
+                  );
+                })()}
+              </div>
+            </div>
+            
+            <div className="bid-modal-footer">
+              <button 
+                className="bid-modal-close-btn"
+                onClick={() => {
+                  setShowBidModal(false);
+                  setSelectedBidItem(null);
+                  setBidModalError(null);
+                }}
+              >
+                Close
+              </button>
+              <button 
+                className="bid-modal-submit-btn"
+                onClick={async () => {
+                  // Get current price from itemBids or item data
+                  const bid = itemBids[selectedBidItem.id];
+                  const currentBidPrice = bid?.currentBid || selectedBidItem.currentBid || selectedBidItem.price || 0;
+                  const minBid = currentBidPrice + 0.01;
+                  
+                  let bidAmount = bidInputs[selectedBidItem.id]?.amount || minBid;
+                  
+                  // Cap bid amount at 1 million
+                  if (bidAmount > 1000000) {
+                    setBidModalError('Maximum bid amount is $1,000,000.00');
+                    bidAmount = 1000000;
+                    setBidInputs(prev => ({
+                      ...prev,
+                      [selectedBidItem.id]: { ...prev[selectedBidItem.id], amount: 1000000 }
+                    }));
+                    return;
+                  }
+                  
+                  if (bidAmount <= currentBidPrice) {
+                    setBidModalError(`A higher bid of $${currentBidPrice.toFixed(2)} has already been placed. Please enter a higher total amount.`);
+                    return;
+                  }
+                  
+                  setBidModalError(null);
+                  await handleBuyItem(selectedBidItem.id);
+                  setShowBidModal(false);
+                  setSelectedBidItem(null);
+                  setBidModalError(null);
+                }}
+              >
+                Submit Bid
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Purchase Confirmation Modal */}
+      {showPurchaseConfirmation && pendingPurchaseItem && (
+        <div className="modal-overlay" onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            handleCancelPurchase();
+          }
+        }}>
+          <div className="bid-modal-overlay" onClick={(e) => e.stopPropagation()}>
+            <div className="bid-modal-content">
+              <div className="bid-modal-header">
+                <h3>Confirm Purchase</h3>
+                <button className="modal-close-btn" onClick={handleCancelPurchase}>✕</button>
+              </div>
+              
+              <div className="bid-modal-body">
+                <div className="purchase-confirmation-item">
+                  <div className="purchase-item-image">
+                    {pendingPurchaseItem.imageUrl ? (
+                      <img src={pendingPurchaseItem.imageUrl} alt={pendingPurchaseItem.name} />
+                    ) : (
+                      <div className="item-icon-large">{pendingPurchaseItem.image || '📦'}</div>
+                    )}
+                  </div>
+                  <div className="purchase-item-info">
+                    <h4>{pendingPurchaseItem.name}</h4>
+                    <p className="purchase-item-price">${formatPriceCompact(pendingPurchaseItem.price)}</p>
+                  </div>
+                </div>
+                
+                <div className="purchase-confirmation-actions">
+                  <button 
+                    className="bid-modal-cancel-btn"
+                    onClick={handleCancelPurchase}
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    className="bid-modal-submit-btn"
+                    onClick={handleConfirmPurchase}
+                  >
+                    Confirm Purchase
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

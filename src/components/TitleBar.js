@@ -280,6 +280,9 @@ const TitleBar = ({ onToggleSidebar, navigate }) => {
   const isGameStudio = location.pathname === '/game-studio' || location.pathname === '/game-studio-settings' || location.pathname === '/game-studio/calendar' || location.pathname === '/game-studio/analytics' || location.pathname === '/game-studio/team';
   const isAuth = location.pathname === '/auth';
   const isAccountSwitcher = location.pathname === '/account-switcher';
+  // Check for compare-only mode (pop-out window)
+  const currentPath = location.pathname + (location.hash || '');
+  const isCompareOnlyMode = currentPath.includes('/market/compare') || window.location.hash.includes('/market/compare');
 
   // Memoized handlers for title bar menus
   const handleTitleBarMenuEscape = useCallback((event) => {
@@ -351,7 +354,7 @@ const TitleBar = ({ onToggleSidebar, navigate }) => {
     <div className="title-bar">
       <div className="title-bar-content">
         <div className="title-bar-left">
-          {!isAuth && !isAccountSwitcher && (
+          {!isAuth && !isAccountSwitcher && !isCompareOnlyMode && (
             <>
               <div className="title-bar-logo-wrapper">
                 <div className="title-bar-logo">
@@ -505,7 +508,7 @@ const TitleBar = ({ onToggleSidebar, navigate }) => {
           )}
         </div>
         {(() => {
-          const shouldShow = totalWindowCount > 1;
+          const shouldShow = totalWindowCount > 1 && !isCompareOnlyMode;
           if (shouldShow) {
             console.log('🔲 Rendering window number:', windowNumber, 'total count:', totalWindowCount);
           }
@@ -518,7 +521,33 @@ const TitleBar = ({ onToggleSidebar, navigate }) => {
           ) : null;
         })()}
         <div className="title-bar-right">
-          {!isAuth && !isAccountSwitcher && (
+          {!isAuth && !isAccountSwitcher && !isCompareOnlyMode && (
+            <>
+              <button 
+                className="title-bar-button pop-out-btn" 
+                onClick={async () => {
+                  try {
+                    const currentRoute = location.pathname;
+                    if (window.electronAPI?.openPopOutWindow) {
+                      const result = await window.electronAPI.openPopOutWindow(currentRoute);
+                      if (!result.success) {
+                        console.error('Failed to open pop-out window:', result.error);
+                      }
+                    } else {
+                      console.warn('Electron API not available');
+                    }
+                  } catch (error) {
+                    console.error('Error opening pop-out window:', error);
+                  }
+                }}
+                title="Pop out to separate window"
+              >
+                <ExternalLink size={14} />
+              </button>
+              <div className="title-bar-separator-vertical"></div>
+            </>
+          )}
+          {isCompareOnlyMode && (
             <>
               <button 
                 className="title-bar-button pop-out-btn" 

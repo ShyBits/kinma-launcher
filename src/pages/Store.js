@@ -116,32 +116,33 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
       
       const wasDragging = dragStateRef.current.isActive;
       const startCard = dragStateRef.current.startCard;
+      const container = newGamesRowRef.current;
       
-      // Reset all drag state FIRST
+      // IMMEDIATELY reset all drag state
       dragStateRef.current.isMouseDown = false;
       dragStateRef.current.isActive = false;
       dragStateRef.current.hasMoved = false;
       dragStateRef.current.startCard = null;
       setIsDragging(false);
       
-      // Reset container styles
-      if (newGamesRowRef.current) {
-        newGamesRowRef.current.style.cursor = 'grab';
-        newGamesRowRef.current.style.userSelect = '';
+      // IMMEDIATELY reset container styles
+      if (container) {
+        container.style.cursor = 'grab';
+        container.style.userSelect = '';
       }
       
-      // Re-enable pointer events on card
-      if (startCard) {
-        if (wasDragging) {
-          // Prevent click if we dragged
-          e.preventDefault();
-          e.stopPropagation();
-          // Re-enable pointer events immediately
-          startCard.style.pointerEvents = '';
-        } else {
-          // Not dragging, allow normal click - don't prevent default
-          startCard.style.pointerEvents = '';
-        }
+      // IMMEDIATELY re-enable pointer events on ALL cards in the container
+      if (container) {
+        const allCards = container.querySelectorAll('.featured-below-card');
+        allCards.forEach(card => {
+          card.style.pointerEvents = '';
+        });
+      }
+      
+      // Only prevent click if we actually dragged
+      if (wasDragging) {
+        e.preventDefault();
+        e.stopPropagation();
       }
     };
 
@@ -996,7 +997,7 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
       const digits = String(raw).replace(/\D+/g, '');
       if (digits && digits !== '0') return formatPrice(Number(digits));
     }
-    return 'Free';
+    return 'Free to play';
   };
 
   // Normalization helpers for custom games coming from JSON
@@ -1853,7 +1854,7 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                                 className="card-price-new" 
                                 style={{ color: getPromoColor(getPromoPercent(g)) }}
                               >
-                                {discountedPrice === 0 ? 'Free' : formatPrice(discountedPrice)}
+                                {discountedPrice === 0 ? 'Free to play' : formatPrice(discountedPrice)}
                               </span>
                               <span className="card-price-old">{displayPrice(g)}</span>
                             </>
@@ -1867,9 +1868,13 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                     </div>
                     <div className="card-info-actions">
                       <button 
-                        className={`card-info-primary ${getFinalPrice(g) > 0 ? 'buy' : 'install'}`} 
+                        className={`card-info-primary ${isGameOwnedByMe(g) ? 'owned' : (getFinalPrice(g) > 0 ? 'buy' : 'install')}`} 
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (isGameOwnedByMe(g)) {
+                            // Already owned, do nothing or navigate to game
+                            return;
+                          }
                           if (getFinalPrice(g) > 0) {
                             handleBuyGame(g);
                           } else {
@@ -1877,7 +1882,7 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                           }
                         }}
                       >
-                        {getFinalPrice(g) > 0 ? 'Buy Now' : 'Add to Library'}
+                        {isGameOwnedByMe(g) ? 'OWNED' : (getFinalPrice(g) > 0 ? 'Buy Now' : 'Add to Library')}
                       </button>
                       {getFinalPrice(g) > 0 && (
                         <button 
@@ -2001,7 +2006,7 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                                 className="card-price-new" 
                                 style={{ color: getPromoColor(getPromoPercent(g)) }}
                               >
-                                {discountedPrice === 0 ? 'Free' : formatPrice(discountedPrice)}
+                                {discountedPrice === 0 ? 'Free to play' : formatPrice(discountedPrice)}
                               </span>
                               <span className="card-price-old">{displayPrice(g)}</span>
                             </>
@@ -2015,9 +2020,13 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                     </div>
                     <div className="card-info-actions">
                       <button 
-                        className={`card-info-primary ${getFinalPrice(g) > 0 ? 'buy' : 'install'}`} 
+                        className={`card-info-primary ${isGameOwnedByMe(g) ? 'owned' : (getFinalPrice(g) > 0 ? 'buy' : 'install')}`} 
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (isGameOwnedByMe(g)) {
+                            // Already owned, do nothing or navigate to game
+                            return;
+                          }
                           if (getFinalPrice(g) > 0) {
                             handleBuyGame(g);
                           } else {
@@ -2025,7 +2034,7 @@ const Store = ({ isPreview = false, previewGameData = null, gamesData = {}, navi
                           }
                         }}
                       >
-                        {getFinalPrice(g) > 0 ? 'Buy Now' : 'Add to Library'}
+                        {isGameOwnedByMe(g) ? 'OWNED' : (getFinalPrice(g) > 0 ? 'Buy Now' : 'Add to Library')}
                       </button>
                       {getFinalPrice(g) > 0 && (
                         <button 

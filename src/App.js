@@ -246,6 +246,12 @@ const AppContent = () => {
   const getCurrentPage = () => {
     // Handle both BrowserRouter (pathname) and HashRouter (hash)
     const path = location.pathname !== '/' ? location.pathname : (location.hash || '#/').replace('#', '');
+    
+    // Check for market routes (including game-specific marketplaces)
+    if (path === '/market' || path.startsWith('/market/') || (path.startsWith('/game/') && path.includes('/market'))) {
+      return 'market';
+    }
+    
     switch (path) {
       case '/':
         return 'home';
@@ -253,8 +259,6 @@ const AppContent = () => {
         return 'store';
       case '/friends':
         return 'friends';
-      case '/market':
-        return 'market';
       case '/community':
         return 'community';
       case '/profile':
@@ -299,6 +303,8 @@ const AppContent = () => {
       
       if (newWidth >= minWidth && newWidth <= maxWidth) {
         setSidebarWidth(newWidth);
+        // Dispatch event so other components can update immediately
+        window.dispatchEvent(new CustomEvent('sidebar-resize', { detail: { width: newWidth } }));
       }
     };
 
@@ -311,6 +317,8 @@ const AppContent = () => {
         try {
           localStorage.setItem('sidebarWidth', currentWidth.toString());
           localStorage.setItem('sidebarManuallyResized', 'true');
+          // Dispatch event after saving to localStorage
+          window.dispatchEvent(new CustomEvent('sidebar-resize', { detail: { width: currentWidth } }));
         } catch (_) {}
         return currentWidth;
       });
@@ -387,7 +395,7 @@ const AppContent = () => {
       ) : (
         <>
           <TitleBar onToggleSidebar={toggleSidebar} navigate={navigate} />
-          {(location.pathname !== '/auth' && location.hash !== '#/auth' && location.pathname !== '/account-switcher' && location.hash !== '#/account-switcher' && location.pathname !== '/admin-window' && location.hash !== '#/admin-window') && (
+          {(location.pathname !== '/auth' && location.hash !== '#/auth' && location.pathname !== '/account-switcher' && location.hash !== '#/account-switcher' && location.pathname !== '/admin-window' && location.hash !== '#/admin-window' && !location.pathname.includes('/market/compare') && !location.hash.includes('/market/compare')) && (
         <TopNavigation 
           currentPage={currentPageId}
           setCurrentPage={setCurrentPage}
@@ -405,7 +413,7 @@ const AppContent = () => {
         />
       )}
       <div className="app-layout">
-        {(location.pathname !== '/auth' && location.hash !== '#/auth' && location.pathname !== '/account-switcher' && location.hash !== '#/account-switcher' && location.pathname !== '/game-studio' && location.hash !== '#/game-studio' && location.pathname !== '/game-studio/calendar' && location.hash !== '#/game-studio/calendar' && location.pathname !== '/game-studio/analytics' && location.hash !== '#/game-studio/analytics' && location.pathname !== '/game-studio/team' && location.hash !== '#/game-studio/team' && location.pathname !== '/game-studio-settings' && location.hash !== '#/game-studio-settings' && location.pathname !== '/admin-window' && location.hash !== '#/admin-window') && (
+        {(location.pathname !== '/auth' && location.hash !== '#/auth' && location.pathname !== '/account-switcher' && location.hash !== '#/account-switcher' && location.pathname !== '/game-studio' && location.hash !== '#/game-studio' && location.pathname !== '/game-studio/calendar' && location.hash !== '#/game-studio/calendar' && location.pathname !== '/game-studio/analytics' && location.hash !== '#/game-studio/analytics' && location.pathname !== '/game-studio/team' && location.hash !== '#/game-studio/team' && location.pathname !== '/game-studio-settings' && location.hash !== '#/game-studio-settings' && location.pathname !== '/admin-window' && location.hash !== '#/admin-window' && !location.pathname.includes('/market/compare') && !location.hash.includes('/market/compare')) && (
           <>
             <SideBar 
               ref={sidebarRef}
@@ -439,7 +447,9 @@ const AppContent = () => {
               <Route path="/store/game/:gameId" element={<GamePromo gamesData={{}} />} />
               <Route path="/friends" element={<Friends />} />
               <Route path="/market" element={<Market />} />
+              <Route path="/market/compare" element={<Market />} />
               <Route path="/game/:gameId/market" element={<Market />} />
+              <Route path="/game/:gameId/market/compare" element={<Market />} />
               <Route path="/community" element={<Community />} />
               <Route path="/game/:gameId/community" element={<Community />} />
               <Route path="/profile" element={<Profile navigate={navigate} />} />

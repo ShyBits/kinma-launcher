@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, Menu, ipcMain, dialog, shell, globalShortcut, screen } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, dialog, shell, globalShortcut, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const electronIsDev = require('electron-is-dev');
@@ -2735,9 +2735,6 @@ ipcMain.handle('open-pop-out-window', (event, route) => {
     }
     console.log('✅ Current window found');
     
-    // Generate unique ID for this window
-    const windowId = `popout-${++popOutWindowCounter}-${Date.now()}`;
-    
     // Clean up destroyed windows first
     for (const [id, window] of popOutWindows.entries()) {
       if (window.isDestroyed()) {
@@ -2745,9 +2742,28 @@ ipcMain.handle('open-pop-out-window', (event, route) => {
       }
     }
     
-    // Get screen size for window positioning
-    const primaryDisplay = screen.getPrimaryDisplay();
-    const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+    // Check if this is a compare window - if so, check if one already exists
+    const isCompareWindow = route.includes('/market/compare');
+    if (isCompareWindow) {
+      // Look for existing compare window
+      for (const [id, window] of popOutWindows.entries()) {
+        if (window && !window.isDestroyed() && window.route && window.route.includes('/market/compare')) {
+          console.log('🔲 Compare window already exists, focusing it instead of creating new one');
+          window.show();
+          window.focus();
+          return { success: true, existing: true };
+        }
+      }
+    }
+    
+    // Generate unique ID for this window
+    const windowId = `popout-${++popOutWindowCounter}-${Date.now()}`;
+    
+    // Get the display where the main window is located
+    const mainWindowBounds = currentWindow.getBounds();
+    const displayWhereWindowIs = screen.getDisplayMatching(mainWindowBounds);
+    const { width: screenWidth, height: screenHeight } = displayWhereWindowIs.workAreaSize;
+    const { x: displayX, y: displayY } = displayWhereWindowIs.workArea;
     
     // Get minimum size from main window (1200x720) or use defaults
     const mainWindowMinWidth = mainWindow && !mainWindow.isDestroyed() ? 1200 : 1200;
@@ -2757,19 +2773,19 @@ ipcMain.handle('open-pop-out-window', (event, route) => {
     const windowWidth = mainWindowMinWidth;
     const windowHeight = mainWindowMinHeight;
     
-    // Position window to the right of main window
-    const mainWindowBounds = currentWindow.getBounds();
-    const windowX = mainWindowBounds.x + mainWindowBounds.width + 20;
-    const windowY = mainWindowBounds.y;
+    // Position window in the center of the display where the main window is located
+    const finalX = displayX + (screenWidth - windowWidth) / 2;
+    const finalY = displayY + (screenHeight - windowHeight) / 2;
     
     // Create pop-out window
+    // isCompareWindow already defined above
     const popOutWindow = new BrowserWindow({
       width: windowWidth,
       height: windowHeight,
-      minWidth: mainWindowMinWidth,
-      minHeight: mainWindowMinHeight,
-      x: windowX,
-      y: windowY,
+      minWidth: isCompareWindow ? 0 : mainWindowMinWidth,
+      minHeight: isCompareWindow ? 0 : mainWindowMinHeight,
+      x: finalX,
+      y: finalY,
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -2803,6 +2819,14 @@ ipcMain.handle('open-pop-out-window', (event, route) => {
     popOutWindow.once('ready-to-show', () => {
       console.log('🔲 Pop-out window ready to show');
       if (popOutWindow && !popOutWindow.isDestroyed()) {
+        // Remove aspect ratio for compare windows
+        if (isCompareWindow) {
+          try {
+            popOutWindow.setAspectRatio(0); // 0 removes aspect ratio constraint
+          } catch (error) {
+            console.error('Error removing aspect ratio:', error);
+          }
+        }
         popOutWindow.show();
         popOutWindow.focus();
         console.log('✅ Pop-out window shown');
@@ -2879,6 +2903,34 @@ ipcMain.handle('open-pop-out-window', (event, route) => {
     return { success: true };
   } catch (error) {
     console.error('Error opening pop-out window:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Focus pop-out window for comparison if it exists
+ipcMain.handle('focus-compare-popout-window', (event) => {
+  try {
+    // Clean up destroyed windows first
+    for (const [id, window] of popOutWindows.entries()) {
+      if (window.isDestroyed()) {
+        popOutWindows.delete(id);
+      }
+    }
+    
+    // Find compare pop-out window
+    for (const [id, window] of popOutWindows.entries()) {
+      if (window && !window.isDestroyed() && window.route && window.route.includes('/market/compare')) {
+        console.log('🔲 Focusing compare pop-out window:', id);
+        window.show();
+        window.focus();
+        return { success: true, found: true };
+      }
+    }
+    
+    console.log('🔲 No compare pop-out window found');
+    return { success: true, found: false };
+  } catch (error) {
+    console.error('Error focusing compare pop-out window:', error);
     return { success: false, error: error.message };
   }
 });

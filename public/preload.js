@@ -82,6 +82,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openAdminWindow: () => ipcRenderer.invoke('open-admin-window'),
   openPopOutWindow: (route) => ipcRenderer.invoke('open-pop-out-window', route),
   closePopOutWindow: (route) => ipcRenderer.invoke('close-pop-out-window', route),
+  focusComparePopoutWindow: () => ipcRenderer.invoke('focus-compare-popout-window'),
   getWindowNumber: () => ipcRenderer.invoke('get-window-number'),
   onWindowNumberChanged: (callback) => {
     ipcRenderer.on('window-number-changed', (event, number) => callback(number));

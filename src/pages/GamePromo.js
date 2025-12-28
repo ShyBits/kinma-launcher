@@ -156,21 +156,21 @@ const GamePromo = ({ gamesData = {} }) => {
   // Load all published games
   useEffect(() => {
     const loadGames = async () => {
-      try {
+    try {
         const allGames = await getAllUsersData('customGames');
         if (!Array.isArray(allGames)) {
           setCustomGames([]);
           return;
         }
-        const publishedGames = allGames.filter(game => {
-          const status = game.status || game.fullFormData?.status || 'draft';
-          return status === 'public' || status === 'published';
-        });
-        setCustomGames(publishedGames);
+      const publishedGames = allGames.filter(game => {
+        const status = game.status || game.fullFormData?.status || 'draft';
+        return status === 'public' || status === 'published';
+      });
+      setCustomGames(publishedGames);
       } catch (error) {
         console.error('Error loading games in GamePromo:', error);
-        setCustomGames([]);
-      }
+      setCustomGames([]);
+    }
     };
     loadGames();
   }, []);

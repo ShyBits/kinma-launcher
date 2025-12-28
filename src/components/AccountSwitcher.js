@@ -313,7 +313,7 @@ const AccountSwitcher = ({ isOpen, onClose, onSwitchAccount, onAddAccount, varia
           
           try {
             const authResult = await api.openAuthWindow(email);
-            if (!authResult || !authResult.success) {
+          if (!authResult || !authResult.success) {
               // Fallback: navigate to auth
               if (window.location) {
                 window.location.hash = email 
